@@ -58,7 +58,8 @@ for target in "${TARGETS[@]}"; do
   old_version="$(cat "$dest/VERSION" 2>/dev/null || echo unknown)"
   mkdir -p "$dir"
   rm -rf "$dest.new"
-  rsync -a --exclude .git --exclude .DS_Store "$SRC/" "$dest.new/"
+  mkdir -p "$dest.new"
+  (cd "$SRC" && tar -cf - --exclude .git --exclude .DS_Store .) | (cd "$dest.new" && tar -xf -)
   rm -rf "$dest"
   mv "$dest.new" "$dest"
 

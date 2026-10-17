@@ -2,6 +2,12 @@
 
 Each release lists what a running project must do to adopt it. Update between stages, never during a task (see `guide/cheatsheet.md`). The current version is in `VERSION`; projects record theirs in `board.json` → `generator_version`.
 
+## Unreleased
+
+- `install.sh` copies with `tar` instead of `rsync`, so it also runs on systems without `rsync`.
+
+**Migration:** none.
+
 ## 0.6.0
 
 - Package reorganised: `prompt/` (generator, rubric, DSH mapping), `guide/` (cheatsheet), root keeps entry points (`SKILL.md`, `README.md`, `CHANGELOG.md`, `VERSION`, `install.sh`, `update.sh`).
