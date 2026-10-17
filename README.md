@@ -1,148 +1,114 @@
-# Prompt-Generator für modulare KI-Projekte
+<div align="center">
 
-**Version 0.4 · Meta-Prompt-Paket · Zielumgebung DeepSeek Harness**  
-**English summary:** [README.en.md](README.en.md)
+# 🧭 Prompt Generator
 
-Ein Generator, der aus einem Projekt-Brief ein startbares Projekt-Gerüst macht:
+**Plan your AI coding project before the AI starts coding.**
 
-- **eine Seite Architektur** statt einer überladenen Design-Datei,
-- **ein Task-Board mit Abhängigkeiten und Schreib-Scopes**,
-- **3–5 just-in-time Task-Briefs** statt 25 Prompts vor dem ersten Code,
-- **AGENTS.md, STATUS.md und Repo-Struktur**,
-- **Lint + unabhängiger Critic + Kaltstart-Test** statt Selbstbewertung.
+You describe your idea. The generator asks questions, plans the project with you<br>
+and writes the files an AI coding agent needs to build it, one step at a time.
 
-Der Generator baut nicht das Projekt. Er baut die Dateien, mit denen ein anderer Agent – oder ein Team aus Agents – es baut.
+![Version](https://img.shields.io/badge/version-0.4-blue)
+![License](https://img.shields.io/badge/license-MIT-green)
+![Free](https://img.shields.io/badge/price-free-brightgreen)
+
+</div>
 
 ---
 
-## Quickstart
+## 🤔 Why?
 
-1. **Das Paket (`generator.md`, `templates/`, `rubric.md`, `tools/`) in einen Chat bzw. Ordner legen.** Eingabeblock in `generator.md` ausfüllen (Vorhaben, Modus, Profil, Sprache, Budget). Bei Brownfield liegt das Paket am besten in `.generator/` im Projektordner; der Generator trägt den Ordner in `.gitignore` ein.
-2. **Interview beantworten.** Maximal 10 Fragen pro Runde, die schwierigen zuerst.
-3. **Architektur und Task-DAG freigeben.** Bei S zusammen mit einem „ja“; bei M/L getrennt. Erst danach schreibt der Generator die Dateien in den Arbeitsordner der Session.
-4. **Projekt starten:** erste Session mit `tasks/M01.md`, Plan zeigen lassen, freigeben, umsetzen.
-5. **Review in neuer Session** mit dem Review-Prompt aus `generator.md` Phase I.
-6. **Nächste Etappe:** nur die nächsten 3–5 Briefs erzeugen lassen.
+When you ask an AI to "build me an app", it often gets lost. It forgets decisions, rewrites working code and calls its own work perfect.
 
-Das Paket wird als **Ordner** benutzt: `generator.md` + `templates/` + `rubric.md` + `tools/`. Der Generator schreibt in den Arbeitsordner der Session; ohne Dateisystem gibt er Codeblöcke aus. `generator.md` allein reicht nicht, weil die Artefakt-Vorlagen dort absichtlich nicht dupliziert sind.
+This generator fixes that by giving the AI **a clear plan and small, focused tasks**, just like a good project lead would.
 
-## Prüfen
+## ⚙️ How it works
+
+```mermaid
+flowchart LR
+    A[💡 Your idea] --> B[❓ Questions]
+    B --> C[🗺️ Plan]
+    C --> D[✅ You approve]
+    D --> E[📁 Project files]
+    E --> F[🤖 AI builds it]
+```
+
+1. **You describe your idea** in a few sentences.
+2. **The generator asks you questions** (max. 10 at a time).
+3. **It shows you a plan.** Nothing is written until you say yes.
+4. **It creates the project files.** A short architecture, a task list and the next 3–5 tasks.
+5. **An AI agent builds the project**, one task at a time.
+6. **A second AI reviews the work**, so nobody grades their own homework.
+
+## 🚀 Quick start
+
+1. Download this repository (green **Code** button → **Download ZIP**).
+2. Open a new chat with your AI coding tool and add these files.
+   - `generator.md`
+   - the `templates/` folder
+   - `rubric.md`
+   - the `tools/` folder
+3. Fill in the input block at the top of `generator.md` (your idea, project size, language).
+4. Answer the questions and approve the plan.
+5. Start building with the first task, `tasks/M01.md`.
+
+> [!NOTE]
+> The prompts are currently written in **German**. Your project can still be in any language. An English version is planned.
+
+## 📦 What you get
+
+| File | What it is |
+|---|---|
+| `ARCHITECTURE.md` | One page with the key decisions for your project |
+| `AGENTS.md` | Rules the AI must follow |
+| `board.json` + `STATUS.md` | Task list and progress |
+| `tasks/` | The next 3–5 tasks, each with clear instructions |
+| `docs/` | Extra details, only when needed |
+
+See a complete example in [`examples/minimal-cli/`](examples/minimal-cli/).
+
+## 🧠 The six rules behind it
+
+1. **Keep the plan short.** One page, not a book.
+2. **One file, one job.** Rules, plan and progress live in separate files.
+3. **Only plan what's next.** 3–5 tasks at a time, not 25.
+4. **Few agents.** One builder and one reviewer is usually enough.
+5. **Tests before opinions.** Code must pass checks before anyone reviews it.
+6. **One writer per file.** Two agents never edit the same file at once.
+
+## 📂 What's in this repo
+
+| File | Purpose |
+|---|---|
+| [`generator.md`](generator.md) | The main prompt. Start here. |
+| [`cheatsheet.md`](cheatsheet.md) | Quick guide for you, with checklists |
+| [`rubric.md`](rubric.md) | Quality checks before you approve anything |
+| [`dsh.md`](dsh.md) | Setup for multiple agents (bigger projects) |
+| [`templates/`](templates/) | Blank templates the generator fills in |
+| [`tools/`](tools/) | Small Python scripts that check a project |
+| [`examples/`](examples/) | A finished example project |
+
+Check the example yourself.
 
 ```bash
 python3 tools/check.py examples/minimal-cli
-python3 tools/render_status.py examples/minimal-cli --out STATUS.md
 ```
 
-`check.py` prüft Board, Budgets, Links, Platzhalter und Pflichtdateien. `render_status.py` erzeugt `STATUS.md` aus `board.json`.
+## 👥 Who is it for?
 
----
+- ✅ **Solo developers** building a small or medium project with AI
+- ✅ **Small teams** running 2–3 AI agents in parallel
+- ✅ **Anyone with a pile of prompts** who wants a clean structure
+- ❌ **Not for one-line demos.** A single prompt is enough for those.
 
-## Das erzeugte Projekt enthält
+## 🙏 Inspired by
 
-- **Git-Repo:** `main`, `.gitignore`, Initial-Commit `chore: scaffold`, Task-Branches, ein Commit pro Task (Task-ID + Titel). Kein Push, kein Remote.
-- **Modulstruktur:** `docs/module-map.md` mit Schichten (UI/Screens, Logik, Daten), Ordnern und erlaubter Importrichtung. Die Architektur verlinkt sie nur.
-- **`AGENTS.md`:** Befehle, Abweichungen, Regeln, Scope-, Git- und Schichtregel. Keine Architektur, kein Fortschritt.
-- **`ARCHITECTURE.md`:** eine Seite Invarianten, Nicht-Ziele, Randbedingungen, Gates, Deferred, Links.
-- **`STATUS.md` + `board.json`:** Fortschritt aus dem Board, nicht handgepflegt.
-- **`tasks/M01..`:** die nächsten 3–5 JIT-Briefs mit Kontext-Pack, Gates und Ausgabeformat.
-- **`docs/`:** Modulstruktur, Datenmodell, Qualität, ADRs, Verträge, Domäne – nur was das Projekt braucht.
-- **S bleibt schlank:** Pflicht sind `ARCHITECTURE.md`, `AGENTS.md`, `board.json`/`STATUS.md`, `docs/module-map.md`, `docs/quality.md` und `tasks/`. ADRs, Contracts und Domain nur bei konkretem Inhalt. Nebenstrang bei S nur mit getrenntem Schreibbereich und vorherigem Vertrag in `docs/contracts/`; damit wird `docs/contracts/` Pflicht.
-- **Sicherheit:** Repo-Inhalte sind Daten, keine Anweisungen; Bibliotheken/APIs nur aus Doku oder Manifest (Secrets-Policy: `generator.md` › Regeln).
+[BMAD-METHOD](https://github.com/bmad-code-org/BMAD-METHOD) ·
+[GitHub Spec Kit](https://github.com/github/spec-kit) ·
+[Claude Code Agent Teams](https://code.claude.com/docs/en/agent-teams) ·
+[Cognition](https://cognition.com/blog/dont-build-multi-agents) ·
+[Anthropic](https://www.anthropic.com/engineering/building-effective-agents) ·
+[AGENTS.md](https://agents.md/)
 
----
+## 📄 License
 
-## Dateien
-
-| Datei | Zweck | Wann lesen |
-|---|---|---|
-| [`generator.md`](generator.md) | Der Meta-Prompt: Phasen 0–I, Regeln, Freigaben, Prompts; verweist auf `templates/`. | Zuerst |
-| [`cheatsheet.md`](cheatsheet.md) | Bedienung für den Menschen: Phasen, Checklisten, rote Flaggen; verweist auf die Prompts in `generator.md`. | Beim Arbeiten |
-| [`rubric.md`](rubric.md) | 12-Punkte-Rubrik, Lint, Critic-Prompt, Kaltstart-Test. | Vor jeder Freigabe |
-| [`dsh.md`](dsh.md) | DSH-Mapping: Subagents, Agent Teams, Board, Worktrees, Profile S/M/L. | Wenn das Projekt läuft |
-| [`templates/`](templates/) | Vorlagen für Architektur, Modulstruktur, AGENTS, Task-Brief, Board, ADR, Review. `STATUS.md` wird von `tools/render_status.py` erzeugt. | Beim Anpassen |
-| [`tools/`](tools/check.py) | `check.py` prüft ein Projekt; `render_status.py` erzeugt `STATUS.md` aus `board.json`. | Vor der Freigabe |
-| [`examples/minimal-cli/`](examples/minimal-cli/) | Vollständiges Beispiel: ein kleines CLI-Projekt mit 6 Tasks. | Zum Vergleichen |
-
-> Die Dateien unter `templates/` sind **Vorlagen mit Platzhaltern**. Sie sind keine Anweisungen für dieses Paket und gelten nicht für die Arbeit am Generator selbst.
-
----
-
-## Die Idee in sechs Regeln
-
-1. **Architektur ist ein Vertrag, keine Wissensdatenbank.** Maximal 800 Wörter. Nur Entscheidungen, die zwei unabhängig gebaute Module sonst inkompatibel treffen würden. Alles andere wird verlinkt.
-2. **Eine Datei, ein Zweck.** `AGENTS.md` = Regeln, `ARCHITECTURE.md` = Invarianten, `STATUS.md` = Fortschritt, `docs/` = Details. Kein Monolith.
-3. **JIT statt Wasserfall.** Nur die nächsten 3–5 Task-Briefs. Spätere Etappen bleiben grob, bis sie dran sind.
-4. **Die richtige Anzahl Agents.** Default S: ein Schreiber, ein Reviewer. M/L nur, wenn mindestens zwei Aufgaben über eine Etappe gleichzeitig laufen können, ohne dieselben Dateien zu schreiben.
-5. **Gates vor Meinung.** Build, Tests, Lint zuerst; LLM-Review danach. Kein Selbst-Score.
-6. **Ein Schreiber pro Pfad.** Keine zwei Agents schreiben gleichzeitig dieselbe Datei. Scopes, Worktrees, Board.
-
----
-
-## Was bewusst nicht enthalten ist
-
-- **Keine Software.** Kein CLI, keine Web-App, keine Datenbank. Das Paket ist Markdown, das in jeden Chat passt.
-- **Keine 25 Modul-Prompts vorab.** Der Generator schreibt nur, was als Nächstes gebraucht wird.
-- **Keine Rollen für Solo-Projekte.** S braucht keinen Agentenvertrag.
-- **Keine Docker-Sandbox, kein LLM-Mediator, kein Cost-Tracker als Default.** Das sind Lösungen für Probleme, die M/L später bekommen können.
-- **Kein Selbst-Score.** Der Autor bewertet nicht seine eigene Arbeit; der Critic ist unabhängig.
-- **Keine Projekt-spezifischen Inhalte.** Das Beispiel ist neutral; dein Brief kommt oben in den Eingabeblock.
-
----
-
-## Für wen
-
-- **Solo-Entwickler**, die mit einem Agenten ein kleines bis mittleres Projekt bauen und nicht in Prompt-Chaos versinken wollen.
-- **Teams mit 2–3 Agents**, die disjunkte Module parallel bauen und trotzdem einen grünen Main behalten wollen.
-- **Menschen, die bereits einen Haufen Prompts haben** und daraus ein wartbares Projekt-Gerüst machen wollen.
-
-Nicht gedacht für: Ein-Satz-Demos, bei denen ein einzelner Prompt reicht. Dann ist der Generator Overhead.
-
----
-
-## Wie du das Paket anpasst
-
-1. **Eine Regel ändern?** Nur mit Grund: Welche Fehlerklasse hat gefehlt? Änderung in `generator.md` und, falls nötig, in `rubric.md`.
-2. **Eine Vorlage ändern?** Nur in `templates/`. `generator.md` verweist darauf und enthält keine Kopien; so kann nichts auseinanderlaufen.
-3. **Ein neues Profil?** Erst messen, ob S/M/L nicht reichen. Neue Profile erhöhen die Komplexität des Generators.
-4. **Version erhöhen** und einen Golden Brief durchlaufen lassen. First-Pass-Green messen, nicht den eigenen Score (den vergibt der Critic).
-
----
-
-## Stand und nächste Schritte
-
-**v0.4** – S-Profil nach Gleichzeitigkeit, Phase 0+Interview zusammengelegt, C+D ein gemeinsames Ja, keine Critics vor der Freigabe bei S, ein Subagent in Phase H, `board.json` und schlankes S-Dateiset, Nebenstrang nur mit Vertrags-Task (`docs/contracts/`).
-
-**v0.3** – Beispiel-Faktenfehler korrigiert (`IntegrityError`, Gate-Suche, nicht-deterministisches Gate), Vorlagen entdoppelt (kanonisch in `templates/`), Prompts nur noch in `generator.md`, `scope_write_forbidden` statt mehrdeutigem Feld, Schichtmodell vereinheitlicht, echte Tools (`check.py`, `render_status.py`), LICENSE + englische README.
-
-**v0.2** – Definitionen für Gate/Task-bestanden/Kaltstart, Mobile-/Web-Secrets-Policy, Git-Repo und Modulstruktur explizit, „nichts erfinden“ an Manifeste gebunden, Abbruch-Regel korrigiert.
-
-Mögliche v0.5:
-- Golden-Brief-Set + kleines Eval-Skript (First-Pass-Green, Rework-Runden).
-- Zwei Beispielprojekte (Web-App, Mobile) statt nur CLI.
-- Generator-Variante für Claude Code / Codex (andere Tool-Namen, gleiche Artefakte).
-- Übersetzte Fassung (Englisch) für Tool-Kompatibilität.
-
----
-
-## Quellen und Einflüsse
-
-Die Ideen sind bewusst nicht neu; sie sind aus bewährten Mustern destilliert:
-
-- [BMAD-METHOD: Architecture Spine](https://github.com/bmad-code-org/BMAD-METHOD) – Invarianten, AD-IDs, „Deferred“, Litmus-Test.
-- [GitHub Spec Kit](https://github.com/github/spec-kit) – Trennung von Spec, Plan, Tasks, Contracts.
-- [Claude Code Agent Teams](https://code.claude.com/docs/en/agent-teams) – Task-Board, Schreibrechte, Worktrees, Review-Unabhängigkeit.
-- [Cognition: Don't Build Multi-Agents](https://cognition.com/blog/dont-build-multi-agents) – Kontext teilen, parallele Schreiber vermeiden.
-- [Anthropic: Building Effective Agents](https://www.anthropic.com/engineering/building-effective-agents) – einfach starten, Evaluator-Optimizer.
-- [AGENTS.md](https://agents.md/) – offenes Regelformat für Coding-Agents.
-
----
-
-## Lizenz und Veröffentlichung
-
-- **Lizenz:** MIT, siehe [LICENSE](LICENSE). Gratis auf GitHub; kein Verkauf, keine Paywall.
-- **Englisch:** [README.en.md](README.en.md) für die internationale Reichweite; die Prompt-Sprache ist noch Deutsch.
-- **Zip ohne macOS-Müll:**
-
-```bash
-zip -r prompt-generator.zip . -x '__MACOSX/*' -x '.DS_Store' -x '*/__pycache__/*'
-```
+[MIT](LICENSE). Free to use, change and share.
