@@ -1,51 +1,51 @@
-# Modulstruktur: <Projektname>
+# Module Structure: <Project name>
 
-> Detaildokument zu `ARCHITECTURE.md`. Enthält Ordner und Importregeln, keine Architekturentscheidungen.
+> Detail document for `ARCHITECTURE.md`. Contains folders and import rules, no architecture decisions.
 
-## Schichten
+## Layers
 
-> **Modell:** klassische Schichtung. Abhängigkeiten zeigen nur nach unten: UI → Logik → Daten. Domain-Typen liegen in der Logik; die Datenschicht importiert sie nicht.
+> **Model:** classic layering. Dependencies only point downwards: UI → logic → data. Domain types live in the logic layer; the data layer does not import them.
 
-| Schicht | Ordner | Zweck | Darf importieren | Darf nicht importieren |
+| Layer | Folder | Purpose | May import | May not import |
 |---|---|---|---|---|
-| UI/Screens | `<z. B. src/ui/>` | Darstellung, Eingaben | Logik, UI-Bausteine | Daten/Infrastruktur direkt |
-| Logik | `<z. B. src/logic/>` | Regeln, Use Cases, Domain-Typen | Daten/Infrastruktur, eigene Domain-Typen | UI |
-| Daten/Infrastruktur | `<z. B. src/data/>` | Persistenz, DB, Adapter | Standardbibliothek, DB-Treiber, eigene Row-Typen | UI, Logik |
-| Tests | `<z. B. tests/>` | Verifikation | alles (lesend) | Produktionscode ändern |
+| UI/screens | `<e.g. src/ui/>` | presentation, input | logic, UI components | data/infrastructure directly |
+| Logic | `<e.g. src/logic/>` | rules, use cases, domain types | data/infrastructure, own domain types | UI |
+| Data/infrastructure | `<e.g. src/data/>` | persistence, DB, adapters | standard library, DB driver, own row types | UI, logic |
+| Tests | `<e.g. tests/>` | verification | everything (read-only) | changing production code |
 
-## Ordnerkarte
+## Folder map
 
 ```text
 src/
-  ui/          # Screens, Views, ViewModels
-  logic/       # Use Cases, Domain-Typen, Repository-Schnittstellen
-  data/        # Repositories, DB, API-Clients, Adapter
+  ui/          # screens, views, view models
+  logic/       # use cases, domain types, repository interfaces
+  data/        # repositories, DB, API clients, adapters
 tests/
   unit/
   e2e/
 ```
 
-## Datenmodell
+## Data model
 
-- Das Datenmodell steht in `docs/data-model.md`, nicht in UI- oder Logikdateien.
-- Tabellen und Spalten sind dort definiert; die Datenschicht mappt DB-Zeilen auf eigene Row-Typen.
-- Die Logik kennt Domain-Typen und Repository-Schnittstellen, keine SQL-Tabellen.
+- The data model lives in `docs/data-model.md`, not in UI or logic files.
+- Tables and columns are defined there; the data layer maps DB rows to its own row types.
+- The logic layer knows domain types and repository interfaces, not SQL tables.
 
-## Regeln
+## Rules
 
-1. Abhängigkeiten zeigen nur nach unten: UI → Logik → Daten. Keine Zyklen.
-2. Domain-Typen liegen in der Logik; Data importiert sie nicht, sondern mappt auf eigene Row-Typen.
-3. Die Datenschicht kennt weder UI noch Logik.
-4. Neue Dateien kommen in die passende Schicht; keine Datei „irgendwo“.
-5. Ein Task ändert möglichst eine Schicht; Ausnahmen stehen im Task-Brief.
-6. Die Ordnerkarte ist verbindlich; Abweichungen brauchen eine ADR.
+1. Dependencies only point downwards: UI → logic → data. No cycles.
+2. Domain types live in the logic layer; the data layer does not import them but maps to its own row types.
+3. The data layer knows neither UI nor logic.
+4. New files go into the matching layer; no file "somewhere".
+5. A task changes one layer if possible; exceptions are stated in the task brief.
+6. The folder map is binding; deviations need an ADR.
 
-## Beispiel (CLI)
+## Example (CLI)
 
 ```text
 bm/
-  cli.py          # UI: Argumente, Ausgabe
-  service.py      # Logik: add/list/search, Domain-Typen
-  store/          # Daten: SQLite, Repository
-  portability.py  # Daten/Adapter: JSON Export/Import
+  cli.py          # UI: arguments, output
+  service.py      # logic: add/list/search, domain types
+  store/          # data: SQLite, repository
+  portability.py  # data/adapter: JSON export/import
 ```

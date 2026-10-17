@@ -1,26 +1,26 @@
-# bm — lokale Bookmark-CLI
+# bm — local bookmark CLI
 
-Speichert Links lokal in SQLite, listet und durchsucht sie, exportiert und importiert JSON. Kein Konto, kein Netzwerk, keine Cloud.
+Saves links locally in SQLite, lists and searches them, exports and imports JSON. No account, no network, no cloud.
 
-## Voraussetzungen
+## Requirements
 
 - Python 3.12, [`uv`](https://docs.astral.sh/uv/)
 
 ## Setup
 
-Voraussetzung: Git-Repo mit `main` und Initial-Commit. Das legt der Generator in Phase G an; M01 legt es nicht noch einmal an.
+The git repo with `main` and an initial commit is created by the generator in phase G; M01 does not create it again.
 
 ```bash
 uv sync
 uv run bm --help
 ```
 
-## Befehle
+## Commands
 
 ```bash
-bm add https://example.com --title "Beispiel"
+bm add https://example.com --title "Example"
 bm list
-bm search beispiel
+bm search example
 bm export ~/backup/bookmarks.json
 bm import ~/backup/bookmarks.json
 ```
@@ -34,23 +34,23 @@ uv run pytest
 uv run pytest tests/e2e -m e2e
 ```
 
-## Struktur
+## Structure
 
-| Pfad | Inhalt |
+| Path | Contents |
 |---|---|
-| `bm/cli.py` | Typer-Befehle, Ausgabe |
-| `bm/service.py` | Fachlogik (add, list, search) |
-| `bm/store/` | SQLite, Schema, Repository |
-| `bm/portability.py` | JSON Export/Import |
-| `docs/module-map.md` | Schichten und Importregeln |
-| `docs/` | Datenmodell, Qualität, ADRs |
-| `tasks/` | Task-Briefs (JIT) |
+| `bm/cli.py` | Typer commands, output |
+| `bm/service.py` | domain logic (add, list, search) |
+| `bm/store/` | SQLite, schema, repository |
+| `bm/portability.py` | JSON export/import |
+| `docs/` | module map, data model, quality, ADRs |
+| `tasks/` | task briefs (JIT) |
+| `reviews/` | review results per task |
 
-## Dokumentation
+## Documentation
 
-- Architektur: `ARCHITECTURE.md`
-- Agentenregeln: `AGENTS.md`
-- Fortschritt: `STATUS.md`
-- Modulstruktur: `docs/module-map.md`
-- Datenmodell: `docs/data-model.md`
-- Gates: `docs/quality.md`
+- Architecture: [`ARCHITECTURE.md`](ARCHITECTURE.md)
+- Agent rules: [`AGENTS.md`](AGENTS.md)
+- Progress: [`STATUS.md`](STATUS.md)
+- Module structure: [`docs/module-map.md`](docs/module-map.md)
+- Data model: [`docs/data-model.md`](docs/data-model.md)
+- Gates: [`docs/quality.md`](docs/quality.md)

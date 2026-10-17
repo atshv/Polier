@@ -1,41 +1,41 @@
-# <Projektname>
+# <Project name>
 
-Fachliche Details: siehe `ARCHITECTURE.md`. Fortschritt: siehe `STATUS.md`. Struktur: siehe `docs/module-map.md`.
+Domain details: see `ARCHITECTURE.md`. Progress: see `STATUS.md`. Structure: see `docs/module-map.md`.
 
-> **Regel:** Nur Regeln, die für jede Aufgabe gelten. Was die KI ohne die Zeile richtig machen würde, wird gestrichen. Keine Architektur, kein Fortschritt, keine langen Erklärungen.
+> **Rule:** only rules that apply to every task. Delete every line the AI would get right without it. No architecture, no progress, no long explanations. Max. 400 words.
 
-## Befehle
+## Commands
 
-- **Starten:** `<...>`
+- **Start:** `<...>`
 - **Build:** `<...>`
-- **Alle Tests:** `<...>`
-- **Einzelner Test:** `<...>`
-- **Lint/Typen:** `<...>`
-- **Git-Status:** `git status --short`
+- **All tests:** `<...>`
+- **Single test:** `<...>`
+- **Lint/types:** `<...>`
+- **Git status:** `git status --short`
 - **Diff:** `git diff`
-- **Letzte Commits:** `git log --oneline -5`
+- **Recent commits:** `git log --oneline -5`
 
-## Abweichungen vom Standard
+## Deviations from the standard
 
-- <nur Regeln, die vom Üblichen abweichen>
-- <bekannte Stolperfallen der Umgebung, nötige Umgebungsvariablen>
+- <only rules that differ from the usual>
+- <known pitfalls of the environment, required environment variables>
 
-## Regeln
+## Rules
 
-- Arbeite nur an der Aufgabe, die im Auftrag steht.
-- Lies zuerst `ARCHITECTURE.md`, `AGENTS.md`, `STATUS.md`, `docs/module-map.md` und deinen Task-Brief.
-- Bei Unklarheit: `open_questions` im Ergebnis, nicht raten.
-- Belege Erfolg mit der Ausgabe jedes Gates.
-- Ändere keine Dateien außerhalb deines Scopes.
-- Ein Commit pro Task: Task-ID + Titel, z. B. `M03: Add, List und Search`. Kein Push, kein Remote, keine PRs ohne Freigabe.
-- Schichten nicht vermischen: UI ruft Logik auf, Logik ruft Daten – nie umgekehrt.
-- Bibliotheken/APIs/Versionen nur aus Doku oder Manifest verwenden; keine erfundenen Pakete.
-- Secrets: keine Keys/Tokens im Repo oder Bundle. Mobile/Web sind öffentlich (Expo: `EXPO_PUBLIC_*`); Secrets nur serverseitig.
+- Work only on the task in your work order.
+- First read `ARCHITECTURE.md`, `AGENTS.md`, `STATUS.md`, `docs/module-map.md` and your task brief.
+- If anything is unclear: `open_questions` in the result; do not guess.
+- Prove success with the output of every gate.
+- Do not change files outside your scope.
+- One commit per task: task ID + title, e.g. `M03: Add, list and search`. No push, no remote, no PRs without approval.
+- Do not mix layers: UI calls logic, logic calls data, never the other way round.
+- Libraries/APIs/versions only from docs or a manifest; no invented packages.
+- Secrets: no keys/tokens in the repo or bundle. Mobile/web bundles are public (Expo: `EXPO_PUBLIC_*`); secrets only on the server.
 
-## Verboten
+## Forbidden
 
-- Neue Abhängigkeiten ohne Freigabe.
-- Bestehende Tests ändern oder löschen ohne Freigabe.
-- Platzhalter oder TODOs als fertig melden.
-- Architektur-Invarianten ändern (nur über ADR + Freigabe).
-- Secrets, Tokens oder Caches committen.
+- New dependencies without approval.
+- Changing or deleting existing tests without approval.
+- Reporting placeholders or TODOs as done.
+- Changing architecture invariants (only via ADR + approval).
+- Committing secrets, tokens or caches.

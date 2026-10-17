@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://example.local/board.schema.json",
   "title": "Project Task Board",
-  "description": "Maschinenlesbare Wahrheit für Tasks, Abhängigkeiten und Schreib-Scopes. STATUS.md wird daraus generiert.",
+  "description": "Machine-readable source of truth for tasks, dependencies and write scopes. STATUS.md is generated from it.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -25,7 +25,8 @@
     },
     "base_branch": {
       "type": "string",
-      "default": "main"
+      "default": "main",
+      "minLength": 1
     },
     "stage": {
       "type": "integer",
@@ -84,6 +85,15 @@
         "why": {
           "type": "string"
         },
+        "satisfies": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^D[0-9]+$"
+          },
+          "uniqueItems": true,
+          "description": "Definition-of-done items from docs/quality.md (D1, D2 …) this task contributes to."
+        },
         "status": {
           "enum": [
             "pending",
@@ -131,7 +141,7 @@
           "items": {
             "type": "string"
           },
-          "description": "Pfade, die gelesen werden dürfen. Schreiben ist nur erlaubt, wenn der Pfad auch in scope_write steht."
+          "description": "Paths that may be read. Writing is only allowed if the path is also in scope_write."
         },
         "acceptance": {
           "type": "array",
@@ -171,6 +181,7 @@
           "default": 0
         },
         "evidence": {
+          "description": "Gate output or paths to it; required once status is done.",
           "type": "array",
           "items": {
             "type": "string"
@@ -181,7 +192,7 @@
           "items": {
             "type": "string"
           },
-          "description": "Pfade, die gelesen, aber ausdrücklich nicht geschrieben werden dürfen."
+          "description": "Paths that may be read but explicitly must not be written."
         }
       }
     },

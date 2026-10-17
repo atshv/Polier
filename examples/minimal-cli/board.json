@@ -6,9 +6,12 @@
   "tasks": [
     {
       "id": "M01",
-      "title": "Projektgerüst und CLI",
-      "goal": "Ein uv-Projekt mit bm --help, ruff, mypy und pytest läuft.",
-      "why": "Alle weiteren Module bauen auf dem Gerüst und den Befehlen auf.",
+      "title": "Project scaffold and CLI",
+      "goal": "A uv project with bm --help, ruff, mypy and pytest runs.",
+      "why": "All further modules build on the scaffold and its commands.",
+      "satisfies": [
+        "D4"
+      ],
       "status": "done",
       "depends_on": [],
       "complexity": 3,
@@ -50,9 +53,12 @@
     },
     {
       "id": "M02",
-      "title": "Store und Schema",
-      "goal": "SQLite-Datenbank, Schema und Repository für Lesezeichen funktionieren.",
-      "why": "M03 braucht Speichern, Auflisten und Suchen; M05 braucht Export/Import.",
+      "title": "Store and schema",
+      "goal": "SQLite database, schema and repository for bookmarks work.",
+      "why": "M03 needs saving, listing and searching; M05 needs export/import.",
+      "satisfies": [
+        "D1"
+      ],
       "status": "done",
       "depends_on": [
         "M01"
@@ -95,9 +101,13 @@
     },
     {
       "id": "M03",
-      "title": "Add, List und Search",
-      "goal": "bm add, bm list und bm search funktionieren auf einer frischen DB.",
-      "why": "Das ist der MVP-Nutzen; M04 (Tags) und M06 (E2E) bauen darauf.",
+      "title": "Add, list and search",
+      "goal": "bm add, bm list and bm search work on a fresh DB.",
+      "why": "This is the MVP value; M04 (tags) and M06 (E2E) build on it.",
+      "satisfies": [
+        "D1",
+        "D2"
+      ],
       "status": "in_progress",
       "depends_on": [
         "M02"
@@ -113,6 +123,7 @@
       ],
       "scope_read": [
         "ARCHITECTURE.md",
+        "docs/module-map.md",
         "docs/data-model.md",
         "bm/store/",
         "bm/config.py"
@@ -145,8 +156,11 @@
     {
       "id": "M04",
       "title": "Tags",
-      "goal": "Tags können beim Speichern gesetzt, normalisiert und gefiltert werden.",
-      "why": "M06 und der tägliche Nutzen brauchen Filter; Architektur AD-3.",
+      "goal": "Tags can be set when saving, normalised and filtered.",
+      "why": "M06 and daily use need filters; architecture AD-3.",
+      "satisfies": [
+        "D3"
+      ],
       "status": "pending",
       "depends_on": [
         "M03"
@@ -185,9 +199,12 @@
     },
     {
       "id": "M05",
-      "title": "JSON Export und Import",
-      "goal": "bm export und bm import erhalten alle Lesezeichen und Tags.",
-      "why": "Backup und Umzug; Architektur AD-1.",
+      "title": "JSON export and import",
+      "goal": "bm export and bm import preserve all bookmarks and tags.",
+      "why": "Backup and migration; architecture AD-1.",
+      "satisfies": [
+        "D3"
+      ],
       "status": "pending",
       "depends_on": [
         "M03"
@@ -228,9 +245,13 @@
     },
     {
       "id": "M06",
-      "title": "E2E, README und Politur",
-      "goal": "Der komplette Nutzerfluss läuft auf einer frischen DB und ist dokumentiert.",
-      "why": "Definition of Done; letzter Schritt vor dem Release.",
+      "title": "E2E, README and polish",
+      "goal": "The complete user flow runs on a fresh DB and is documented.",
+      "why": "Definition of done; last step before the release.",
+      "satisfies": [
+        "D5",
+        "D6"
+      ],
       "status": "pending",
       "depends_on": [
         "M04",
@@ -275,20 +296,20 @@
     {
       "date": "2026-10-17",
       "id": "ADR-0001",
-      "title": "SQLite als einzige Wahrheit",
+      "title": "SQLite as the single source of truth",
       "file": "docs/adr/ADR-0001-sqlite.md"
     },
     {
       "date": "2026-10-17",
       "id": "ADR-0002",
-      "title": "Tags erst in Etappe 2",
+      "title": "Tags only in stage 2",
       "file": "docs/adr/ADR-0002-tags-stage2.md"
     }
   ],
   "open_questions": [
     {
       "id": "Q1",
-      "question": "Soll `bm list` standardmäßig alle Einträge zeigen?",
+      "question": "Should `bm list` show all entries by default?",
       "blocks": [
         "M06"
       ],

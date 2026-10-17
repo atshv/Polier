@@ -1,65 +1,80 @@
 # Prompt Generator
 
-Plan your AI coding project before the AI starts coding.
+Plans an AI coding project before any code is written.
 
-![version](https://img.shields.io/badge/version-0.4-blue?style=flat-square)
+![version](https://img.shields.io/badge/version-0.5-blue?style=flat-square)
 ![license](https://img.shields.io/badge/license-MIT-green?style=flat-square)
 
-You describe your idea. The generator asks questions, makes a plan with you and writes clear tasks for an AI coding agent. The agent then builds the project one task at a time.
-
-## How it works
+The generator interviews you, drafts a one-page architecture and a task DAG, and after your approval writes a scaffold that an AI coding agent builds from, one task at a time. Built for the DeepSeek Harness ([`dsh.md`](dsh.md)); usable in any agent or chat.
 
 ```mermaid
 flowchart LR
-    A[Idea] --> B[Questions] --> C[Plan] --> D{Approve}
-    D -- yes --> E[Tasks] --> F[AI builds] --> G[Review]
-    D -- change --> C
-    G -- next tasks --> E
+    A[Idea] --> B[Interview] --> C[Plan] --> D{Approve}
+    D -- yes --> E[Task briefs] --> F[Agent builds] --> G[Independent review]
+    D -- revise --> C
+    G -- next stage --> E
 ```
 
-## Quick start
+## Installation
 
-1. Download this repo (**Code** → **Download ZIP**).
-2. Add `generator.md`, `rubric.md`, `templates/` and `tools/` to a new AI chat.
-3. Fill in the input block at the top of `generator.md`.
-4. Answer the questions and approve the plan.
-5. Start building with `tasks/M01.md`.
+**As a skill** — copy this folder into a skills directory and ask the agent to plan your project:
 
-> [!NOTE]
-> The prompts are currently in German. Your project can be in any language.
+| Agent | Folder |
+|---|---|
+| DeepSeek Harness | `~/.dsh/skills/prompt-generator/` |
+| Claude Code | `~/.claude/skills/prompt-generator/` |
 
-## What you get
+**In any chat** — attach `generator.md`, `rubric.md`, `templates/` and `tools/`, then fill in the input block at the top of `generator.md`. For an existing project, place the package in `.generator/`; it is kept out of git.
+
+## Output
 
 ```
 my-project/
-├── ARCHITECTURE.md   key decisions, one page
-├── AGENTS.md         rules for the AI
-├── board.json        tasks and dependencies
-├── STATUS.md         progress
-├── tasks/            the next 3–5 tasks
-└── docs/             details, only if needed
+├── ARCHITECTURE.md   invariants, one page
+├── AGENTS.md         commands and rules for agents
+├── board.json        tasks, dependencies, write scopes
+├── STATUS.md         progress, generated from board.json
+├── tasks/            next 3–5 task briefs
+├── reviews/          review results per task
+└── docs/             module map, quality gates; ADRs and contracts when needed
 ```
 
-See a full example in [`examples/minimal-cli/`](examples/minimal-cli/).
+A git repository on `main`, initial commit `chore: scaffold`, one commit per task.
 
 ## Principles
 
-- **Short plan.** One page, not a book.
-- **Small steps.** Only the next 3–5 tasks are planned.
-- **Checks first.** Tests run before any review.
-- **Independent review.** The AI never grades its own work.
+- **One-page architecture.** Only invariants that keep modules from diverging; max. 800 words.
+- **Just in time.** Only the next 3–5 tasks are briefed.
+- **Gates before opinions.** Deterministic checks run before any review.
+- **Independent review.** No agent grades its own work.
+- **Right-sized team.** One writer by default; more only for truly parallel work.
+- **Traceable.** Definition of done → task → acceptance criterion → gate, verified by `tools/check.py`.
 
-## Files
+## Contents
 
-| File | Purpose |
+| Path | Purpose |
 |---|---|
-| [`generator.md`](generator.md) | The main prompt |
-| [`cheatsheet.md`](cheatsheet.md) | Quick guide |
-| [`rubric.md`](rubric.md) | Quality checks |
-| [`dsh.md`](dsh.md) | Setup for multiple agents |
-| [`templates/`](templates/) | Templates |
-| [`tools/`](tools/) | Check scripts |
+| [`SKILL.md`](SKILL.md) | Skill entry point |
+| [`generator.md`](generator.md) | The process: phases 0–I, rules, handoff prompts |
+| [`rubric.md`](rubric.md) | Quality criteria, lint list, critic and cold-start prompts |
+| [`cheatsheet.md`](cheatsheet.md) | Checklists and red flags for the human |
+| [`dsh.md`](dsh.md) | DeepSeek Harness tool mapping and fallbacks |
+| [`templates/`](templates/) | Artifact templates and board schema |
+| [`tools/`](tools/) | `check.py` (validation), `render_status.py` (STATUS from board); Python 3.9+, no dependencies |
+| [`examples/minimal-cli/`](examples/minimal-cli/) | Reference project |
+
+## Example
+
+[`examples/minimal-cli/`](examples/minimal-cli/) is a bookmark CLI with six tasks, captured while M03 is in progress: [`project-input.md`](examples/minimal-cli/project-input.md) is the generator input, [`tasks/M03.md`](examples/minimal-cli/tasks/M03.md) the current brief, [`reviews/M03.md`](examples/minimal-cli/reviews/M03.md) its first review round. Stage 2 (M04–M06) has no briefs yet.
+
+```bash
+python3 tools/check.py examples/minimal-cli
+```
+
+## Acknowledgements
+
+BMAD-METHOD, GitHub Spec Kit, Claude Code agent teams, Cognition, Anthropic's evaluator-optimizer pattern, AGENTS.md.
 
 ## License
 
-[MIT](LICENSE). Free to use, change and share.
+[MIT](LICENSE)

@@ -1,23 +1,23 @@
-# ADR-0002: Tags erst in Etappe 2
+# ADR-0002: Tags only in stage 2
 
-**Datum:** 17.10.2026 · **Status:** akzeptiert · **Ersetzt:** –
+**Date:** 2026-10-17 · **Status:** accepted · **Supersedes:** –
 
-## Kontext
+## Context
 
-Tags sind für den täglichen Nutzen wichtig, aber sie berühren Service, Store und CLI. M03 (Add/List/Search) ist der MVP-Kern. Würden Tags in M03 wandern, wächst der Task über Komplexität 5 und die Review-Fläche steigt.
+Tags matter for daily use, but they touch service, store and CLI. M03 (add/list/search) is the MVP core. If tags moved into M03, the task would grow beyond complexity 5 and the review surface would increase.
 
-## Entscheidung
+## Decision
 
-M03 bleibt bei Add/List/Search ohne Tags. Tags kommen als M04 in Etappe 2, nachdem der MVP-Kern grün ist.
+M03 stays with add/list/search without tags. Tags come as M04 in stage 2, once the MVP core is green.
 
-## Konsequenzen
+## Consequences
 
-- **Positiv:** M03 bleibt klein und testbar; der MVP ist früher nutzbar.
-- **Negativ:** `bm add --tag` funktioniert erst in Etappe 2.
-- **Bindet:** M03, M04
-- **Verhindert:** einen überladenen ersten Task.
+- **Positive:** M03 stays small and testable; the MVP is usable earlier.
+- **Negative:** `bm add --tag` only works from stage 2.
+- **Binds:** M03, M04
+- **Prevents:** an overloaded first task.
 
-## Alternativen
+## Alternatives
 
-- **Tags in M03** — verworfen: Task zu groß, vermischte Akzeptanz.
-- **Tags ganz weglassen** — verworfen: Filter sind ein Kernnutzen.
+- **Tags in M03** — rejected: task too large, mixed acceptance.
+- **No tags at all** — rejected: filters are a core benefit.

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Generiert STATUS.md aus board.json.
+"""Generate STATUS.md from board.json.
 
-Nutzung:
+Usage:
     python3 tools/render_status.py examples/minimal-cli
     python3 tools/render_status.py examples/minimal-cli --out STATUS.md
 """
@@ -35,35 +35,47 @@ def render(board: dict) -> str:
     lines = [
         "# Status",
         "",
-        f"**Projekt:** {board.get('project', '?')} · **Profil:** {board.get('profile', '?')} · "
-        f"**Etappe:** {stage} von {max_stage}",
+        f"**Project:** {board.get('project', '?')} · **Profile:** {board.get('profile', '?')} · "
+        f"**Stage:** {stage} of {max_stage}",
         "",
-        "> Automatisch aus `board.json` erzeugt. Nicht von Hand bearbeiten.",
+        "> Generated from `board.json`. Do not edit by hand.",
         "",
     ]
 
+    # Ready now: pending tasks whose dependencies are all done
+    done = {t.get("id") for t in tasks if t.get("status") == "done"}
+    ready = [t for t in tasks
+             if t.get("status") == "pending" and set(t.get("depends_on", [])) <= done]
+    lines += ["## Ready now", ""]
+    if ready:
+        for task in ready:
+            lines.append(f"- `{task.get('id')}` {task.get('title', '')}")
+    else:
+        lines.append("- none")
+    lines.append("")
+
     groups = [
-        ("Erledigt", {"done"}),
-        ("In Arbeit", {"claimed", "in_progress", "verifying", "review", "rework"}),
-        ("Blockiert / Fehlgeschlagen", {"blocked", "failed"}),
-        ("Offen", {"pending"}),
+        ("Done", {"done"}),
+        ("In progress", {"claimed", "in_progress", "verifying", "review", "rework"}),
+        ("Blocked / failed", {"blocked", "failed"}),
+        ("Open", {"pending"}),
     ]
     for title, statuses in groups:
         lines.append(f"## {title}")
         lines.append("")
         selected = [t for t in tasks if t.get("status") in statuses]
         if not selected:
-            lines.append("- keine")
+            lines.append("- none")
         for task in selected:
             owner = task.get("owner") or "—"
             lines.append(
                 f"- {ICONS.get(task.get('status'), '[ ]')} `{task.get('id')}` {task.get('title', '')} "
-                f"— Status: `{task.get('status')}` — Owner: {owner}"
+                f"— status: `{task.get('status')}` — owner: {owner}"
             )
         lines.append("")
 
     decisions = board.get("decisions", [])
-    lines += ["## Entscheidungen", ""]
+    lines += ["## Decisions", ""]
     if decisions:
         for decision in decisions:
             date = decision.get("date", "—")
@@ -73,20 +85,20 @@ def render(board: dict) -> str:
             suffix = f" (`{file}`)" if file else ""
             lines.append(f"- {date} `{did}` {title}{suffix}")
     else:
-        lines.append("- keine im Board; Details unter `docs/adr/`.")
+        lines.append("- none on the board; details in `docs/adr/`.")
     lines.append("")
 
     questions = [q for q in board.get("open_questions", []) if q.get("status", "open") == "open"]
-    lines += ["## Offene Fragen", ""]
+    lines += ["## Open questions", ""]
     if questions:
         for question in questions:
             qid = question.get("id", "Q?")
             text = question.get("question", "")
             blocks = ", ".join(question.get("blocks", [])) or "—"
             status = question.get("status", "open")
-            lines.append(f"- `{qid}` {text} — blockiert: {blocks} — Status: `{status}`")
+            lines.append(f"- `{qid}` {text} — blocks: {blocks} — status: `{status}`")
     else:
-        lines.append("- keine im Board.")
+        lines.append("- none on the board.")
     lines.append("")
 
     return "\n".join(lines)
@@ -94,7 +106,7 @@ def render(board: dict) -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("project", help="Projektordner mit board.json")
+    parser.add_argument("project", help="project folder containing board.json")
     parser.add_argument("--out", default="STATUS.md")
     args = parser.parse_args()
 
@@ -102,7 +114,7 @@ def main() -> int:
     board = json.loads((root / "board.json").read_text(encoding="utf-8"))
     text = render(board)
     (root / args.out).write_text(text, encoding="utf-8")
-    print(f"STATUS geschrieben: {root / args.out}")
+    print(f"STATUS written: {root / args.out}")
     return 0
 
 

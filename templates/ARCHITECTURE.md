@@ -1,68 +1,68 @@
-# Architektur: <Projektname>
+# Architecture: <Project name>
 
-**Stand:** <Datum> · **Status:** verbindlich · **Besitzer:** <Rolle>
+**As of:** <YYYY-MM-DD> · **Status:** binding · **Owner:** <role>
 
-> **Größenbudget:** 400–600 Wörter, harte Obergrenze 800. Wenn du mehr brauchst: auslagern und verlinken, nicht anhängen.
+> **Size budget:** 400–600 words, hard limit 800. If you need more: move it out and link it, don't append.
 
-## 1. Zweck und Nicht-Ziele
+## 1. Purpose and non-goals
 
-<2–3 Sätze: Was kann das System, für wen, welcher Nutzen?>
+<2–3 sentences: what does the system do, for whom, what is the value?>
 
-**Nicht-Ziele:** <was bewusst nicht dazugehört>
+**Non-goals:** <what is deliberately out>
 
-## 2. Harte Randbedingungen
+## 2. Hard constraints
 
-- **Plattform/Version:** <...>
-- **Daten und Netz:** <offline, keine API, ...>
-- **Recht/Regeln:** <ToS, Datenschutz, Lizenzen>
-- **Secrets/Backend:** <kein Backend; keine Secrets im Bundle | Backend, Secrets serverseitig>
-- **Zeit/Budget:** <...>
-- **Sprache:** UI <Deutsch>, Code/Prompts <Englisch>
+- **Platform/version:** <...>
+- **Data and network:** <offline, no API, ...>
+- **Legal/rules:** <ToS, privacy, licences>
+- **Secrets/backend:** <no backend; no secrets in the bundle | backend, secrets server-side>
+- **Time/budget:** <...>
+- **Language:** UI <English>, code/prompts <English>
 
-## 3. Systemform und Modulstruktur
+## 3. System shape and module structure
 
-<Schichten und erlaubte Abhängigkeitsrichtung. Details: `docs/module-map.md`>
+<Layers and allowed dependency direction. Details: `docs/module-map.md`>
 
-| Schicht | Ordner | Darf | Darf nicht |
+| Layer | Folder | May | May not |
 | --- | --- | --- | --- |
-| UI/Screens | `<...>` | Logik aufrufen | Daten/DB direkt |
-| Logik | `<...>` | Data/Repository, eigene Domain-Typen | UI |
-| Daten/Infrastruktur | `<...>` | Standardbibliothek/DB-Treiber, eigene Row-Typen | UI, Logik |
+| UI/screens | `<...>` | call logic | access data/DB directly |
+| Logic | `<...>` | data/repository, own domain types | UI |
+| Data/infrastructure | `<...>` | standard library/DB driver, own row types | UI, logic |
 
-**Regel:** Abhängigkeiten zeigen nur nach unten: UI → Logik → Daten; keine Zyklen. Domain-Typen liegen in der Logik; Data importiert sie nicht.
+**Rule:** dependencies only point downwards: UI → logic → data; no cycles. Domain types live in the logic layer; the data layer does not import them.
 
-## 4. Invarianten (AD-1 … AD-n)
+## 4. Invariants (AD-1 … AD-n)
 
-> Nur Entscheidungen, die zwei unabhängig gebaute Module sonst inkompatibel treffen würden – nicht offensichtlich, echter Trade-off.
+> Only decisions that two independently built modules would otherwise make incompatibly. Non-obvious, a real trade-off.
 
-| ID | Regel | Bindet | Verhindert |
+| ID | Rule | Binds | Prevents |
 | --- | --- | --- | --- |
-| AD-1 | <ein Satz> | <Module/Pfade> | <Fehlerklasse> |
+| AD-1 | <one sentence> | <modules/paths> | <class of errors> |
 | AD-2 | <...> | <...> | <...> |
 
-## 5. Grenzen und Eigentum
+## 5. Boundaries and ownership
 
-| Bereich | Gehört zu | Schreiben | Lesen |
+| Area | Belongs to | Write | Read |
 | --- | --- | --- | --- |
-| <Pfad/Modul> | <Schicht/Rolle> | <wer> | <wer> |
+| <path/module> | <layer/role> | <who> | <who> |
 
-## 6. Qualitätsgates
+## 6. Quality gates
 
-- **Build:** `<Befehl>` → <erwartet>
-- **Tests:** `<Befehl>` → <erwartet>
-- **Lint/Typen:** `<Befehl>` → <erwartet>
-- **E2E/Akzeptanz:** <Szenario> → <sichtbares Ergebnis>
-- **Review:** unabhängig, Diff + Kriterien + Gate-Ausgabe
+- **Build:** `<command>` → <expected>
+- **Tests:** `<command>` → <expected>
+- **Lint/types:** `<command>` → <expected>
+- **E2E/acceptance:** <scenario> → <visible result>
+- **Review:** independent; diff + criteria + gate output
 
-## 7. Offen / bewusst nicht entschieden (Deferred)
+## 7. Open / deliberately undecided (deferred)
 
-- <Thema> — <wann entschieden wird>
+- <topic> — <when it will be decided>
 
-## 8. Verweise
+## 8. References
 
-- Modulstruktur: `docs/module-map.md`
-- Datenmodell: `docs/data-model.md`
-- Verträge: `docs/contracts/<...>.md`
-- Entscheidungen: `docs/adr/`
-- Domänenwissen: `docs/domain/<...>.md`
-- Betrieb: `docs/runbook.md`
+- Module structure: `docs/module-map.md`
+- Data model: `docs/data-model.md`
+- Contracts: `docs/contracts/<...>.md`
+- Decisions: `docs/adr/`
+- Domain knowledge: `docs/domain/<...>.md`
+- Operations: `docs/runbook.md`

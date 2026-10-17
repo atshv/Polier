@@ -1,28 +1,28 @@
-# Modulstruktur: bm
+# Module Structure: bm
 
-> Detaildokument zu `ARCHITECTURE.md`. Ordner und Importregeln, keine Architekturentscheidungen.
+> Detail document for `ARCHITECTURE.md`. Folders and import rules, no architecture decisions.
 
-## Schichten
+## Layers
 
-| Schicht | Ordner | Zweck | Darf importieren | Darf nicht importieren |
+| Layer | Folder | Purpose | May import | May not import |
 |---|---|---|---|---|
-| UI/CLI | `bm/cli.py` | Argumente, Ausgabe, Exit-Codes | `bm.service` | `bm.store` direkt |
-| Logik | `bm/service.py`, `bm/tags.py` | add/list/search, Tag-Regeln | `bm.store`, `bm.config`, `bm.portability` | `bm.cli` |
-| Daten | `bm/store/` | SQLite, Schema, Repository | Standardbibliothek | `bm.cli`, `bm.service` |
-| Adapter | `bm/portability.py` | JSON Export/Import | `bm.store`, Standardbibliothek | `bm.cli`, `bm.service` |
+| UI/CLI | `bm/cli.py` | arguments, output, exit codes | `bm.service` | `bm.store` directly |
+| Logic | `bm/service.py`, `bm/tags.py` | add/list/search, tag rules | `bm.store`, `bm.config`, `bm.portability` | `bm.cli` |
+| Data | `bm/store/` | SQLite, schema, repository | standard library | `bm.cli`, `bm.service` |
+| Adapter | `bm/portability.py` | JSON export/import | `bm.store`, standard library | `bm.cli`, `bm.service` |
 
-## Ordnerkarte
+## Folder map
 
 ```text
 bm/
   cli.py            # UI/CLI
-  service.py        # Logik
-  tags.py           # Logik (Etappe 2)
-  config.py         # Konfiguration
-  portability.py    # Adapter
+  service.py        # logic
+  tags.py           # logic (stage 2)
+  config.py         # configuration
+  portability.py    # adapter
   store/
-    db.py           # Verbindung, Schema, Migration
-    repository.py   # Datenzugriff
+    db.py           # connection, schema, migrations
+    repository.py   # data access
 tests/
   test_cli.py
   test_service.py
@@ -32,16 +32,16 @@ tests/
   e2e/
 ```
 
-## Datenmodell
+## Data model
 
-- Tabellen und Felder stehen in `docs/data-model.md`.
-- SQL nur in `bm/store/`; CLI und Service kennen keine Spaltennamen.
+- Tables and fields are in `docs/data-model.md`.
+- SQL only in `bm/store/`; CLI and service know no column names.
 
-## Regeln
+## Rules
 
-1. Abhängigkeiten zeigen nur nach unten: CLI → Service → Store; Service → Portability → Store. Keine Zyklen.
-2. SQL nur in `bm/store/`; die CLI enthält keine Queries.
-3. Der Service kennt keine Typer-/CLI-Typen.
-4. Neue Dateien kommen in die passende Schicht; keine Datei „irgendwo“.
-5. Ein Task ändert möglichst eine Schicht. M03 ändert CLI + Service, weil der Befehl verdrahtet wird – Store bleibt unangetastet.
-6. Abweichungen brauchen eine ADR.
+1. Dependencies only point downwards: CLI → service → store; service → portability → store. No cycles.
+2. SQL only in `bm/store/`; the CLI contains no queries.
+3. The service knows no Typer/CLI types.
+4. New files go into the matching layer; no file "somewhere".
+5. A task changes one layer if possible. M03 changes CLI + service because the command is wired up; the store stays untouched.
+6. Deviations need an ADR.

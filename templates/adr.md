@@ -1,23 +1,23 @@
-# ADR-0001: <Titel>
+# ADR-0001: <Title>
 
-**Datum:** <Datum> · **Status:** akzeptiert · **Ersetzt:** –
+**Date:** <YYYY-MM-DD> · **Status:** accepted · **Supersedes:** –
 
-## Kontext
+## Context
 
-<Welche Kräfte wirken? Welche Optionen gab es? Warum ist die Entscheidung jetzt nötig?>
+<Which forces are at work? Which options were there? Why is the decision needed now?>
 
-## Entscheidung
+## Decision
 
-<Ein Satz, aktiv formuliert. „Wir bauen X clientseitig, weil …“>
+<One sentence, active voice. "We build X client-side because …">
 
-## Konsequenzen
+## Consequences
 
-- **Positiv:** <...>
-- **Negativ:** <...>
-- **Bindet:** <Module/Pfade>
-- **Verhindert:** <Fehlerklasse>
+- **Positive:** <...>
+- **Negative:** <...>
+- **Binds:** <modules/paths>
+- **Prevents:** <class of errors>
 
-## Alternativen
+## Alternatives
 
-- **<Option B>** — verworfen, weil <...>
-- **<Option C>** — verworfen, weil <...>
+- **<Option B>** — rejected because <...>
+- **<Option C>** — rejected because <...>

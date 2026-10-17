@@ -1,75 +1,77 @@
 # Mxx — <Name>
 
-> **Größe:** 400–800 Wörter. Kein Brief ohne Kontext-Pack und Gates. Keine Boilerplate – die steht in `AGENTS.md`.
+> **Size:** 400–800 words. No brief without a context pack and gates. No boilerplate; that lives in `AGENTS.md`. Stored as `tasks/Mxx.md`.
 
-## Ziel
+## Goal
 
-<Ein Satz: was funktioniert nach dieser Aufgabe?>
+<One sentence: what works after this task?>
 
-**Warum:** <welches spätere Modul baut darauf>
+**Why:** <which later module builds on it>
 
-## Umfang
+**Satisfies:** <D1, D2 — definition-of-done items from `docs/quality.md`, as in board.json>
 
-- <Funktion 1>
-- <Funktion 2>
+## Scope
 
-## Nicht Teil davon
+- <feature 1>
+- <feature 2>
 
-- <bewusst ausgeschlossen> (kommt in Mxx)
+## Out of scope
 
-## Akzeptanz
+- <deliberately excluded> (comes in Mxx)
 
-A1 WENN <Situation>, DANN SOLL das System <Verhalten>.
-A2 WENN <Situation>, DANN SOLL das System <Verhalten>.
+## Acceptance
+
+A1 WHEN <situation>, THEN the system SHALL <behaviour>.
+A2 WHEN <situation>, THEN the system SHALL <behaviour>.
 A3 ...
 
-## Kontext-Pack
+## Context pack
 
-**Lies genau:**
+**Read exactly:**
 
 - `ARCHITECTURE.md`, `AGENTS.md`, `STATUS.md`, `docs/module-map.md`
-- `docs/contracts/<...>.md`, Abschnitt <...>
-- `src/<...>`, Zeilen <...>
-- `<Vorbild-Datei>`
+- `docs/contracts/<...>.md`, section <...>
+- `src/<...>`, lines <...>
+- `<reference file>`
 
-**Lies nicht:** <andere Task-Briefs, Details, ...>
+**Do not read:** <other task briefs, details, ...>
 
-**Budget:** ≤ <n> Token Input.
+**Budget:** ≤ <n> tokens input.
 
-## Vorgaben
+## Specifications
 
-- **Schicht/Modul:** <UI/Logik/Daten> — `<Ordner>`
-- **Daten/Vertrag:** <Felder, Typen, Grenzen, gemäß ARCHITECTURE.md>
-- **Dateien neu:** `<Pfad>`
-- **Dateien ändern:** `<Pfad>` — <was genau>
-- **Vorbild:** `<bestehende Datei>`
+- **Layer/module:** <UI/logic/data> — `<folder>`
+- **Data/contract:** <fields, types, limits, according to ARCHITECTURE.md>
+- **New files:** `<path>`
+- **Changed files:** `<path>` — <what exactly>
+- **Reference:** `<existing file>`
 
-## Stolperfallen
+## Pitfalls
 
-- <Eigenheit einer Bibliothek oder Version> (Quelle: <URL>, geprüft <Datum>)
-- <Falle im Projekt, z. B. Feld X heißt in der DB anders>
+- <quirk of a library or version> (source: <URL>, checked <date>)
+- <trap in the project, e.g. field X has a different name in the DB>
 
-## Sonderfälle
+## Edge cases
 
-- <leere Eingabe, Duplikat, ungültiger Wert, fehlende Verbindung, Doppelklick ...>
+- <empty input, duplicate, invalid value, missing connection, double click ...>
 
 ## Gates
 
-1. `<Befehl>` → <erwartet>
-2. `<Befehl>` → <erwartet>
-3. <E2E-Szenario> → <sichtbares Ergebnis>
+1. `<command>` → <expected>
+2. `<command>` → <expected>
+3. <E2E scenario> → <visible result>
 
-Ein Gate ist bestanden, wenn Befehl, Exit-Code und erwartete Ausgabe stimmen; die Ausgabe ist die Evidenz. Die Task ist bestanden, wenn alle Gates grün sind, jede Akzeptanz belegt ist und der Reviewer `pass` ohne Blocker gibt.
+A gate passes when command, exit code and expected output match; the output is the evidence. The task passes when all gates are green, every acceptance criterion is evidenced and the reviewer gives `pass` with no blockers.
 
-Schlägt ein Gate fehl: Ursache lesen, Code korrigieren, Gate wiederholen. Nie den Test anpassen, damit er grün wird.
+If a gate fails: read the cause, fix the code, rerun the gate. Never adjust the test to make it pass.
 
-## Grenzen
+## Limits
 
-- **Scope:** nur `<Pfade>`
-- **Stop:** <max. Runden/Zeit/Token>; bei Blockade `status: blocked` + Begründung
-- Keine Architekturänderung; keine neuen Abhängigkeiten ohne Freigabe
+- **Scope:** only `<paths>`
+- **Stop:** <max. rounds/time/tokens>; when blocked, `status: blocked` + reason
+- No architecture change; no new dependencies without approval
 
-## Ausgabe (YAML, kein Prosatext)
+## Output (YAML, no prose)
 
 ```yaml
 task_id: Mxx

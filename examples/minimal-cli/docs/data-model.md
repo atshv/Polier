@@ -1,37 +1,37 @@
-# Datenmodell: bm
+# Data Model: bm
 
-> Detaildokument zu `ARCHITECTURE.md`. Nur Daten, keine Architekturentscheidungen.
+> Detail document for `ARCHITECTURE.md`. Data only, no architecture decisions.
 
-## Tabelle `bookmark`
+## Table `bookmark`
 
-| Feld | Typ | Pflicht | Regeln |
+| Field | Type | Required | Rules |
 |---|---|---|---|
-| `id` | INTEGER | ja | Primärschlüssel, autoincrement |
-| `url` | TEXT | ja | kanonisch, eindeutig, max. 2000 Zeichen |
-| `title` | TEXT | ja | Standard `''`, max. 500 Zeichen |
-| `created_at` | TEXT | ja | ISO-8601 UTC, `datetime.now(timezone.utc).isoformat()` |
+| `id` | INTEGER | yes | primary key, autoincrement |
+| `url` | TEXT | yes | canonical, unique, max. 2000 characters |
+| `title` | TEXT | yes | default `''`, max. 500 characters |
+| `created_at` | TEXT | yes | ISO 8601 UTC, `datetime.now(timezone.utc).isoformat()` |
 
 **Index:** `UNIQUE(url)`.
 
-## Tabelle `tag` (Etappe 2)
+## Table `tag` (stage 2)
 
-| Feld | Typ | Pflicht | Regeln |
+| Field | Type | Required | Rules |
 |---|---|---|---|
-| `id` | INTEGER | ja | Primärschlüssel |
-| `name` | TEXT | ja | lowercase, getrimmt, max. 20 Zeichen, eindeutig |
+| `id` | INTEGER | yes | primary key |
+| `name` | TEXT | yes | lowercase, trimmed, max. 20 characters, unique |
 
-## Tabelle `bookmark_tag` (Etappe 2)
+## Table `bookmark_tag` (stage 2)
 
-| Feld | Typ | Pflicht | Regeln |
+| Field | Type | Required | Rules |
 |---|---|---|---|
-| `bookmark_id` | INTEGER | ja | Fremdschlüssel `bookmark.id`, `ON DELETE CASCADE` |
-| `tag_id` | INTEGER | ja | Fremdschlüssel `tag.id`, `ON DELETE CASCADE` |
+| `bookmark_id` | INTEGER | yes | foreign key `bookmark.id`, `ON DELETE CASCADE` |
+| `tag_id` | INTEGER | yes | foreign key `tag.id`, `ON DELETE CASCADE` |
 
-**Primärschlüssel:** (`bookmark_id`, `tag_id`).
+**Primary key:** (`bookmark_id`, `tag_id`).
 
-## Regeln
+## Rules
 
-- SQLite-Fremdschlüssel aktivieren (`PRAGMA foreign_keys = ON`) pro Verbindung.
-- Schemaänderungen nur in `bm/store/db.py` mit einer nummerierten Migration.
-- Kein Ad-hoc-SQL außerhalb von `bm/store/`.
-- Export/Import nutzt dieselben Tabellen; JSON ist kein zweites Schema.
+- Enable SQLite foreign keys (`PRAGMA foreign_keys = ON`) per connection.
+- Schema changes only in `bm/store/db.py` with a numbered migration.
+- No ad-hoc SQL outside `bm/store/`.
+- Export/import uses the same tables; JSON is not a second schema.

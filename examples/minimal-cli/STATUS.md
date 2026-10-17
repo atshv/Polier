@@ -1,33 +1,37 @@
 # Status
 
-**Projekt:** bm · **Profil:** S · **Etappe:** 1 von 2
+**Project:** bm · **Profile:** S · **Stage:** 1 of 2
 
-> Automatisch aus `board.json` erzeugt. Nicht von Hand bearbeiten.
+> Generated from `board.json`. Do not edit by hand.
 
-## Erledigt
+## Ready now
 
-- [x] `M01` Projektgerüst und CLI — Status: `done` — Owner: worker-1
-- [x] `M02` Store und Schema — Status: `done` — Owner: worker-1
+- none
 
-## In Arbeit
+## Done
 
-- [ ] `M03` Add, List und Search — Status: `in_progress` — Owner: worker-1
+- [x] `M01` Project scaffold and CLI — status: `done` — owner: worker-1
+- [x] `M02` Store and schema — status: `done` — owner: worker-1
 
-## Blockiert / Fehlgeschlagen
+## In progress
 
-- keine
+- [ ] `M03` Add, list and search — status: `in_progress` — owner: worker-1
 
-## Offen
+## Blocked / failed
 
-- [ ] `M04` Tags — Status: `pending` — Owner: —
-- [ ] `M05` JSON Export und Import — Status: `pending` — Owner: —
-- [ ] `M06` E2E, README und Politur — Status: `pending` — Owner: —
+- none
 
-## Entscheidungen
+## Open
 
-- 2026-10-17 `ADR-0001` SQLite als einzige Wahrheit (`docs/adr/ADR-0001-sqlite.md`)
-- 2026-10-17 `ADR-0002` Tags erst in Etappe 2 (`docs/adr/ADR-0002-tags-stage2.md`)
+- [ ] `M04` Tags — status: `pending` — owner: —
+- [ ] `M05` JSON export and import — status: `pending` — owner: —
+- [ ] `M06` E2E, README and polish — status: `pending` — owner: —
 
-## Offene Fragen
+## Decisions
 
-- `Q1` Soll `bm list` standardmäßig alle Einträge zeigen? — blockiert: M06 — Status: `open`
+- 2026-10-17 `ADR-0001` SQLite as the single source of truth (`docs/adr/ADR-0001-sqlite.md`)
+- 2026-10-17 `ADR-0002` Tags only in stage 2 (`docs/adr/ADR-0002-tags-stage2.md`)
+
+## Open questions
+
+- `Q1` Should `bm list` show all entries by default? — blocks: M06 — status: `open`

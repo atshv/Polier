@@ -1,7 +1,10 @@
 # ReviewFeedback — Mxx
 
+> Stored as `reviews/Mxx.md`. Later rounds are appended to the same file as "Round 2", "Round 3" …
+
 ```yaml
 task_id: Mxx
+round: 1
 verdict: rework          # pass | rework | fail
 acceptance_map:
   A1: pass
@@ -11,16 +14,16 @@ findings:
     file: "src/<...>"
     line: 42
     criterion: "A2"
-    issue: "<Was ist falsch und warum ist es wichtig?>"
-    evidence: "<Befehl + Ausgabe, Testname, Diff-Stelle>"
-    fix_hint: "<kleinste Korrektur, kein Rewrite>"
+    issue: "<What is wrong and why does it matter?>"
+    evidence: "<command + output, test name, diff location>"
+    fix_hint: "<smallest fix, no rewrite>"
 ```
 
-## Regeln
+## Rules
 
-- Kein Finding ohne Datei, Zeile, Kriterium und Evidenz.
-- Keine Stilfragen, außer sie verursachen Fehler.
-- Maximal 5 Findings pro Runde, die wichtigsten zuerst.
-- Der Reviewer darf nicht editieren.
-- Der Reviewer sieht Diff, Akzeptanz, Gate-Ausgabe und Architektur – nicht die Denkspur des Autors.
-- `verdict: pass` nur, wenn alle Blocker weg sind und die Gates grün sind.
+- No finding without file, line, criterion and evidence.
+- No style questions unless they cause defects.
+- At most 5 findings per round, most important first.
+- The reviewer may not edit code.
+- The reviewer sees the diff, acceptance criteria, gate output and architecture, not the author's reasoning.
+- `verdict: pass` only when all blockers are gone and the gates are green.

@@ -1,146 +1,99 @@
-# Qualitätsrubrik und Lint
+# Quality Rubric and Lint
 
-**Zweck:** Ein Prompt-Paket ist gut, wenn ein fremder Agent damit ohne Rückfrage arbeiten kann. Diese Rubrik prüft das – unabhängig vom Autor, ohne Selbst-Score.
+A generated project is good when an outside agent can work from it without asking. Terms (gate, task passed, cold-start test) are defined in `generator.md`.
 
----
+## 1. Criteria
 
-## 0. Begriffe
+Score each criterion **0 or 1**. **B** marks a blocker: it prevents approval regardless of the total.
 
-- **Gate:** ein deterministischer Befehl mit erwarteter Ausgabe. Bestanden ist es nur, wenn Exit-Code und sichtbare Ausgabe stimmen; die Ausgabe wird als Evidenz gespeichert.
-- **Task bestanden:** alle Gates grün, jede Akzeptanz einem Gate/Test zugeordnet, Reviewer-`verdict: pass` ohne Blocker, vom Lead/Menschen gemergt. Ein Worker-`submitted` zählt nicht.
-- **Kaltstart-Test:** ein fremder Agent bekommt nur `ARCHITECTURE.md`, `AGENTS.md`, `STATUS.md` und den ersten Task-Brief und muss daraus ohne blockierende Rückfrage einen Plan bauen können. Blockierend = ohne diese Antwort ist kein Plan möglich.
-
----
-
-## 1. Die 12 Kriterien
-
-Jedes Kriterium wird mit **0 oder 1** bewertet. Blocker sind mit **B** markiert: Ein Blocker verhindert die Freigabe, auch wenn die Summe passt.
-
-| # | Kriterium | Prüffrage | B |
+| # | Criterion | Check | B |
 |---|---|---|---|
-| 1 | Zweck, Nutzer, Nutzen | Steht in 2–3 Sätzen, was das System für wen tut und woran Erfolg gemessen wird? | B |
-| 2 | Umfang und Nicht-Ziele | Gibt es eine Liste, was dazugehört, und eine, was ausdrücklich nicht dazugehört? | – |
-| 3 | Testbare Akzeptanz | Ist jede Anforderung als WENN–DANN formuliert und hat mindestens ein Gate oder einen Test? | B |
-| 4 | Kontext-Pack | Steht im Brief genau, welche Dateien/Abschnitte gelesen werden – und welche nicht? Gibt es ein Token-Budget? | – |
-| 5 | Exakte Vorgaben | Sind Felder, Typen, Grenzen, Pfade und Texte konkret statt adjektivisch? | – |
-| 6 | Sonderfälle | Sind leere Eingabe, Duplikat, ungültiger Wert, fehlende Verbindung, Doppelklick o. Ä. abgedeckt? | – |
-| 7 | Gates | Gibt es Befehle mit erwarteter Ausgabe für Build, Tests und E2E/Akzeptanz? | B |
-| 8 | Architektur-Spine | Ist `ARCHITECTURE.md` ≤ 800 Wörter, mit 3–7 Invarianten (AD-IDs), Nicht-Zielen, Modulstruktur und Verweisen? | – |
-| 9 | Rollen und Scopes | Passt die Topologie zum Profil? Hat jede Aufgabe genau einen Schreiber und einen disjunkten Scope? | – |
-| 10 | Review-Unabhängigkeit | Ist definiert, wer prüft, was der Reviewer sieht, und wie eskaliert wird? | B |
-| 11 | Größenbudgets | Sind Architektur, Briefs, STATUS und Docs innerhalb der Budgets; keine Duplikate? | – |
-| 12 | Keine Erfindungen | Sind Bibliotheken, APIs, Paketnamen, Versionen und Pfade aus Doku/Manifest/Repo belegt oder als `[UNVERIFIED]` mit Quelle markiert? | – |
+| 1 | Purpose, users, value | 2–3 sentences say what the system does, for whom, and how success is measured. | B |
+| 2 | Scope and non-goals | Both are listed explicitly. | – |
+| 3 | Testable acceptance | Every requirement is WHEN–THEN and covered by a gate or test. | B |
+| 4 | Context pack | Each brief names what to read, what not to read, and a token budget. | – |
+| 5 | Exact specifications | Fields, types, limits, paths and texts are concrete, not adjectives. | – |
+| 6 | Edge cases | Empty input, duplicates, invalid values, lost connection, repeated actions are covered. | – |
+| 7 | Gates | Build, test and acceptance commands with expected output exist. | B |
+| 8 | Architecture spine | `ARCHITECTURE.md` ≤ 800 words, 3–7 invariants (AD IDs), non-goals, module structure, references. | – |
+| 9 | Roles and scopes | Topology fits the profile; each task has one writer and a disjoint scope. | – |
+| 10 | Review independence | Reviewer, reviewer inputs and escalation are defined. | B |
+| 11 | Size budgets | All artifacts within budget; no duplicated content. | – |
+| 12 | Nothing invented | Libraries, APIs, versions and paths are sourced or marked `[UNVERIFIED]`. | – |
 
-**Bestanden:** ≥ 11/12 **und** kein Blocker. Unter 11 oder ein Blocker: nachbessern und erneut prüfen. Maximal zwei Runden, dann entscheidet der Mensch.
+**Pass:** ≥ 11/12 and no blocker. Otherwise fix and re-check; after two rounds the human decides.
 
----
+## 2. Lint
 
-## 2. Lint: prüfbare Punkte
+*(check.py)* marks what `tools/check.py` verifies; the rest needs a reviewer.
 
-`tools/check.py` prüft die harten, maschinellen Punkte (Board, Budgets, Links, Platzhalter, Pflichtdateien). Die übrigen Punkte brauchen Review-Urteil; sie sind hier trotzdem aufgeführt.
+- [ ] Mandatory files present, including `.gitignore` *(check.py)*.
+- [ ] `ARCHITECTURE.md` ≤ 800 words *(check.py)*; sections 1–8 present.
+- [ ] `AGENTS.md` ≤ 400 words *(check.py, warning)*; commands, scope and commit rule *(check.py)*; no architecture or progress.
+- [ ] `docs/module-map.md` defines layers *(check.py)*, folders and import direction.
+- [ ] `board.json`: valid, mandatory task fields, `base_branch`, complexity ≤ 6, no unknown dependencies, no cycles, no overlapping write scopes in a parallel group *(check.py)*.
+- [ ] Briefs match the board: ID, title, acceptance IDs, scope, `satisfies` *(check.py)*.
+- [ ] Every `AD-n` and `ADR-nnnn` reference exists *(check.py)*.
+- [ ] Every definition-of-done item `D1..Dn` is covered by a task *(check.py)*.
+- [ ] `STATUS.md` matches `board.json` *(check.py)*.
+- [ ] Every `done` task has evidence *(check.py)*.
+- [ ] No placeholders or TODOs *(check.py)*; no `[UNVERIFIED]` in critical paths.
+- [ ] Internal links resolve *(check.py)*; named paths exist or are marked new.
+- [ ] Git repo initialised *(check.py, warning)* with a first commit.
+- [ ] Every acceptance criterion has a gate or named test.
+- [ ] Every brief has a context pack ("Read exactly", "Do not read") and a stop/budget section.
+- [ ] No task mixes UI and data access; each names its layer.
+- [ ] No monolith files; no secrets or credentials in files or bundles.
 
-Diese Punkte kann ein Skript oder ein sorgfältiger Reviewer ohne Urteil prüfen:
+## 3. Critic prompt
 
-- [ ] `ARCHITECTURE.md` vorhanden, ≤ 800 Wörter, Abschnitte 1–8 vorhanden.
-- [ ] `docs/module-map.md` vorhanden; Schichten (UI/Logik/Daten), Ordner und Importrichtung definiert.
-- [ ] `AGENTS.md` vorhanden, ≤ 400 Wörter, keine Architektur, kein Fortschritt; enthält Befehle, Scope- und Commit-Regel.
-- [ ] `STATUS.md` vorhanden und aus `board.json` ableitbar.
-- [ ] `board.json` ist valides JSON, entspricht `templates/board.schema.json`.
-- [ ] Jede Task hat: `id`, `title`, `goal`, `status`, `depends_on`, `complexity`, `stage`, `scope_write`, `acceptance`, `gates`.
-- [ ] Keine Task mit `complexity ≥ 7`.
-- [ ] Keine Zyklen in `depends_on`.
-- [ ] Keine zwei parallel laufenden Tasks mit überlappendem `scope_write`.
-- [ ] Jede Akzeptanz `A1..An` hat mindestens ein Gate oder einen benannten Test.
-- [ ] Jede Task hat einen Kontext-Pack mit „Lies genau“ und „Lies nicht“.
-- [ ] Jede Task hat einen Stop-/Budget-Abschnitt.
-- [ ] Keine `TODO`, `TBD`, `Platzhalter`, `[UNVERIFIED]` in kritischen Pfaden.
-- [ ] Alle internen Links und Dateipfade existieren.
-- [ ] Keine Datei, die „alles“ enthält (Monolith).
-- [ ] Keine erfundenen Bibliotheksversionen ohne Quelle.
-- [ ] Keine Secrets, Tokens oder echten Zugangsdaten in Dateien.
-- [ ] Secrets-Policy beachtet: keine Secrets in Dateien/Bundles; Mobile/Web-Bundles sind öffentlich.
-- [ ] Bibliotheken/APIs/Versionen sind aus Doku oder Manifest belegt, nicht erfunden.
-- [ ] Git-Repo initialisiert, `.gitignore` vorhanden, `base_branch` gesetzt, erster Commit vorhanden.
-- [ ] Keine Task mischt UI und Datenzugriff; jede Task nennt ihre Schicht/Modulgruppe.
-
----
-
-## 3. Critic-Prompt (ein Subagent, nach dem Kaltstart)
-
-Der Critic ist **derselbe** Subagent wie im Kaltstart. Er bekommt zuerst nur die vier Kaltstart-Dateien; erst danach Board, Briefs und diesen Prompt. Kein zweiter Subagent.
+Same subagent as the cold start (§4), continued after it.
 
 ```text
-Du bist unabhängiger Kritiker. Du hast dieses Projekt nicht geschrieben und
-sollst es nicht umschreiben. Du prüfst nur.
+You are an independent critic. You did not write this project; do not rewrite it.
 
-Lies ausschließlich:
-- ARCHITECTURE.md
-- AGENTS.md
-- STATUS.md
-- board.json
-- tasks/M01..Mxx.md (die vorhandenen Briefs)
-- docs/quality.md, falls vorhanden
+Read only: ARCHITECTURE.md, AGENTS.md, STATUS.md, board.json, tasks/*.md,
+docs/quality.md (if present).
 
-Bewerte mit der 12-Punkte-Rubrik (rubric.md). Achte besonders auf:
-1. Architektur > 800 Wörter oder Details, die nicht hineingehören
-2. Akzeptanz ohne Gate/Test
-3. Tasks ohne Scope, mit Zyklen oder überlappenden Schreibpfaden
-4. fehlende Kontext-Packs oder Budgets
-5. Rollen/Rechte, die nicht zum Profil passen
-6. erfundene Versionen, Pfade oder APIs
-7. Widersprüche zwischen Architektur, Briefs und Board
-8. fehlendes Git-Repo, fehlende `.gitignore` oder fehlender erster Commit
-9. vermischte Schichten (UI greift direkt auf Daten zu, Logik importiert UI)
+Score the 12 criteria of rubric.md. Look especially for:
+1. architecture > 800 words or details that belong elsewhere
+2. acceptance criteria without gate or test
+3. tasks without scope, with cycles or overlapping write paths
+4. missing context packs or budgets
+5. roles or permissions that do not fit the profile
+6. invented versions, paths or APIs
+7. contradictions between architecture, briefs and board
+8. missing git repo, .gitignore or first commit
+9. mixed layers (UI accesses data, logic imports UI)
 
-Ausgabe: Tabelle | # | Kriterium | 0/1 | Blocker | Finding | Datei | Fix.
-Danach: Gesamtsumme, Blocker-Liste, drei wichtigste Verbesserungen.
-Keine Rewrites. Keinen Score ohne Findings. Keine Meinung ohne Datei/Zeile.
+Output: table | # | criterion | 0/1 | blocker | finding | file | fix |,
+then total, blockers, top three improvements.
+No rewrites. No score without findings. No finding without file and line.
 ```
 
----
-
-## 4. Kaltstart-Test
-
-Der wichtigste Test: Ein fremder Agent bekommt **nur** die Dateien, die ein neuer Mitarbeiter auch bekommen würde.
+## 4. Cold-start test
 
 ```text
-Du bist ein neuer Agent auf diesem Projekt. Du bekommst nur:
-- ARCHITECTURE.md
-- AGENTS.md
-- STATUS.md
-- tasks/M01.md
+You are new on this project. You have only ARCHITECTURE.md, AGENTS.md,
+STATUS.md and tasks/M01.md.
 
-Beantworte ohne Rückfrage:
-1. Was ist das Ziel des Projekts in einem Satz?
-2. Was ist der Scope von M01, und was ist ausdrücklich nicht drin?
-3. Welche Dateien würdest du ändern, und welche nicht?
-4. Welche Befehle würdest du ausführen, und was erwartest du?
-5. Welche Informationen fehlen dir, um einen Plan zu schreiben?
-6. Welche Datei müsstest du zusätzlich lesen?
-7. In welche Schicht (UI/Logik/Daten) gehört die Änderung, und welche Dateien darfst du dafür anfassen?
+Answer without asking back:
+1. The project goal in one sentence.
+2. M01's scope and what is explicitly out.
+3. Which files you would change, and which not.
+4. Which commands you would run and what you expect.
+5. What information is missing for a plan.
+6. Which additional file you would need.
+7. Which layer the change belongs to.
 
-Antworte knapp. Erfinde nichts.
+Be brief. Invent nothing.
 ```
 
-**Auswertung:** Jede Rückfrage ist ein Befund. Ergänze den Kontext-Pack oder die Architektur – aber nur, wenn es eine echte Lücke ist. Ein Detail, das nur ein Modul braucht, gehört in den Brief, nicht in die Architektur.
+**Pass:** no blocking question; correct files, layer and gates; no new decision needed. Each question back is a finding: close real gaps in the brief (or, if every module needs it, in the architecture) and re-test.
 
-**Bestanden:** keine blockierende Rückfrage; der Agent nennt die richtigen Dateien, die richtige Schicht und die Gates und kann planen, ohne eine neue Entscheidung zu treffen. **Nicht bestanden:** eine blockierende Rückfrage oder eine falsche Datei/Schicht – Kontext korrigieren und erneut testen.
+## 5. Anti-gaming
 
----
-
-## 5. Anti-Gaming
-
-- Der Autor bewertet nicht seine eigene Arbeit.
-- Der Critic sieht keine Denkspur, keine Selbstbewertung, keine Chat-Historie – nur Artefakte.
-- „Sieht gut aus“ ist kein Finding. Jedes Finding braucht Datei, Kriterium und Evidenz.
-- Ein Score ohne Findings ist wertlos. Zähle die behobenen Blocker, nicht den Score.
-- Wenn der Critic nie etwas findet, ist die Rubrik zu weich oder der Kontext zu klein. Rubrik schärfen, nicht loben.
-
----
-
-## 6. Wann du aufhörst
-
-- ≥ 11/12 und kein Blocker: freigeben.
-- Ein Blocker: nachbessern, erneut prüfen.
-- Zwei Runden ohne Fortschritt: Mensch fragen, nicht weiter würfeln.
-- Widersprüchliche Anforderungen: stoppen, Entscheidung verlangen.
+- Authors never score their own work.
+- The critic sees artifacts only: no reasoning, self-assessment or chat history.
+- Every finding needs file, criterion and evidence; "looks good" is not a finding.
+- Count fixed blockers, not scores. A critic that never finds anything means the rubric is too soft.

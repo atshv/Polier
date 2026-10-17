@@ -1,74 +1,74 @@
-# Architektur: bm
+# Architecture: bm
 
-**Stand:** 17.10.2026 · **Status:** verbindlich · **Besitzer:** Projektteam
+**As of:** 2026-10-17 · **Status:** binding · **Owner:** project team
 
-## 1. Zweck und Nicht-Ziele
+## 1. Purpose and non-goals
 
-Eine lokale Bookmark-CLI: Links speichern, taggen, durchsuchen, als JSON sichern. Für einen Entwickler, der Lesezeichen ohne Cloud und ohne Konto verwalten will.
+A local bookmark CLI: save links, tag them, search them, back them up as JSON. For a developer who wants to manage bookmarks without a cloud and without an account.
 
-**Nicht-Ziele:** Sync, Cloud, Browser-Extension, Web-UI, Volltext-Index, KI-Tagging, Windows.
+**Non-goals:** sync, cloud, browser extension, web UI, full-text index, AI tagging, Windows.
 
-## 2. Harte Randbedingungen
+## 2. Hard constraints
 
-- Python 3.12, `uv`; Laufzeit nur Standardbibliothek + `typer`
-- SQLite unter `~/.bm/bookmarks.db`; Export/Import als JSON
-- Keine Netzwerkaufrufe zur Laufzeit; keine Secrets, kein Backend
-- macOS/Linux; Windows nicht getestet
-- Code/Kommentare Englisch, CLI-Texte Deutsch
+- Python 3.12, `uv`; runtime only standard library + `typer`
+- SQLite at `~/.bm/bookmarks.db`; export/import as JSON
+- No network calls at runtime; no secrets, no backend
+- macOS/Linux; Windows not tested
+- Code, comments and CLI texts in English
 
-## 3. Systemform und Modulstruktur
+## 3. System shape and module structure
 
 ```text
 CLI (typer) → Service → Repository → SQLite
                   ↘ Portability (JSON export/import) → Store
 ```
 
-- `bm/cli.py` parst Argumente und gibt aus; keine Fachlogik.
-- `bm/service.py` enthält die Operationen (add, list, search, import, export).
-- `bm/store/` kapselt SQLite; nur hier steht SQL.
-- `bm/portability.py` liest/schreibt JSON.
-- Richtung: CLI → Service → Store; Service → Portability → Store. Store kennt keinen Service, Service keine CLI.
+- `bm/cli.py` parses arguments and prints output; no domain logic.
+- `bm/service.py` contains the operations (add, list, search, import, export).
+- `bm/store/` encapsulates SQLite; SQL lives only here.
+- `bm/portability.py` reads/writes JSON.
+- Direction: CLI → service → store; service → portability → store. The store knows no service, the service no CLI.
 
-Schichten: UI/CLI (`bm/cli.py`), Logik (`bm/service.py`, `bm/tags.py`), Daten (`bm/store/`), Adapter (`bm/portability.py`). Details: `docs/module-map.md`.
+Layers: UI/CLI (`bm/cli.py`), logic (`bm/service.py`, `bm/tags.py`), data (`bm/store/`), adapter (`bm/portability.py`). Details: `docs/module-map.md`.
 
-## 4. Invarianten
+## 4. Invariants
 
-| ID | Regel | Bindet | Verhindert |
+| ID | Rule | Binds | Prevents |
 | --- | --- | --- | --- |
-| AD-1 | SQLite ist die einzige Wahrheit; JSON ist Backup, kein zweiter Store. | Store, Portability | Divergenz, doppelte Datenhaltung |
-| AD-2 | URLs werden vor dem Speichern kanonisiert (Schema/Host klein, Standardport weg, Trailing Slash weg); `url` ist eindeutig. | Service, Store | Duplikate, kaputte Suche |
-| AD-3 | Tags sind lowercase, getrimmt, max. 20 Zeichen, ohne Kommas; Duplikate werden zusammengeführt. | Service, Store | inkonsistente Filter |
-| AD-4 | Die CLI enthält keine Fachlogik; jede Operation geht über `bm.service`. | CLI, Service | nicht testbare Logik, doppelte Regeln |
-| AD-5 | Keine Netzwerkaufrufe; Import/Export nur lokale Pfade. | alle | unerwartete Abhängigkeiten, Datenschutz |
-| AD-6 | Schemaänderungen nur über `bm/store/db.py`; kein Ad-hoc-SQL in Features. | Store, Features | Drift, kaputte Migrationen |
+| AD-1 | SQLite is the single source of truth; JSON is a backup, not a second store. | store, portability | divergence, duplicate data |
+| AD-2 | URLs are canonicalised before saving (lowercase scheme/host, default port removed, trailing slash removed); `url` is unique. | service, store | duplicates, broken search |
+| AD-3 | Tags are lowercase, trimmed, max. 20 characters, without commas; duplicates are merged. | service, store | inconsistent filters |
+| AD-4 | The CLI contains no domain logic; every operation goes through `bm.service`. | CLI, service | untestable logic, duplicated rules |
+| AD-5 | No network calls; import/export only to local paths. | all | unexpected dependencies, privacy |
+| AD-6 | Schema changes only via `bm/store/db.py`; no ad-hoc SQL in features. | store, features | drift, broken migrations |
 
-## 5. Grenzen und Eigentum
+## 5. Boundaries and ownership
 
-| Bereich | Schicht | Schreiben | Lesen |
+| Area | Layer | Write | Read |
 | --- | --- | --- | --- |
-| `bm/cli.py` | UI/CLI | CLI-Verantwortlicher | Reviewer |
-| `bm/service.py` | Logik | Logik-Verantwortlicher | Reviewer |
-| `bm/store/` | Daten | Daten-Verantwortlicher | Logik, Reviewer |
-| `bm/tags.py` | Logik | Logik-Verantwortlicher | Reviewer |
-| `bm/portability.py` | Adapter | Adapter-Verantwortlicher | Service, Reviewer |
-| `tests/` | Qualität | alle | Reviewer |
+| `bm/cli.py` | UI/CLI | CLI owner | reviewer |
+| `bm/service.py` | logic | logic owner | reviewer |
+| `bm/store/` | data | data owner | logic, reviewer |
+| `bm/tags.py` | logic | logic owner | reviewer |
+| `bm/portability.py` | adapter | adapter owner | service, reviewer |
+| `tests/` | quality | everyone | reviewer |
 
-## 6. Qualitätsgates
+## 6. Quality gates
 
-- Lint: `uv run ruff check .` → keine Fehler
-- Typen: `uv run mypy bm` → keine Fehler
-- Tests: `uv run pytest` → alle grün
-- E2E: `bm add` → `bm list` enthält; `bm search` findet; Duplikat → Exit 2
+- Lint: `uv run ruff check .` → no errors
+- Types: `uv run mypy bm` → no errors
+- Tests: `uv run pytest` → all green
+- E2E: `bm add` → `bm list` contains it; `bm search` finds it; duplicate → exit 2
 
-## 7. Offen / Deferred
+## 7. Open / deferred
 
-- Tags — Etappe 2 (`ADR-0002`), nicht V1
-- `--limit` für `list` — nach MVP
-- Windows — nicht V1
+- Tags — stage 2 (`ADR-0002`), not in V1
+- `--limit` for `list` — after the MVP (`Q1`)
+- Windows — not in V1
 
-## 8. Verweise
+## 8. References
 
-- Modulstruktur: `docs/module-map.md`
-- Datenmodell: `docs/data-model.md`
+- Module structure: `docs/module-map.md`
+- Data model: `docs/data-model.md`
 - Gates/DoD: `docs/quality.md`
-- Entscheidungen: `docs/adr/`
+- Decisions: `docs/adr/`

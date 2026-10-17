@@ -1,41 +1,41 @@
 # bm
 
-Fachliche Details: siehe `ARCHITECTURE.md`. Fortschritt: siehe `STATUS.md`. Struktur: siehe `docs/module-map.md`.
+Domain details: see `ARCHITECTURE.md`. Progress: see `STATUS.md`. Structure: see `docs/module-map.md`.
 
-## Befehle
+## Commands
 
 - Setup: `uv sync`
-- Starten: `uv run bm --help`
-- Alle Tests: `uv run pytest`
-- Einzelner Test: `uv run pytest tests/test_service.py -k test_add`
-- Lint/Typen: `uv run ruff check . && uv run mypy bm`
+- Start: `uv run bm --help`
+- All tests: `uv run pytest`
+- Single test: `uv run pytest tests/test_service.py -k test_add`
+- Lint/types: `uv run ruff check . && uv run mypy bm`
 - E2E: `uv run pytest tests/e2e -m e2e`
-- Git-Status: `git status --short`
+- Git status: `git status --short`
 - Diff: `git diff`
-- Letzte Commits: `git log --oneline -5`
+- Recent commits: `git log --oneline -5`
 
-## Abweichungen vom Standard
+## Deviations from the standard
 
-- Zeitstempel immer UTC als ISO-8601 (`datetime.now(timezone.utc).isoformat()`), nie lokale Zeit.
-- SQLite-Verbindung pro CLI-Aufruf öffnen und schließen; keine globalen Connections.
-- Externe Programme nur über `subprocess` mit Argumentliste, nie `shell=True`.
-- `~/.bm/` wird beim ersten Lauf angelegt; Tests nutzen `tmp_path` und nie das echte Home.
+- Timestamps always UTC as ISO 8601 (`datetime.now(timezone.utc).isoformat()`), never local time.
+- Open and close the SQLite connection per CLI call; no global connections.
+- External programs only via `subprocess` with an argument list, never `shell=True`.
+- `~/.bm/` is created on the first run; tests use `tmp_path` and never the real home directory.
 
-## Regeln
+## Rules
 
-- Arbeite nur am Task, der im Auftrag steht.
-- Lies zuerst `ARCHITECTURE.md`, `AGENTS.md`, `STATUS.md`, `docs/module-map.md` und deinen Task-Brief.
-- Bei Unklarheit: `open_questions` im Ergebnis, nicht raten.
-- Belege Erfolg mit der Ausgabe jedes Gates.
-- Ändere keine Dateien außerhalb deines Scopes.
-- Ein Commit pro Task: Task-ID + Titel, z. B. `M03: Add, List und Search`. Kein Push, kein Remote.
-- Schichten nicht vermischen: CLI ruft Service auf, Service ruft Store – nie umgekehrt.
-- Bibliotheken/APIs/Versionen nur aus Doku oder Manifest; keine erfundenen Pakete.
+- Work only on the task in your work order.
+- First read `ARCHITECTURE.md`, `AGENTS.md`, `STATUS.md`, `docs/module-map.md` and your task brief.
+- If anything is unclear: `open_questions` in the result; do not guess.
+- Prove success with the output of every gate.
+- Do not change files outside your scope.
+- One commit per task: task ID + title, e.g. `M03: Add, list and search`. No push, no remote.
+- Do not mix layers: the CLI calls the service, the service calls the store, never the other way round.
+- Libraries/APIs/versions only from docs or a manifest; no invented packages.
 
-## Verboten
+## Forbidden
 
-- Neue Abhängigkeiten ohne Freigabe.
-- Bestehende Tests ändern oder löschen ohne Freigabe.
-- Platzhalter oder TODOs als fertig melden.
-- Architektur-Invarianten ändern (nur über ADR + Freigabe).
-- Secrets, Tokens oder Caches committen.
+- New dependencies without approval.
+- Changing or deleting existing tests without approval.
+- Reporting placeholders or TODOs as done.
+- Changing architecture invariants (only via ADR + approval).
+- Committing secrets, tokens or caches.
