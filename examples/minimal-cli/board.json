@@ -1,0 +1,298 @@
+{
+  "project": "bm",
+  "profile": "S",
+  "base_branch": "main",
+  "stage": 1,
+  "tasks": [
+    {
+      "id": "M01",
+      "title": "Projektgerüst und CLI",
+      "goal": "Ein uv-Projekt mit bm --help, ruff, mypy und pytest läuft.",
+      "why": "Alle weiteren Module bauen auf dem Gerüst und den Befehlen auf.",
+      "status": "done",
+      "depends_on": [],
+      "complexity": 3,
+      "stage": 1,
+      "parallel_group": null,
+      "scope_write": [
+        "pyproject.toml",
+        "uv.lock",
+        ".python-version",
+        "bm/__init__.py",
+        "bm/cli.py",
+        "bm/config.py",
+        "tests/test_cli.py"
+      ],
+      "scope_read": [
+        "ARCHITECTURE.md",
+        "AGENTS.md"
+      ],
+      "acceptance": [
+        "A1",
+        "A2",
+        "A3"
+      ],
+      "gates": [
+        "lint",
+        "types",
+        "tests"
+      ],
+      "owner": "worker-1",
+      "branch": "task/M01",
+      "worktree": null,
+      "round": 0,
+      "evidence": [
+        "ruff: 0",
+        "mypy: 0",
+        "pytest: 6 passed"
+      ],
+      "scope_write_forbidden": []
+    },
+    {
+      "id": "M02",
+      "title": "Store und Schema",
+      "goal": "SQLite-Datenbank, Schema und Repository für Lesezeichen funktionieren.",
+      "why": "M03 braucht Speichern, Auflisten und Suchen; M05 braucht Export/Import.",
+      "status": "done",
+      "depends_on": [
+        "M01"
+      ],
+      "complexity": 4,
+      "stage": 1,
+      "parallel_group": null,
+      "scope_write": [
+        "bm/store/__init__.py",
+        "bm/store/db.py",
+        "bm/store/repository.py",
+        "tests/test_store.py"
+      ],
+      "scope_read": [
+        "ARCHITECTURE.md",
+        "docs/data-model.md"
+      ],
+      "acceptance": [
+        "A1",
+        "A2",
+        "A3"
+      ],
+      "gates": [
+        "lint",
+        "types",
+        "tests"
+      ],
+      "owner": "worker-1",
+      "branch": "task/M02",
+      "worktree": null,
+      "round": 0,
+      "evidence": [
+        "ruff: 0",
+        "mypy: 0",
+        "pytest: 14 passed"
+      ],
+      "scope_write_forbidden": [
+        "bm/cli.py"
+      ]
+    },
+    {
+      "id": "M03",
+      "title": "Add, List und Search",
+      "goal": "bm add, bm list und bm search funktionieren auf einer frischen DB.",
+      "why": "Das ist der MVP-Nutzen; M04 (Tags) und M06 (E2E) bauen darauf.",
+      "status": "in_progress",
+      "depends_on": [
+        "M02"
+      ],
+      "complexity": 5,
+      "stage": 1,
+      "parallel_group": null,
+      "scope_write": [
+        "bm/service.py",
+        "bm/cli.py",
+        "tests/test_service.py",
+        "tests/test_cli.py"
+      ],
+      "scope_read": [
+        "ARCHITECTURE.md",
+        "docs/data-model.md",
+        "bm/store/",
+        "bm/config.py"
+      ],
+      "acceptance": [
+        "A1",
+        "A2",
+        "A3",
+        "A4",
+        "A5",
+        "A6"
+      ],
+      "gates": [
+        "lint",
+        "types",
+        "tests",
+        "cli-smoke"
+      ],
+      "owner": "worker-1",
+      "branch": "task/M03",
+      "worktree": null,
+      "round": 1,
+      "evidence": [],
+      "scope_write_forbidden": [
+        "bm/store/",
+        "bm/tags.py",
+        "bm/portability.py"
+      ]
+    },
+    {
+      "id": "M04",
+      "title": "Tags",
+      "goal": "Tags können beim Speichern gesetzt, normalisiert und gefiltert werden.",
+      "why": "M06 und der tägliche Nutzen brauchen Filter; Architektur AD-3.",
+      "status": "pending",
+      "depends_on": [
+        "M03"
+      ],
+      "complexity": 3,
+      "stage": 2,
+      "parallel_group": null,
+      "scope_write": [
+        "bm/tags.py",
+        "bm/service.py",
+        "tests/test_tags.py"
+      ],
+      "scope_read": [
+        "ARCHITECTURE.md",
+        "docs/data-model.md"
+      ],
+      "acceptance": [
+        "A1",
+        "A2",
+        "A3"
+      ],
+      "gates": [
+        "lint",
+        "types",
+        "tests"
+      ],
+      "owner": null,
+      "branch": null,
+      "worktree": null,
+      "round": 0,
+      "evidence": [],
+      "scope_write_forbidden": [
+        "bm/store/",
+        "bm/cli.py"
+      ]
+    },
+    {
+      "id": "M05",
+      "title": "JSON Export und Import",
+      "goal": "bm export und bm import erhalten alle Lesezeichen und Tags.",
+      "why": "Backup und Umzug; Architektur AD-1.",
+      "status": "pending",
+      "depends_on": [
+        "M03"
+      ],
+      "complexity": 5,
+      "stage": 2,
+      "parallel_group": null,
+      "scope_write": [
+        "bm/portability.py",
+        "bm/service.py",
+        "bm/cli.py",
+        "tests/test_portability.py"
+      ],
+      "scope_read": [
+        "ARCHITECTURE.md",
+        "docs/data-model.md",
+        "bm/store/",
+        "docs/module-map.md"
+      ],
+      "acceptance": [
+        "A1",
+        "A2",
+        "A3"
+      ],
+      "gates": [
+        "lint",
+        "types",
+        "tests"
+      ],
+      "owner": null,
+      "branch": null,
+      "worktree": null,
+      "round": 0,
+      "evidence": [],
+      "scope_write_forbidden": [
+        "bm/store/"
+      ]
+    },
+    {
+      "id": "M06",
+      "title": "E2E, README und Politur",
+      "goal": "Der komplette Nutzerfluss läuft auf einer frischen DB und ist dokumentiert.",
+      "why": "Definition of Done; letzter Schritt vor dem Release.",
+      "status": "pending",
+      "depends_on": [
+        "M04",
+        "M05"
+      ],
+      "complexity": 3,
+      "stage": 2,
+      "parallel_group": null,
+      "scope_write": [
+        "tests/e2e/",
+        "README.md",
+        "docs/"
+      ],
+      "scope_read": [
+        "ARCHITECTURE.md",
+        "AGENTS.md",
+        "docs/quality.md"
+      ],
+      "acceptance": [
+        "A1",
+        "A2",
+        "A3",
+        "A4"
+      ],
+      "gates": [
+        "lint",
+        "types",
+        "tests",
+        "e2e"
+      ],
+      "owner": null,
+      "branch": null,
+      "worktree": null,
+      "round": 0,
+      "evidence": [],
+      "scope_write_forbidden": [
+        "bm/"
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "date": "2026-10-17",
+      "id": "ADR-0001",
+      "title": "SQLite als einzige Wahrheit",
+      "file": "docs/adr/ADR-0001-sqlite.md"
+    },
+    {
+      "date": "2026-10-17",
+      "id": "ADR-0002",
+      "title": "Tags erst in Etappe 2",
+      "file": "docs/adr/ADR-0002-tags-stage2.md"
+    }
+  ],
+  "open_questions": [
+    {
+      "id": "Q1",
+      "question": "Soll `bm list` standardmäßig alle Einträge zeigen?",
+      "blocks": [
+        "M06"
+      ],
+      "status": "open"
+    }
+  ]
+}

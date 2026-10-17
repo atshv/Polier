@@ -1,0 +1,249 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.local/board.schema.json",
+  "title": "Project Task Board",
+  "description": "Maschinenlesbare Wahrheit für Tasks, Abhängigkeiten und Schreib-Scopes. STATUS.md wird daraus generiert.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "project",
+    "profile",
+    "base_branch",
+    "tasks"
+  ],
+  "properties": {
+    "project": {
+      "type": "string",
+      "minLength": 1
+    },
+    "profile": {
+      "enum": [
+        "S",
+        "M",
+        "L"
+      ]
+    },
+    "base_branch": {
+      "type": "string",
+      "default": "main"
+    },
+    "stage": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "tasks": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/task"
+      }
+    },
+    "decisions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/decision"
+      }
+    },
+    "open_questions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/question"
+      }
+    }
+  },
+  "$defs": {
+    "task": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "title",
+        "goal",
+        "status",
+        "depends_on",
+        "complexity",
+        "stage",
+        "scope_write",
+        "acceptance",
+        "gates"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^M[0-9]{2,3}$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 120
+        },
+        "goal": {
+          "type": "string",
+          "minLength": 3
+        },
+        "why": {
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "pending",
+            "claimed",
+            "in_progress",
+            "verifying",
+            "review",
+            "rework",
+            "done",
+            "blocked",
+            "failed"
+          ]
+        },
+        "depends_on": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        },
+        "complexity": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10
+        },
+        "stage": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "parallel_group": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "scope_write": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        },
+        "scope_read": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Pfade, die gelesen werden dürfen. Schreiben ist nur erlaubt, wenn der Pfad auch in scope_write steht."
+        },
+        "acceptance": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        },
+        "gates": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        },
+        "owner": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "branch": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "worktree": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "round": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 0
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "scope_write_forbidden": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Pfade, die gelesen, aber ausdrücklich nicht geschrieben werden dürfen."
+        }
+      }
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "date",
+        "id",
+        "title"
+      ],
+      "properties": {
+        "date": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^ADR-[0-9]{3,4}$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 3
+        },
+        "file": {
+          "type": "string"
+        }
+      }
+    },
+    "question": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "question",
+        "status"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^Q[0-9]+$"
+        },
+        "question": {
+          "type": "string",
+          "minLength": 3
+        },
+        "blocks": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "status": {
+          "enum": [
+            "open",
+            "answered",
+            "dropped"
+          ]
+        },
+        "answer": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}
