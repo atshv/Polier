@@ -248,6 +248,19 @@ def check_status_fresh(root: Path, board: dict, errors: list[str]) -> None:
         errors.append("STATUS.md is out of date with board.json — run tools/render_status.py")
 
 
+def check_version(board: dict, warnings: list[str]) -> None:
+    package = Path(__file__).resolve().parent.parent / "VERSION"
+    if not package.exists():
+        return
+    current = package.read_text(encoding="utf-8").strip()
+    used = board.get("generator_version")
+    if not used:
+        warnings.append(f"board.json: generator_version missing (package is {current}); see CHANGELOG.md")
+    elif used != current:
+        warnings.append(
+            f"board.json: project uses generator {used}, package is {current}; see CHANGELOG.md before updating")
+
+
 def check_consistency(root: Path, board: dict, errors: list[str], warnings: list[str]) -> None:
     """Cross-artifact checks: briefs vs board, AD/ADR references, DoD traceability."""
     tasks = {t.get("id"): t for t in board.get("tasks", []) if isinstance(t, dict)}
@@ -380,6 +393,7 @@ def main() -> int:
             board = None
         if isinstance(board, dict):
             check_consistency(root, board, errors, warnings)
+            check_version(board, warnings)
             check_status_fresh(root, board, errors)
 
     check_links(root, errors)

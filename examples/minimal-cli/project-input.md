@@ -1,6 +1,6 @@
 # Generator Input: `bm` — Local Bookmark CLI
 
-> This is the input the generator received (the filled-in input block from `generator.md` plus background). It is not part of the generated project.
+> This is the input the generator received (the filled-in input block from `prompt/generator.md` plus background). It is not part of the generated project.
 
 ```text
 PROJECT:

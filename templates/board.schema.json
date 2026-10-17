@@ -28,6 +28,11 @@
       "default": "main",
       "minLength": 1
     },
+    "generator_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+      "description": "Generator version the project was created or last migrated with (VERSION file of the package)."
+    },
     "stage": {
       "type": "integer",
       "minimum": 1

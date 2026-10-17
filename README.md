@@ -1,80 +1,103 @@
 # Prompt Generator
 
-Plans an AI coding project before any code is written.
+Plan an AI coding project before the first line of code.
 
-![version](https://img.shields.io/badge/version-0.5-blue?style=flat-square)
+![version](https://img.shields.io/badge/version-0.6.0-blue?style=flat-square)
 ![license](https://img.shields.io/badge/license-MIT-green?style=flat-square)
 
-The generator interviews you, drafts a one-page architecture and a task DAG, and after your approval writes a scaffold that an AI coding agent builds from, one task at a time. Built for the DeepSeek Harness ([`dsh.md`](dsh.md)); usable in any agent or chat.
+The Prompt Generator is an agent skill for the DeepSeek Harness. It interviews you, drafts a one-page architecture and a task plan, and after your approval writes a project scaffold that coding agents build from, one reviewed task at a time.
+
+## Quick start
+
+Requirements: DeepSeek Harness, git, Python 3.9+.
+
+```bash
+git clone <repository-url> prompt-generator && cd prompt-generator
+./install.sh --ref "v$(cat VERSION)"
+```
+
+Open a new DSH session in an empty project folder and write:
+
+> Plan a new project: a command-line tool that stores my bookmarks locally and finds them again.
+
+The generator asks its questions, shows the plan for approval, writes the scaffold and hands over the prompt for the first task.
+
+## How it works
 
 ```mermaid
 flowchart LR
-    A[Idea] --> B[Interview] --> C[Plan] --> D{Approve}
-    D -- yes --> E[Task briefs] --> F[Agent builds] --> G[Independent review]
-    D -- revise --> C
-    G -- next stage --> E
+    A[Interview] --> B[Architecture + task plan] --> C{Approve}
+    C -- revise --> B
+    C -- yes --> D[Scaffold + 3–5 task briefs] --> E[Agent builds a task] --> F[Independent review]
+    F -- next task --> E
+    F -- stage done --> D
 ```
 
-## Installation
-
-**As a skill** — copy this folder into a skills directory and ask the agent to plan your project:
-
-| Agent | Folder |
+| Step | Result |
 |---|---|
-| DeepSeek Harness | `~/.dsh/skills/prompt-generator/` |
-| Claude Code | `~/.claude/skills/prompt-generator/` |
+| Interview | goals, definition of done, constraints, team size |
+| Plan | one-page architecture, task DAG with scopes and gates |
+| Scaffold | git repository, rules for agents, briefs for the next 3–5 tasks |
+| Build | one task per session, verified by deterministic gates |
+| Review | a separate agent checks every acceptance criterion against the diff |
 
-**In any chat** — attach `generator.md`, `rubric.md`, `templates/` and `tools/`, then fill in the input block at the top of `generator.md`. For an existing project, place the package in `.generator/`; it is kept out of git.
-
-## Output
+## What you get
 
 ```
 my-project/
 ├── ARCHITECTURE.md   invariants, one page
-├── AGENTS.md         commands and rules for agents
-├── board.json        tasks, dependencies, write scopes
-├── STATUS.md         progress, generated from board.json
-├── tasks/            next 3–5 task briefs
+├── AGENTS.md         commands and rules every agent follows
+├── board.json        tasks, dependencies, write scopes, status
+├── STATUS.md         progress and next tasks, generated from board.json
+├── tasks/            briefs for the next 3–5 tasks
 ├── reviews/          review results per task
-└── docs/             module map, quality gates; ADRs and contracts when needed
+└── docs/             module map, quality gates, decisions
 ```
-
-A git repository on `main`, initial commit `chore: scaffold`, one commit per task.
 
 ## Principles
 
-- **One-page architecture.** Only invariants that keep modules from diverging; max. 800 words.
-- **Just in time.** Only the next 3–5 tasks are briefed.
-- **Gates before opinions.** Deterministic checks run before any review.
-- **Independent review.** No agent grades its own work.
-- **Right-sized team.** One writer by default; more only for truly parallel work.
-- **Traceable.** Definition of done → task → acceptance criterion → gate, verified by `tools/check.py`.
+- **One-page architecture** — only the invariants that keep modules consistent.
+- **Just in time** — only the next 3–5 tasks are specified in detail.
+- **Gates before opinions** — deterministic checks run before any review.
+- **Independent review** — no agent approves its own work.
+- **Right-sized team** — one writer by default; parallel agents only for parallel work.
+- **Traceable** — definition of done → task → acceptance criterion → gate, enforced by `tools/check.py`.
 
-## Contents
+## Installation and updates
 
-| Path | Purpose |
+| Task | Command |
 |---|---|
-| [`SKILL.md`](SKILL.md) | Skill entry point |
-| [`generator.md`](generator.md) | The process: phases 0–I, rules, handoff prompts |
-| [`rubric.md`](rubric.md) | Quality criteria, lint list, critic and cold-start prompts |
-| [`cheatsheet.md`](cheatsheet.md) | Checklists and red flags for the human |
-| [`dsh.md`](dsh.md) | DeepSeek Harness tool mapping and fallbacks |
-| [`templates/`](templates/) | Artifact templates and board schema |
-| [`tools/`](tools/) | `check.py` (validation), `render_status.py` (STATUS from board); Python 3.9+, no dependencies |
-| [`examples/minimal-cli/`](examples/minimal-cli/) | Reference project |
+| Install for all projects | `./install.sh --ref "v$(cat VERSION)"` |
+| Install for one project | `./install.sh <project>/.dsh/skills` |
+| Update to the latest version | `git pull && ./update.sh --ref "v$(cat VERSION)"` |
+| Roll back | `./update.sh --ref v0.5.6` |
+| Claude Code | add the target `claude` to any command above |
+
+Without `--ref`, the scripts install the current checkout, including uncommitted changes. Before updating a running project, read [`CHANGELOG.md`](CHANGELOG.md); update between stages, never during a task.
+
+Without skill support, attach `prompt/generator.md`, `prompt/rubric.md`, `templates/` and `tools/` to the chat and fill in the input block at the top of `prompt/generator.md`.
+
+## Repository
+
+```
+├── SKILL.md            skill entry point
+├── prompt/             generator.md (process), rubric.md (quality), dsh.md (DSH tool mapping)
+├── templates/          artifact templates and board schema
+├── tools/              check.py (validation), render_status.py (STATUS.md)
+├── guide/              cheatsheet.md: checklists for the human
+├── examples/           minimal-cli: reference project
+├── install.sh          install, update.sh: update or roll back
+└── CHANGELOG.md        releases and migration steps; current version in VERSION
+```
 
 ## Example
 
-[`examples/minimal-cli/`](examples/minimal-cli/) is a bookmark CLI with six tasks, captured while M03 is in progress: [`project-input.md`](examples/minimal-cli/project-input.md) is the generator input, [`tasks/M03.md`](examples/minimal-cli/tasks/M03.md) the current brief, [`reviews/M03.md`](examples/minimal-cli/reviews/M03.md) its first review round. Stage 2 (M04–M06) has no briefs yet.
+[`examples/minimal-cli`](examples/minimal-cli/) is a bookmark CLI with six tasks, captured during the third task: the [generator input](examples/minimal-cli/project-input.md), the [architecture](examples/minimal-cli/ARCHITECTURE.md), the [current brief](examples/minimal-cli/tasks/M03.md) and its [first review](examples/minimal-cli/reviews/M03.md).
 
 ```bash
 python3 tools/check.py examples/minimal-cli
 ```
 
-## Acknowledgements
-
-BMAD-METHOD, GitHub Spec Kit, Claude Code agent teams, Cognition, Anthropic's evaluator-optimizer pattern, AGENTS.md.
-
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE). Ideas from BMAD-METHOD, GitHub Spec Kit, Claude Code agent teams, Cognition, Anthropic's evaluator-optimizer pattern and AGENTS.md.
