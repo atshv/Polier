@@ -1,106 +1,187 @@
 <div align="center">
 
-# 🧭 Prompt Generator
+<br>
 
-**Plan your AI coding project before the AI starts coding.**
+# Prompt Generator
 
-You describe your idea. The generator asks questions, plans the project with you<br>
-and writes the files an AI coding agent needs to build it, one step at a time.
+**Turn a project idea into a clear plan your AI coding agent can actually follow.**
 
-![Version](https://img.shields.io/badge/version-0.4-blue)
-![License](https://img.shields.io/badge/license-MIT-green)
-![Free](https://img.shields.io/badge/price-free-brightgreen)
+<br>
+
+![version](https://img.shields.io/badge/version-0.4-1e293b?style=flat-square&labelColor=0f172a)
+![license](https://img.shields.io/badge/license-MIT-1e293b?style=flat-square&labelColor=0f172a)
+![price](https://img.shields.io/badge/price-free-1e293b?style=flat-square&labelColor=0f172a)
+![format](https://img.shields.io/badge/format-markdown-1e293b?style=flat-square&labelColor=0f172a)
+
+<br>
 
 </div>
 
----
+> **The short version.** You don't get code from this. You get a plan, a task list and clear instructions, so the AI that writes your code stays on track.
 
-## 🤔 Why?
+<br>
 
-When you ask an AI to "build me an app", it often gets lost. It forgets decisions, rewrites working code and calls its own work perfect.
-
-This generator fixes that by giving the AI **a clear plan and small, focused tasks**, just like a good project lead would.
-
-## ⚙️ How it works
+## The big picture
 
 ```mermaid
-flowchart LR
-    A[💡 Your idea] --> B[❓ Questions]
-    B --> C[🗺️ Plan]
-    C --> D[✅ You approve]
-    D --> E[📁 Project files]
-    E --> F[🤖 AI builds it]
+flowchart TB
+    subgraph IN ["You bring"]
+        I1["An idea<br><i>3–6 sentences</i>"]
+    end
+
+    subgraph GEN ["The generator does"]
+        direction LR
+        G1["Asks questions"] --> G2["Drafts a plan"] --> G3["Waits for your OK"] --> G4["Writes the files"]
+    end
+
+    subgraph OUT ["You get"]
+        direction LR
+        O1["Architecture<br><i>1 page</i>"]
+        O2["Task board<br><i>with dependencies</i>"]
+        O3["Next 3–5 tasks<br><i>ready to run</i>"]
+        O1 ~~~ O2 ~~~ O3
+    end
+
+    IN --> GEN --> OUT
+
+    style IN fill:#f8fafc,stroke:#94a3b8,color:#0f172a
+    style GEN fill:#eff6ff,stroke:#3b82f6,color:#1e3a8a
+    style OUT fill:#f0fdf4,stroke:#22c55e,color:#14532d
 ```
 
-1. **You describe your idea** in a few sentences.
-2. **The generator asks you questions** (max. 10 at a time).
-3. **It shows you a plan.** Nothing is written until you say yes.
-4. **It creates the project files.** A short architecture, a task list and the next 3–5 tasks.
-5. **An AI agent builds the project**, one task at a time.
-6. **A second AI reviews the work**, so nobody grades their own homework.
+<br>
 
-## 🚀 Quick start
+## A typical session
 
-1. Download this repository (green **Code** button → **Download ZIP**).
-2. Open a new chat with your AI coding tool and add these files.
-   - `generator.md`
-   - the `templates/` folder
-   - `rubric.md`
-   - the `tools/` folder
-3. Fill in the input block at the top of `generator.md` (your idea, project size, language).
-4. Answer the questions and approve the plan.
-5. Start building with the first task, `tasks/M01.md`.
+```mermaid
+sequenceDiagram
+    autonumber
+    actor You
+    participant G as Generator
+    participant B as Builder AI
+    participant R as Reviewer AI
+
+    You->>G: Here is my idea
+    G->>You: A few questions
+    You->>G: Answers
+    G->>You: Plan and task list
+    You->>G: Looks good, go
+    G-->>B: Task M01
+    B-->>R: Finished work
+    R-->>You: Review result
+    Note over You,R: Repeat with the next 3–5 tasks
+```
+
+<br>
+
+## Get started in 5 minutes
+
+- [ ] **Download** this repo. Green **Code** button, then **Download ZIP**.
+- [ ] **Open a new chat** with your AI coding tool.
+- [ ] **Add these files** to the chat.
+  ```
+  generator.md   rubric.md   templates/   tools/
+  ```
+- [ ] **Fill in** the input block at the top of `generator.md`.
+- [ ] **Answer** the questions and approve the plan.
+- [ ] **Build** with the first task, `tasks/M01.md`.
 
 > [!NOTE]
 > The prompts are currently written in **German**. Your project can still be in any language. An English version is planned.
 
-## 📦 What you get
+<br>
 
-| File | What it is |
+## What lands in your project
+
+```
+my-project/
+│
+├─ ARCHITECTURE.md ····· the key decisions, one page
+├─ AGENTS.md ··········· rules the AI must follow
+├─ board.json ·········· every task and what it depends on
+├─ STATUS.md ··········· progress, generated from the board
+│
+├─ tasks/
+│   └─ M01.md … M05.md · only the next few tasks
+│
+└─ docs/ ··············· extra details, only when needed
+```
+
+Every task gets its own Git branch and exactly one commit, so your history stays easy to read.
+
+```mermaid
+gitGraph
+    commit id: "scaffold"
+    branch task/M01
+    commit id: "M01: Setup"
+    checkout main
+    merge task/M01
+    branch task/M02
+    commit id: "M02: Data model"
+    checkout main
+    merge task/M02
+    branch task/M03
+    commit id: "M03: Add and list"
+    checkout main
+    merge task/M03
+```
+
+<br>
+
+## How big is your project?
+
+The generator suggests a size for you. Most projects are **S**.
+
+```mermaid
+flowchart LR
+    Q1{"Can two tasks run<br>at the same time<br>without touching<br>the same files?"}
+    Q1 -- no --> S["<b>S</b><br>1 builder<br>1 reviewer"]
+    Q1 -- yes --> Q2{"Several services<br>or repos?"}
+    Q2 -- no --> M["<b>M</b><br>1 lead<br>2–3 builders<br>1 reviewer"]
+    Q2 -- yes --> L["<b>L</b><br>full team<br>plus integrator"]
+
+    style S fill:#dcfce7,stroke:#22c55e,color:#14532d
+    style M fill:#dbeafe,stroke:#3b82f6,color:#1e3a8a
+    style L fill:#ede9fe,stroke:#6366f1,color:#312e81
+```
+
+<br>
+
+## Six rules it never breaks
+
+| | | |
+|:---|:---|:---|
+| **1 · Short plan**<br>One page, not a book. | **2 · One file, one job**<br>Rules, plan and progress stay apart. | **3 · Only what's next**<br>3–5 tasks at a time, not 25. |
+| **4 · Few agents**<br>One builder and one reviewer is usually enough. | **5 · Tests first**<br>Code must pass checks before anyone reviews it. | **6 · One writer per file**<br>Two agents never edit the same file at once. |
+
+<br>
+
+## Inside this repo
+
+| | |
 |---|---|
-| `ARCHITECTURE.md` | One page with the key decisions for your project |
-| `AGENTS.md` | Rules the AI must follow |
-| `board.json` + `STATUS.md` | Task list and progress |
-| `tasks/` | The next 3–5 tasks, each with clear instructions |
-| `docs/` | Extra details, only when needed |
-
-See a complete example in [`examples/minimal-cli/`](examples/minimal-cli/).
-
-## 🧠 The six rules behind it
-
-1. **Keep the plan short.** One page, not a book.
-2. **One file, one job.** Rules, plan and progress live in separate files.
-3. **Only plan what's next.** 3–5 tasks at a time, not 25.
-4. **Few agents.** One builder and one reviewer is usually enough.
-5. **Tests before opinions.** Code must pass checks before anyone reviews it.
-6. **One writer per file.** Two agents never edit the same file at once.
-
-## 📂 What's in this repo
-
-| File | Purpose |
-|---|---|
-| [`generator.md`](generator.md) | The main prompt. Start here. |
+| [`generator.md`](generator.md) | **The main prompt.** Start here. |
 | [`cheatsheet.md`](cheatsheet.md) | Quick guide for you, with checklists |
 | [`rubric.md`](rubric.md) | Quality checks before you approve anything |
-| [`dsh.md`](dsh.md) | Setup for multiple agents (bigger projects) |
+| [`dsh.md`](dsh.md) | Setup for sizes M and L |
 | [`templates/`](templates/) | Blank templates the generator fills in |
-| [`tools/`](tools/) | Small Python scripts that check a project |
-| [`examples/`](examples/) | A finished example project |
+| [`tools/`](tools/) | Python scripts that check a project |
+| [`examples/minimal-cli/`](examples/minimal-cli/) | A finished example with 6 tasks |
 
-Check the example yourself.
+<details>
+<summary><b>Run the checks on the example</b></summary>
+<br>
 
 ```bash
 python3 tools/check.py examples/minimal-cli
+python3 tools/render_status.py examples/minimal-cli --out STATUS.md
 ```
 
-## 👥 Who is it for?
+</details>
 
-- ✅ **Solo developers** building a small or medium project with AI
-- ✅ **Small teams** running 2–3 AI agents in parallel
-- ✅ **Anyone with a pile of prompts** who wants a clean structure
-- ❌ **Not for one-line demos.** A single prompt is enough for those.
+<br>
 
-## 🙏 Inspired by
+## Built on good ideas
 
 [BMAD-METHOD](https://github.com/bmad-code-org/BMAD-METHOD) ·
 [GitHub Spec Kit](https://github.com/github/spec-kit) ·
@@ -109,6 +190,8 @@ python3 tools/check.py examples/minimal-cli
 [Anthropic](https://www.anthropic.com/engineering/building-effective-agents) ·
 [AGENTS.md](https://agents.md/)
 
-## 📄 License
+<br>
 
-[MIT](LICENSE). Free to use, change and share.
+<div align="center">
+<sub><a href="LICENSE">MIT License</a> · Free to use, change and share</sub>
+</div>
