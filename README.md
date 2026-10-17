@@ -12,7 +12,7 @@ The Prompt Generator is an agent skill for the DeepSeek Harness. It interviews y
 Requirements: DeepSeek Harness, git, Python 3.9+.
 
 ```bash
-git clone <repository-url> prompt-generator && cd prompt-generator
+git clone https://github.com/atshv/prompt-generator.git && cd prompt-generator
 ./install.sh --ref "v$(cat VERSION)"
 ```
 
