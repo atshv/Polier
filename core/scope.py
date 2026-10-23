@@ -160,6 +160,17 @@ def changed_files(root) -> List[str]:
     return out
 
 
+def is_tracked(root, rel: str) -> bool:
+    """True if git tracks `rel` or any file below it. Deleting an untracked file
+    undoes a write, so guards let it through."""
+    try:
+        result = subprocess.run(["git", "-C", str(root), "ls-files", "-z", "--", rel or "."],
+                                capture_output=True, check=False)
+    except FileNotFoundError:
+        return True
+    return result.returncode != 0 or bool(result.stdout.strip(b"\0"))
+
+
 def violations(paths: Iterable[str], task: dict, allow_board: bool = False) -> List[Tuple[str, str]]:
     """(path, reason) for every path outside the task's scope."""
     allowed = [p for p in task.get("scope_write", []) if isinstance(p, str)]
