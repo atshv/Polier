@@ -198,6 +198,15 @@
             "type": "string"
           },
           "description": "Paths that may be read but explicitly must not be written."
+        },
+        "handoff": {
+          "type": "array",
+          "maxItems": 3,
+          "items": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "description": "Up to 3 short lines for the tasks that depend on this one (decision, pitfall, changed interface). Written when the task is done."
         }
       }
     },

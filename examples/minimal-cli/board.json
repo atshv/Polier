@@ -50,7 +50,10 @@
         "mypy: 0",
         "pytest: 6 passed"
       ],
-      "scope_write_forbidden": []
+      "scope_write_forbidden": [],
+      "handoff": [
+        "Run everything through uv: uv sync, uv run pytest, uv run ruff check ., uv run mypy bm."
+      ]
     },
     {
       "id": "M02",
@@ -98,6 +101,10 @@
       ],
       "scope_write_forbidden": [
         "bm/cli.py"
+      ],
+      "handoff": [
+        "All SQL stays in bm/store/; schema changes only as a numbered migration in bm/store/db.py.",
+        "Foreign keys are switched on per connection (PRAGMA foreign_keys = ON)."
       ]
     },
     {
