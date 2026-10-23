@@ -1,6 +1,6 @@
 {
   "name": "dsh-polier",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "Polier for DeepSeek Harness: plans an AI coding project, then keeps the agents to the plan. Enforces task scopes, records gate evidence and checks the board.",
   "license": "MIT",
   "repository": {

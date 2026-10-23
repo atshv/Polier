@@ -176,7 +176,7 @@ Without the plugin, copy the package as a plain skill (`./install.sh`) to `~/.ds
 | Planning or merging in a worker session | `/pl lead` first; the guard blocks board and brief edits |
 | Free-text evidence ("tests passed") | the record path from `pl_gate` |
 
-Plugin seams verified on 2026-10-23 against the published packages `@deepseek-ai/dsh-tools`, `dsh-commands` and `dsh-skill` 0.2.1-rc.3 (tests in `dsh/test/`).
+Plugin seams verified on 2026-10-23 against the published packages `@deepseek-ai/dsh-tools`, `dsh-commands` and `dsh-skill` 0.2.1-rc.3 (tests in `adapters/dsh/test/`).
 
 ## Sources (checked 2026-10-18)
 
