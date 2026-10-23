@@ -2,7 +2,7 @@
   "project": "bm",
   "profile": "S",
   "base_branch": "main",
-  "generator_version": "0.6.0",
+  "generator_version": "0.7.0",
   "stage": 1,
   "tasks": [
     {

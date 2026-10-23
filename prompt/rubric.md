@@ -36,7 +36,7 @@ Score each criterion **0 or 1**. **B** marks a blocker: it prevents approval reg
 - [ ] Every `AD-n` and `ADR-nnnn` reference exists *(check.py)*.
 - [ ] Every definition-of-done item `D1..Dn` is covered by a task *(check.py)*.
 - [ ] `STATUS.md` matches `board.json` *(check.py)*.
-- [ ] Every `done` task has evidence *(check.py)*.
+- [ ] Every `done` task has a passing `tools/gate.py` record for each of its gates, with an unchanged log *(check.py; free-text evidence only warns)*.
 - [ ] No placeholders or TODOs *(check.py)*; no `[UNVERIFIED]` in critical paths.
 - [ ] Internal links resolve *(check.py)*; named paths exist or are marked new.
 - [ ] Git repo initialised *(check.py, warning)* with a first commit.

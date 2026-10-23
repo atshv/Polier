@@ -25,4 +25,6 @@ python3 <skill-folder>/tools/check.py <project>
 python3 <skill-folder>/tools/render_status.py <project>
 ```
 
+When the `pg_check` tool exists (DeepSeek Harness plugin), use it instead of the first command; regenerate `STATUS.md` with the second. In phase G write the real package path into the gate line of `AGENTS.md`, or point to `pg_gate` when the plugin is installed. Before writing the scaffold of a project that already has a task `in_progress`, ask the human to run `/pg lead`.
+
 This package is not part of the project: never copy or commit it there.

@@ -394,6 +394,71 @@ def check_context_packs(root: Path, board: dict, warnings: list[str]) -> None:
                 f"{tid}: context pack is about {total} tokens (warning at {PACK_TOKEN_WARN}); "
                 f"trim scope_read, split the task or shorten the base files")
 
+def check_evidence(root: Path, board: dict, errors: list[str], warnings: list[str]) -> None:
+    """Done tasks: evidence must point to gate.py records that passed and match their logs."""
+    import hashlib
+
+    head_ok = subprocess.run(["git", "-C", str(root), "rev-parse", "HEAD"],
+                             capture_output=True, text=True, check=False).returncode == 0 \
+        if _has_git() else False
+
+    for task in board.get("tasks", []):
+        if not isinstance(task, dict) or task.get("status") != "done":
+            continue
+        tid = task.get("id", "?")
+        entries = [e for e in task.get("evidence", []) if isinstance(e, str)]
+        records = [e for e in entries if e.strip().endswith(".json")]
+        if entries and not records:
+            warnings.append(f"{tid}: evidence is free text; use the record paths printed by tools/gate.py")
+            continue
+        passed: set[str] = set()
+        for entry in records:
+            rel = normalized(entry)
+            path = (root / rel).resolve()
+            if not path.is_file():
+                errors.append(f"{tid}: evidence record missing: {rel}")
+                continue
+            try:
+                record = json.loads(path.read_text(encoding="utf-8"))
+            except ValueError:
+                errors.append(f"{tid}: evidence record is not valid JSON: {rel}")
+                continue
+            gate = record.get("gate", "?")
+            if record.get("task") != tid:
+                errors.append(f"{tid}: evidence record {rel} belongs to task {record.get('task')!r}")
+                continue
+            log = path.parent / str(record.get("log", ""))
+            if not record.get("log") or not log.is_file():
+                errors.append(f"{tid}: log file of {rel} is missing")
+                continue
+            digest = hashlib.sha256(log.read_bytes()).hexdigest()
+            if digest != record.get("log_sha256"):
+                errors.append(f"{tid}: log of {rel} was changed after the gate ran (checksum mismatch)")
+                continue
+            if record.get("exit_code") != 0:
+                errors.append(f"{tid}: gate {gate} failed in {rel} (exit {record.get('exit_code')})")
+                continue
+            passed.add(gate)
+            commit = record.get("commit")
+            if head_ok and commit:
+                ancestor = subprocess.run(
+                    ["git", "-C", str(root), "merge-base", "--is-ancestor", commit, "HEAD"],
+                    capture_output=True, check=False)
+                if ancestor.returncode != 0:
+                    warnings.append(f"{tid}: record {rel} was made on commit {commit[:10]}, which is not in HEAD's history")
+        for gate in task.get("gates", []):
+            if isinstance(gate, str) and gate not in passed:
+                errors.append(f"{tid}: no passing gate record for '{gate}' (run it with tools/gate.py --name {gate})")
+
+
+def _has_git() -> bool:
+    try:
+        subprocess.run(["git", "--version"], capture_output=True, check=False)
+    except FileNotFoundError:
+        return False
+    return True
+
+
 def main() -> int:
     root = Path(sys.argv[1] if len(sys.argv) > 1 else ".").resolve()
     errors: list[str] = []
@@ -452,6 +517,7 @@ def main() -> int:
         if isinstance(board, dict):
             check_consistency(root, board, errors, warnings)
             check_context_packs(root, board, warnings)
+            check_evidence(root, board, errors, warnings)
             check_version(board, warnings)
             check_status_fresh(root, board, errors)
 

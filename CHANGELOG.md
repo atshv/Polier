@@ -2,14 +2,24 @@
 
 Each release lists what a running project must do to adopt it. Update between stages, never during a task (see `guide/cheatsheet.md`). The current version is in `VERSION`; projects record theirs in `board.json` → `generator_version`.
 
-## Unreleased
+## 0.7.0
 
-- `install.sh` copies with `tar` instead of `rsync`, so it also runs on systems without `rsync`.
-- `tools/gate.py` runs a gate command, keeps the full output in `reviews/evidence/<ID>-<name>.log` and prints only a short result. Less output in the agent's context, and the log is the evidence.
-- Optional `handoff` field per task (max. 3 lines of max. 200 characters). `tools/render_status.py` shows the handoff of a ready task's dependencies under "Ready now", so a fresh session needs no old transcript.
-- `tools/check.py` warns when `STATUS.md` exceeds 300 words, when a task's estimated context pack exceeds about 15k tokens, and when a done task that others depend on has no handoff. It validates `handoff` (errors).
+**DeepSeek Harness plugin.** The package is now also an installable DSH plugin (`dsh plugin --profile <name> add …`, see `README.md`). It registers the skill with its files resolved inside the package and adds:
 
-**Migration:** none required. Optional: add `handoff` to done tasks that others depend on, then run `tools/render_status.py`; add the `gate.py` line from `templates/AGENTS.template.md` to your `AGENTS.md`.
+- a write guard: while a task is `in_progress`, a worker session may write only inside that task's `scope_write` (minus `scope_write_forbidden`); `board.json`, `STATUS.md` and `tasks/` are lead-owned, `reviews/evidence/` is always writable. Config `enforce: deny | ask | off`.
+- a stop check: before a turn ends, the git diff is compared with the scope. Out-of-scope changes, including those made through `bash`, are sent back to the agent (max. 2 reminders per turn).
+- tools `pg_status`, `pg_gate`, `pg_scope_check`, `pg_check`.
+- the human command `/pg` (`status`, `lead`, `worker`, `off`, `task <ID>`, `render`). Roles live in memory; after a harness restart every session is a worker again.
+
+**Tools.**
+
+- New `tools/scope_check.py`: changed files (modified, staged, untracked, deleted, both sides of a rename) against the running task's scope. Exit 0/1/2, `--json`.
+- `tools/gate.py` writes a new log and a JSON record per run (command, exit code, times, commit, dirty flag, SHA-256 of the log) and never overwrites. The last output line is `record: <path>`. New `--shell "<command>"`.
+- `tools/check.py` verifies records for `done` tasks: file exists, belongs to the task, log unchanged, exit code 0, every listed gate covered. A record made on a commit outside `HEAD`'s history warns. Free-text evidence only warns.
+- Earlier in this cycle: `install.sh` uses `tar` instead of `rsync`; optional `handoff` per task, shown by `render_status.py` under "Ready now"; `check.py` warns on `STATUS.md` over 300 words, context packs over about 15k tokens and done tasks without handoff.
+- Tests: `npm test` (plugin against the real DSH tool registry, Python `unittest` for the tools).
+
+**Migration:** set `generator_version` to `0.7.0`. Replace the gate line in `AGENTS.md` with the one from `templates/AGENTS.template.md`. From now on put the record paths from `gate.py`/`pg_gate` into `evidence`; old free-text evidence keeps passing with a warning. Commit `reviews/evidence/`. To use the plugin, install it and use `/pg lead` in sessions that plan, merge or edit the board.
 
 ## 0.6.0
 

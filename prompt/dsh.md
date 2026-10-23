@@ -51,9 +51,10 @@ Subagents and `workflow` only read, research and criticise. `spawn_teammate` and
 
 ### S — one writer, one reviewer
 
-- One session per task (new chat or `/clear`). The agent reads `ARCHITECTURE.md`, `STATUS.md`, `docs/module-map.md` and `tasks/Mxx.md`; `AGENTS.md` is already loaded.
+- One session per task (new chat or `/clear`). The agent reads `ARCHITECTURE.md`, `STATUS.md`, `docs/module-map.md` and `tasks/Mxx.md`; `AGENTS.md` is already loaded. With the plugin (section 8), `pg_status` shows the running task, its scope and the handoffs.
+- **Before the worker starts:** set the task to `in_progress` in `board.json` from a lead session (`/pg lead`). From then on the plugin limits every worker session to that task's scope.
 - **Stop condition as a goal:** `create_goal` with "gates green for Mxx" as `objective` and a small `max_goal_rounds` derived from the brief's stop rule. DSH counts goal rounds as continuation turns, so the cap is an upper bound, not the rework-round count itself. When the goal is blocked or paused, only the human can resume it.
-- **Long gates:** `bash` with `run_in_background`, then `job_output` to wait for the result. Store the output as evidence.
+- **Gates:** `pg_gate` with the gate name from the board; it runs `tools/gate.py` through the harness shell and returns the record path, which is the evidence. Without the plugin, run `tools/gate.py` with `bash` (long gates with `run_in_background`, then `job_output`).
 - **Reviewer:** a fresh `subagent` that sees only the diff, the criteria and the gate output, never the author's session.
 
 ### M — lead + 2–3 workers
@@ -135,16 +136,23 @@ Rules:
 - Plan mode does not block writes; the sandbox and approval policy do. Keep the session's permissions to the working folder and the task's scope.
 - All other rules: `prompt/generator.md` › rules.
 
-## 8. The generator as a DSH skill
+## 8. The generator as a DSH plugin
 
-DSH loads skills as `<name>/SKILL.md` folders with kebab-case names. Copy this package to one of these folders:
+Install the package as a plugin: `dsh plugin --profile <name> add <path or package>`, then restart the harness. The bundle patch inserts one row; `package.json` → `dsh.bundle.patch` points to it. The plugin:
 
-| Scope | Folder |
-|---|---|
-| all projects | `~/.dsh/skills/prompt-generator/` or `~/.agents/skills/prompt-generator/` |
-| one project | `<project>/.dsh/skills/prompt-generator/` or `<project>/.agents/skills/prompt-generator/` |
+| Part | DSH seam | Effect |
+|---|---|---|
+| Skill | `ctx.skills.register` | `prompt-generator` in every session; relative paths resolve inside the package (`resourceBase`). |
+| Write guard | `ctx.tools.guard` (monotonic; `enforce: ask` uses `tools/pre-execute` instead) | `write`, `edit`, `str_replace_editor` outside the running task's scope are denied. No other listener can turn the denial back into an allow. |
+| Stop check | `agent/turn-stopping` + `agent.steer` | `tools/scope_check.py` against the git diff; violations go back to the agent, max. `maxStopReminders` per turn. |
+| Tools | `ctx.tools.register` | `pg_status`, `pg_gate`, `pg_scope_check`, `pg_check`. |
+| `/pg` | `ctx.commands.register` | Human-only role switch per session: `lead`, `worker` (default), `off`, `task <ID>`, `status`, `render`. |
 
-The model then sees the skill's name and description and loads it with the `skill` tool when you ask it to plan a project. Inside a project, add the skill folder to `.gitignore`; the package is not part of the project. Which `SKILL.md` frontmatter fields besides `disable-model-invocation` and `user-invocable` DSH reads is `[UNVERIFIED]`.
+Which tasks bind a session: the one pinned with `/pg task`, else the `in_progress` task whose `worktree` contains the session directory, else every `in_progress` task (a path must fit one of their scopes). No task in progress, no board, or a lead session: the guard stays out of the way. In a worktree the session finds the worktree's own copy of `board.json`, where the task may still be `pending`; bind the session with `/pg task <ID>`.
+
+Limits: the guard sees only the guarded file tools; `bash` writes are caught afterwards by the stop check and the review. Roles are in memory and reset to `worker` on restart. Gate commands run through `ctx.shell` with the session's sandbox policy on macOS and Linux; on Windows `gate.py` starts them directly. Reviewer sessions are not made read-only by the plugin; use a read-only sandbox for them.
+
+Without the plugin, copy the package as a plain skill (`./install.sh`) to `~/.dsh/skills/prompt-generator/` (all projects) or `<project>/.dsh/skills/prompt-generator/` (one project, add it to `.gitignore`). Use one of the two, not both.
 
 ## 9. Deliberately not used
 
@@ -165,6 +173,10 @@ The model then sees the skill's name and description and loads it with the `skil
 | Pasting `AGENTS.md` into prompts | it is already loaded; keep it short |
 | Polling teammates | `wait_agent` |
 | More teammates than parallel tasks | max. 3 workers, M/L only |
+| Planning or merging in a worker session | `/pg lead` first; the guard blocks board and brief edits |
+| Free-text evidence ("tests passed") | the record path from `pg_gate` |
+
+Plugin seams verified on 2026-10-23 against the published packages `@deepseek-ai/dsh-tools`, `dsh-commands` and `dsh-skill` 0.2.1-rc.3 (tests in `dsh/test/`).
 
 ## Sources (checked 2026-10-18)
 
