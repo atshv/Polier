@@ -1,0 +1,40 @@
+{
+  "comment": "Guard decisions shared by core.scope.check_write and adapters/dsh/lib/project.mjs. Paths are relative to the project root.",
+  "tasks": {
+    "app": {"id": "M01", "status": "in_progress", "scope_write": ["src/app.py", "tests/"]},
+    "src_but_app": {"id": "M02", "status": "in_progress", "scope_write": ["src/"], "scope_write_forbidden": ["src/app.py"]},
+    "readme": {"id": "M03", "status": "in_progress", "scope_write": ["README.md"]},
+    "no_reviews": {"id": "M04", "status": "in_progress", "scope_write": ["src/"], "scope_write_forbidden": ["reviews/"]},
+    "app_forbidden": {"id": "M05", "status": "in_progress", "scope_write": ["docs/"], "scope_write_forbidden": ["src/app.py"]}
+  },
+  "cases": [
+    {"name": "file in scope", "path": "src/app.py", "tasks": ["app"], "ok": true},
+    {"name": "file below a scoped folder", "path": "tests/unit/test_app.py", "tasks": ["app"], "ok": true},
+    {"name": "file outside scope", "path": "README.md", "tasks": ["app"], "ok": false, "code": "outside-scope"},
+    {"name": "prefix is not a folder", "path": "src/app.pyc", "tasks": ["app"], "ok": false, "code": "outside-scope"},
+    {"name": "board is lead-owned", "path": "board.json", "tasks": ["app"], "ok": false, "code": "lead-owned"},
+    {"name": "status is lead-owned", "path": "STATUS.md", "tasks": ["app"], "ok": false, "code": "lead-owned"},
+    {"name": "briefs are lead-owned", "path": "tasks/M01.md", "tasks": ["app"], "ok": false, "code": "lead-owned"},
+    {"name": "evidence is always writable", "path": "reviews/evidence/M01-tests.log", "tasks": ["app"], "ok": true},
+    {"name": "other reviews are not", "path": "reviews/M01.md", "tasks": ["app"], "ok": false, "code": "outside-scope"},
+    {"name": "parent folder", "path": "../elsewhere.txt", "tasks": ["app"], "ok": false, "code": "outside-project"},
+    {"name": "dot segments escaping", "path": "src/../../x", "tasks": ["app"], "ok": false, "code": "outside-project"},
+    {"name": "dot segments inside", "path": "src/../README.md", "tasks": ["app"], "ok": false, "code": "outside-scope"},
+    {"name": "backslashes", "path": "src\\app.py", "tasks": ["app"], "ok": true},
+    {"name": "absolute path", "path": "/etc/passwd", "tasks": ["app"], "ok": false, "code": "outside-project"},
+    {"name": "forbidden wins over scope", "path": "src/app.py", "tasks": ["src_but_app"], "ok": false, "code": "forbidden"},
+    {"name": "rest of the folder", "path": "src/other.py", "tasks": ["src_but_app"], "ok": true},
+    {"name": "evidence before forbidden", "path": "reviews/evidence/x.log", "tasks": ["no_reviews"], "ok": true},
+    {"name": "several tasks: any scope fits", "path": "README.md", "tasks": ["app", "readme"], "ok": true},
+    {"name": "several tasks: none fits", "path": "docs/x.md", "tasks": ["app", "readme"], "ok": false, "code": "outside-scope"},
+    {"name": "forbidden in one, allowed in another", "path": "src/app.py", "tasks": ["app_forbidden", "app"], "ok": true},
+    {"name": "forbidden in the only candidate", "path": "src/app.py", "tasks": ["app_forbidden", "readme"], "ok": false, "code": "forbidden"},
+    {"name": "no running task", "path": "README.md", "tasks": [], "ok": true},
+    {"name": "lead writes anything", "path": "board.json", "tasks": ["app"], "role": "lead", "ok": true},
+    {"name": "off writes anything", "path": "README.md", "tasks": ["app"], "role": "off", "ok": true},
+    {"name": "reviewer writes reviews", "path": "reviews/M01.md", "tasks": ["app"], "role": "reviewer", "ok": true},
+    {"name": "reviewer without a task", "path": "reviews/M01.md", "tasks": [], "role": "reviewer", "ok": true},
+    {"name": "reviewer may not fix code", "path": "src/app.py", "tasks": ["app"], "role": "reviewer", "ok": false, "code": "reviewer"},
+    {"name": "reviewer without a task, code", "path": "src/app.py", "tasks": [], "role": "reviewer", "ok": false, "code": "reviewer"}
+  ]
+}
