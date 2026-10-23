@@ -26,7 +26,7 @@ Domain details: see `ARCHITECTURE.md`. Progress: see `STATUS.md`. Structure: see
 - Work only on the task in your work order.
 - First read `ARCHITECTURE.md`, `AGENTS.md`, `STATUS.md`, `docs/module-map.md` and your task brief.
 - If anything is unclear: `open_questions` in the result; do not guess.
-- Prove success with the output of every gate.
+- Prove success with every gate: run it with `pg_gate` (DeepSeek Harness plugin) or `python3 .generator/tools/gate.py --task <ID> --name <gate> --shell "<command>"`, gate names as in `board.json`. The printed record path is the evidence; commit `reviews/evidence/` with the task.
 - Do not change files outside your scope.
 - One commit per task: task ID + title, e.g. `M03: Add, list and search`. No push, no remote.
 - Do not mix layers: the CLI calls the service, the service calls the store, never the other way round.

@@ -20,14 +20,20 @@ The human's operating manual. The generator drafts and writes; you approve, star
 - **Structure:** `docs/module-map.md` exists; imports only point downwards; no UI file touches the database.
 - **AGENTS.md:** commands, git and commit rule, scope and layer rule; no architecture, no progress.
 
+## Before every task
+
+- [ ] In a lead session (`/pg lead` with the DSH plugin): set the task to `in_progress` in `board.json`, run `render_status.py` (`/pg render`).
+- [ ] Start the worker in a new session without `/pg lead`. With several tasks in progress or in a worktree: `/pg task <ID>` in that session.
+- [ ] Check with `/pg status` that the session shows the right task and scope.
+
 ## After every task
 
-- [ ] Gate output seen, not just "done".
+- [ ] Gate records exist (`reviews/evidence/*.json` from `pg_gate` or `gate.py`), not just "done".
 - [ ] Every acceptance criterion evidenced.
 - [ ] Diff stays within the scope; no tests changed without approval.
-- [ ] Independent review in a new session, no open blockers (`reviews/Mxx.md`).
+- [ ] Independent review in a new session (`/pg reviewer` with the plugin), no open blockers (`reviews/Mxx.md`).
 - [ ] No placeholders, TODOs or `[UNVERIFIED]`.
-- [ ] `STATUS.md` regenerated; commit `<ID>: <title>`.
+- [ ] As lead: record paths into the task's `evidence`, status `done`, `handoff` written, `STATUS.md` regenerated, `check.py` (`pg_check`) green; commit `<ID>: <title>` including `reviews/evidence/`.
 - [ ] Next task starts from its brief.
 
 ## Red flags
@@ -42,6 +48,9 @@ The human's operating manual. The generator drafts and writes; you approve, star
 | Generator scores itself | require critic and cold start |
 | Two tasks write the same files | split scopes or run sequentially |
 | Agent sets its own task to `done` | only the lead sets `done`, after gates and merge |
+| Write blocked by prompt-generator | expected outside the scope; if the change is right, extend `scope_write` as lead or split the task |
+| Guard never blocks anything | task not `in_progress`, session in lead mode, or plugin not loaded (`/pg status`) |
+| "tests passed" as evidence | the record path from `pg_gate`; `check.py` rejects missing or failed records |
 | Reviewer never finds anything | sharpen the rubric, require evidence |
 | Lead writes feature code | lead plans and merges; workers write |
 | Whole docs folder in context | context pack with "Do not read" |

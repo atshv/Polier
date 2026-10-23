@@ -56,6 +56,7 @@ async function boot(config = {}) {
       output: { schema: { type: 'string' }, render: (_a, v) => [{ type: 'text', text: v }] },
       async execute(args, exec) {
         const abs = path.resolve(exec.agent.session.header.cwd, args.file_path)
+        mkdirSync(path.dirname(abs), { recursive: true })
         writeFileSync(abs, args.content)
         return 'written'
       },
@@ -113,6 +114,20 @@ test('/pg lead lifts the guard for that session only', async () => {
   assert.equal((await call(tools, worker, 'write', { file_path: 'README.md', content: 'w\n' })).error, true)
   await cmd.handler({ agent: lead, rawInput: 'worker' })
   assert.equal((await call(tools, lead, 'write', { file_path: 'README.md', content: 'x\n' })).error, true)
+})
+
+test('/pg reviewer may write only under reviews/, with or without a running task', async () => {
+  for (const status of ['in_progress', 'pending']) {
+    const root = project([task('M01', status)])
+    const { ctx, tools } = await boot()
+    const cmd = plugin.command(ctx, plugin.resolveConfig())
+    const r = agent(root)
+    await cmd.handler({ agent: r, rawInput: 'reviewer' })
+    assert.equal((await call(tools, r, 'write', { file_path: 'reviews/M01.md', content: 'verdict: pass\n' })).error, false)
+    const code = await call(tools, r, 'write', { file_path: 'src/app.py', content: 'x = 9\n' })
+    assert.equal(code.error, true)
+    assert.match(code.text, /reviewer session writes only under reviews/)
+  }
 })
 
 test('/pg task binds a session when several tasks run', async () => {

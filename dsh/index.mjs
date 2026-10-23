@@ -17,7 +17,7 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { activeTasks, decide, findRoot, loadBoard, readyTasks, relative } from './lib/project.mjs'
+import { activeTasks, decide, findRoot, inside, loadBoard, readyTasks, relative } from './lib/project.mjs'
 import { agentCwd, run } from './lib/run.mjs'
 
 export const name = 'prompt-generator'
@@ -117,10 +117,14 @@ export function checkWrite(ctx, config, exec) {
   const target = targetOf(exec, config.guardedTools)
   if (!target) return undefined
   const info = context(ctx, exec.agent)
-  if (!info || info.state.role !== 'worker') return undefined
-  if (info.tasks.length === 0) return undefined
+  if (!info) return undefined
   const abs = path.resolve(info.cwd, target)
   const rel = relative(info.root, abs)
+  if (info.state.role === 'reviewer') {
+    if (inside(rel, 'reviews') && !rel.startsWith('../')) return undefined
+    return `prompt-generator: write to ${rel || target} blocked, a reviewer session writes only under reviews/. Report the problem in the review instead of fixing it.`
+  }
+  if (info.state.role !== 'worker' || info.tasks.length === 0) return undefined
   const verdict = decide(rel, info.tasks)
   if (verdict.ok) return undefined
   const ids = info.tasks.map((t) => t.id).join(', ')
@@ -323,6 +327,7 @@ const HELP = [
   '/pg status        role, running task and scope of this session',
   '/pg lead          this session may write everything (planning, board, briefs, merge)',
   '/pg worker        back to the scope of the running task (default)',
+  '/pg reviewer      this session writes only under reviews/ (independent review)',
   '/pg task <ID>     bind this session to one task (several tasks in progress)',
   '/pg task          remove the binding',
   '/pg render        regenerate STATUS.md from board.json (lead only)',
@@ -331,8 +336,8 @@ const HELP = [
 export function command(ctx, config) {
   return {
     name: 'pg',
-    description: 'Prompt generator: switch this session between lead and worker, bind it to a task, show status.',
-    input: { hint: 'status | lead | worker | task <ID> | render' },
+    description: 'Prompt generator: switch this session between lead, worker and reviewer, bind it to a task, show status.',
+    input: { hint: 'status | lead | worker | reviewer | task <ID> | render' },
     async handler({ agent, rawInput, signal }) {
       const [verb = 'status', arg] = String(rawInput ?? '').trim().split(/\s+/).filter(Boolean)
       const state = stateOf(agent)
@@ -344,6 +349,9 @@ export function command(ctx, config) {
         case 'worker':
           state.role = 'worker'
           return { kind: 'success', text: 'Worker mode: writes are limited to the running task\'s scope.' }
+        case 'reviewer':
+          state.role = 'reviewer'
+          return { kind: 'success', text: 'Reviewer mode: this session writes only under reviews/. Use /pg worker to return.' }
         case 'off':
           state.role = 'off'
           return { kind: 'success', text: 'Guard off for this session. Use /pg worker to turn it on again.' }
