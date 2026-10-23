@@ -2,6 +2,18 @@
 
 Each release lists what a running project must do to adopt it. Update between stages, never during a task (see `guide/cheatsheet.md`). The current version is in `VERSION`; projects record theirs in `board.json` → `generator_version`.
 
+## 0.9.0
+
+**Core split from the harness.** The enforcement rules now live in `core/`, a Python package without any DeepSeek Harness code, so later adapters (Claude Code, git hooks) can use the same rules.
+
+- `core/`: `check_write` (guard decision), `check_stop` and `scope_check` (changed files against a task), `run_gate` (gate records), `verify_evidence`, `load_board`, `pick_task`, `active_tasks`, `ready_tasks`. Python 3.9+, standard library only, own tests in `core/tests/`.
+- The DSH plugin moved from `dsh/` to `adapters/dsh/`; `package.json` points there. Its synchronous guard keeps a JavaScript mirror of `check_write`; both are tested against one decision table, `core/tests/write_cases.json`.
+- `tools/gate.py`, `tools/scope_check.py` and `tools/check.py` are thin command-line wrappers around `core/`; paths, options, output and exit codes are unchanged.
+- `install.sh` no longer copies `__pycache__` folders and leaves out the new test folders.
+- Unchanged: plugin behaviour, tool names, `/pl`, messages, `board.json` fields. The guard and the stop check keep their slightly different rule order (the guard lets `reviews/evidence/` through before `scope_write_forbidden`, the stop check checks `scope_write_forbidden` first).
+
+**Migration:** set `generator_version` to `0.9.0`. Plugin users: `git pull` in the clone, then run `dsh plugin --profile <name> add ./polier` again and restart the harness. Skill-only users: `./update.sh`. Projects that call `tools/gate.py` keep working.
+
 ## 0.8.0
 
 **Renamed to Polier.** The project was the "Prompt Generator"; it now plans and enforces, so it is called Polier (German for site foreman).

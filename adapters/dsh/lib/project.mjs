@@ -1,6 +1,7 @@
 // Board and scope logic shared by the guard, the stop check and the tools.
-// Mirrors tools/scope_check.py so the guard can decide synchronously, without
-// starting a process. Keep the two in step: the Python tests cover the rules.
+// JavaScript mirror of core/board.py and core/scope.py (check_write), so the
+// guard can decide synchronously, without starting a process. Keep the two in
+// step: both are tested against core/tests/write_cases.json.
 
 import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
@@ -9,6 +10,8 @@ import path from 'node:path'
 export const ALWAYS_ALLOWED = ['reviews/evidence']
 /** Lead-owned: a worker must not edit the board, the generated status or briefs. */
 export const BOARD_FILES = ['board.json', 'STATUS.md', 'tasks']
+/** The only folder a reviewer session writes to. */
+export const REVIEWS = 'reviews'
 
 /** Forward slashes, no trailing slash, `.` and `..` resolved; '' for the root. */
 export function normalized(p) {
@@ -105,6 +108,21 @@ export function decide(rel, tasks) {
   return forbidden
     ? { ok: false, code: 'forbidden', reason: 'is listed in scope_write_forbidden' }
     : { ok: false, code: 'outside-scope', reason: 'is outside the write scope' }
+}
+
+/**
+ * Guard decision for one session role, as core.scope.check_write: a reviewer
+ * writes only under reviews/, a worker with a running task only inside its
+ * scope, every other case is allowed.
+ * @returns {{ ok: true } | { ok: false, reason: string, code: string }}
+ */
+export function checkPath(rel, tasks, role = 'worker') {
+  if (role === 'reviewer') {
+    if (inside(rel, REVIEWS) && !rel.startsWith('../')) return { ok: true }
+    return { ok: false, code: 'reviewer', reason: 'is outside reviews/' }
+  }
+  if (role !== 'worker' || tasks.length === 0) return { ok: true }
+  return decide(rel, tasks)
 }
 
 /** Ready tasks: pending, every dependency done. Same rule as tools/render_status.py. */

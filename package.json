@@ -1,6 +1,6 @@
 {
   "name": "dsh-polier",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "Polier for DeepSeek Harness: plans an AI coding project, then keeps the agents to the plan. Enforces task scopes, records gate evidence and checks the board.",
   "license": "MIT",
   "repository": {
@@ -9,15 +9,16 @@
   },
   "keywords": ["deepseek-harness", "dsh", "dsh-plugin", "cordis", "agents", "planning", "polier"],
   "type": "module",
-  "main": "dsh/index.mjs",
+  "main": "adapters/dsh/index.mjs",
   "exports": {
-    ".": "./dsh/index.mjs",
+    ".": "./adapters/dsh/index.mjs",
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./package.json": "./package.json"
   },
   "files": [
-    "dsh/index.mjs",
-    "dsh/lib/",
+    "adapters/dsh/index.mjs",
+    "adapters/dsh/lib/",
+    "core/*.py",
     "cordis.patch.yml",
     "SKILL.md",
     "VERSION",
@@ -47,6 +48,6 @@
     "@deepseek-ai/dsh-tools": "0.2.1-rc.3"
   },
   "scripts": {
-    "test": "node --test dsh/test/*.test.mjs && python3 -m unittest discover -s tests"
+    "test": "node --test adapters/dsh/test/*.test.mjs && python3 -m unittest discover -s tests && python3 -m unittest discover -s core/tests -t ."
   }
 }

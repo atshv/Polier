@@ -2,7 +2,7 @@
 
 Plan an AI coding project before the first line of code, then keep the agents to the plan.
 
-![version](https://img.shields.io/badge/version-0.8.0-blue?style=flat-square)
+![version](https://img.shields.io/badge/version-0.9.0-blue?style=flat-square)
 ![license](https://img.shields.io/badge/license-MIT-green?style=flat-square)
 
 A plugin for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness). It interviews you, writes a one-page architecture and a task plan, and after your approval sets up the project. While agents build, it blocks writes outside the current task and records test results as proof.
@@ -59,6 +59,18 @@ my-project/
 ├── reviews/          reviews and gate records
 └── docs/             module map, quality gates, decisions
 ```
+
+## Package layout
+
+The rules are separate from the harness, so they can run in other hosts too.
+
+| Folder | What it holds |
+|---|---|
+| `core/` | Write guard, stop check, gate records, board reading. Python 3.9+, standard library only, no harness code. Tests in `core/tests/`. |
+| `adapters/dsh/` | The DeepSeek Harness plugin. It maps harness events and tool names onto `core/` (see [`adapters/README.md`](adapters/README.md)). |
+| `tools/` | Command-line tools (`gate.py`, `scope_check.py`, `check.py`, `render_status.py`) built on `core/`. |
+
+Adapters for Claude Code and git hooks are planned. Run all tests with `npm test`; the core alone with `python3 -m unittest discover -s core/tests -t .`.
 
 ## More
 
