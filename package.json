@@ -1,0 +1,52 @@
+{
+  "name": "dsh-prompt-generator",
+  "version": "0.7.0",
+  "description": "Prompt generator for AI coding projects as a DeepSeek Harness plugin: plans the project, then enforces task scopes, records gate evidence and checks the board.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/atshv/prompt-generator.git"
+  },
+  "keywords": ["deepseek-harness", "dsh", "dsh-plugin", "cordis", "agents", "planning", "prompt-generator"],
+  "type": "module",
+  "main": "dsh/index.mjs",
+  "exports": {
+    ".": "./dsh/index.mjs",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dsh/index.mjs",
+    "dsh/lib/",
+    "cordis.patch.yml",
+    "SKILL.md",
+    "VERSION",
+    "CHANGELOG.md",
+    "prompt/",
+    "templates/",
+    "tools/*.py",
+    "guide/",
+    "examples/"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": ">=4.0.1"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "4.0.5",
+    "@deepseek-ai/dsh-commands": "0.2.1-rc.3",
+    "@deepseek-ai/dsh-skill": "0.2.1-rc.3",
+    "@deepseek-ai/dsh-system-prompt": "0.2.1-rc.3",
+    "@deepseek-ai/dsh-tools": "0.2.1-rc.3"
+  },
+  "scripts": {
+    "test": "node --test dsh/test/*.test.mjs && python3 -m unittest discover -s tests"
+  }
+}

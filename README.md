@@ -2,19 +2,21 @@
 
 Plan an AI coding project before the first line of code.
 
-![version](https://img.shields.io/badge/version-0.6.0-blue?style=flat-square)
+![version](https://img.shields.io/badge/version-0.7.0-blue?style=flat-square)
 ![license](https://img.shields.io/badge/license-MIT-green?style=flat-square)
 
-The Prompt Generator is an agent skill for the DeepSeek Harness. It interviews you, drafts a one-page architecture and a task plan, and after your approval writes a project scaffold that coding agents build from, one reviewed task at a time.
+The Prompt Generator is a DeepSeek Harness plugin and agent skill. It interviews you, drafts a one-page architecture and a task plan, and after your approval writes a project scaffold that coding agents build from, one reviewed task at a time. As a plugin it also enforces the plan while agents build: writes outside a task's scope are blocked, and gate results are recorded so they cannot be made up.
 
 ## Quick start
 
 Requirements: DeepSeek Harness, git, Python 3.9+.
 
 ```bash
-git clone https://github.com/atshv/prompt-generator.git && cd prompt-generator
-./install.sh --ref "v$(cat VERSION)"
+git clone https://github.com/atshv/prompt-generator.git
+dsh plugin --profile web add ./prompt-generator
 ```
+
+Use your own profile name instead of `web`, then restart the harness. Without the plugin, install only the skill with `./install.sh` (see [Installation and updates](#installation-and-updates)).
 
 Open a new DSH session in an empty project folder and write:
 
@@ -63,17 +65,33 @@ my-project/
 - **Right-sized team** — one writer by default; parallel agents only for parallel work.
 - **Traceable** — definition of done → task → acceptance criterion → gate, enforced by `tools/check.py`.
 
+## In DeepSeek Harness
+
+The plugin registers the skill and adds four parts around the build.
+
+| Part | What it does |
+|---|---|
+| Write guard | While a task is `in_progress`, `write`, `edit` and `str_replace_editor` work only inside its `scope_write`, never in `scope_write_forbidden`. `board.json`, `STATUS.md` and `tasks/` are lead-owned; `reviews/evidence/` is always open. |
+| Stop check | Before a turn ends, the git diff is compared with the scope. Changes made through `bash` are caught here and sent back to the agent. |
+| Tools | `pg_status` (running and ready tasks, scope, handoffs), `pg_gate` (runs a gate, writes a record), `pg_scope_check`, `pg_check`. |
+| `/pg` | Your command per session: `/pg lead` before planning, merging or editing the board, `/pg worker` to return, `/pg task M03` with several tasks in progress, `/pg status`, `/pg render`. |
+
+Every session starts as a worker, also after a restart. Configure the plugin row in the profile with `enforce: deny | ask | off`, `stopCheck`, `maxStopReminders`, `python` and `skill` (defaults in [`cordis.patch.yml`](cordis.patch.yml)). Gate commands run through the harness shell and its sandbox on macOS and Linux; on Windows they run as a direct process.
+
 ## Installation and updates
 
 | Task | Command |
 |---|---|
-| Install for all projects | `./install.sh --ref "v$(cat VERSION)"` |
+| Plugin (skill + guard + tools) | `dsh plugin --profile <name> add ./prompt-generator` |
+| Update the plugin | `git -C prompt-generator pull && dsh plugin --profile <name> add ./prompt-generator` |
+| Remove the plugin | `dsh plugin --profile <name> remove dsh-prompt-generator` |
+| Skill only, all projects | `./install.sh --ref "v$(cat VERSION)"` |
 | Install for one project | `./install.sh <project>/.dsh/skills` |
 | Update to the latest version | `git pull && ./update.sh --ref "v$(cat VERSION)"` |
 | Roll back | `./update.sh --ref v0.5.6` |
 | Claude Code | add the target `claude` to any command above |
 
-Without `--ref`, the scripts install the current checkout, including uncommitted changes. Before updating a running project, read [`CHANGELOG.md`](CHANGELOG.md); update between stages, never during a task.
+Use either the plugin or `install.sh`, not both, or the skill exists twice. Without `--ref`, the scripts install the current checkout, including uncommitted changes. Before updating a running project, read [`CHANGELOG.md`](CHANGELOG.md); update between stages, never during a task.
 
 Without skill support, attach `prompt/generator.md`, `prompt/rubric.md`, `templates/` and `tools/` to the chat and fill in the input block at the top of `prompt/generator.md`.
 
@@ -81,9 +99,12 @@ Without skill support, attach `prompt/generator.md`, `prompt/rubric.md`, `templa
 
 ```
 ├── SKILL.md            skill entry point
+├── dsh/                DeepSeek Harness plugin (index.mjs, lib/, test/); package.json, cordis.patch.yml
 ├── prompt/             generator.md (process), rubric.md (quality), dsh.md (DSH tool mapping)
 ├── templates/          artifact templates and board schema
-├── tools/              check.py (validation), render_status.py (STATUS.md)
+├── tools/              check.py (validation), render_status.py (STATUS.md),
+│                       gate.py (gate run + record), scope_check.py (diff vs. scope)
+├── tests/              unittest for the tools; `npm test` runs these and the plugin tests
 ├── guide/              cheatsheet.md: checklists for the human
 ├── examples/           minimal-cli: reference project
 ├── install.sh          install, update.sh: update or roll back

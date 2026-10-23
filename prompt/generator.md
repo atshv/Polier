@@ -52,7 +52,7 @@ Write no file before its approval; the only exception is `docs/repo-facts.md`. O
 ## Definitions
 
 - **Gate:** a deterministic command with expected output. Passes only if exit code and visible output match; the output is evidence.
-- **Task passed:** all gates green, every acceptance criterion mapped to a gate or test, reviewer `verdict: pass` without blockers, merged by the lead/human, gate output recorded in the task's `evidence`, and a `handoff` of up to 3 lines (decision, pitfall, changed interface) written for the tasks that depend on it. A worker's `submitted` is not a pass.
+- **Task passed:** all gates green, every acceptance criterion mapped to a gate or test, reviewer `verdict: pass` without blockers, merged by the lead/human, a passing `tools/gate.py` record for every gate listed in the task's `evidence`, and a `handoff` of up to 3 lines (decision, pitfall, changed interface) written for the tasks that depend on it. A worker's `submitted` is not a pass.
 - **Cold-start test:** an outside agent gets only `ARCHITECTURE.md`, `AGENTS.md`, `STATUS.md` and the first brief and must produce a plan without a blocking question (one without whose answer no plan is possible). Passes when no blocking question remains and files, layer and gates are named correctly.
 - **Stage:** tasks planned in detail together (foundation, core, extension).
 

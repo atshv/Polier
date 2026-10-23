@@ -186,7 +186,7 @@
           "default": 0
         },
         "evidence": {
-          "description": "Gate output or paths to it; required once status is done.",
+          "description": "Paths of tools/gate.py records (reviews/evidence/*.json), one passing record per gate; required once status is done. Free text is accepted with a warning for older projects.",
           "type": "array",
           "items": {
             "type": "string"
