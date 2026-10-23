@@ -1,6 +1,7 @@
 // Board and scope logic shared by the guard, the stop check and the tools.
-// Mirrors tools/scope_check.py so the guard can decide synchronously, without
-// starting a process. Keep the two in step: the Python tests cover the rules.
+// JavaScript mirror of core/board.py and core/scope.py (check_write), so the
+// guard can decide synchronously, without starting a process. Keep the two in
+// step: both are tested against core/tests/write_cases.json.
 
 import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'

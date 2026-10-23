@@ -22,7 +22,7 @@ import { agentCwd, run } from './lib/run.mjs'
 
 export const name = 'polier'
 
-const PACKAGE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+const PACKAGE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
 const TOOLS = path.join(PACKAGE, 'tools')
 const SOURCE = 'polier'
 

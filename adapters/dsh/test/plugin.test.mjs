@@ -201,7 +201,7 @@ test('pl_scope_check and the stop check see writes made outside the tools', asyn
 
 test('pl_check runs tools/check.py', async () => {
   const { tools } = await boot({ python: PY })
-  const example = path.resolve(import.meta.dirname, '../../examples/minimal-cli')
+  const example = path.resolve(import.meta.dirname, '../../../examples/minimal-cli')
   const res = await call(tools, agent(example), 'pl_check', {})
   assert.equal(res.value.ok, true, res.value.output)
 })
