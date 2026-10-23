@@ -18,6 +18,9 @@
   "files": [
     "adapters/dsh/index.mjs",
     "adapters/dsh/lib/",
+    "adapters/claude-code/hook.py",
+    "adapters/claude-code/settings.example.json",
+    "adapters/claude-code/README.md",
     "core/*.py",
     "cordis.patch.yml",
     "SKILL.md",
@@ -48,6 +51,6 @@
     "@deepseek-ai/dsh-tools": "0.2.1-rc.3"
   },
   "scripts": {
-    "test": "node --test adapters/dsh/test/*.test.mjs && python3 -m unittest discover -s tests && python3 -m unittest discover -s core/tests -t ."
+    "test": "node --test adapters/dsh/test/*.test.mjs && python3 -m unittest discover -s tests && python3 -m unittest discover -s core/tests -t . && python3 -m unittest discover -s adapters/claude-code/tests"
   }
 }
