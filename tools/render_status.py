@@ -48,8 +48,13 @@ def render(board: dict) -> str:
              if t.get("status") == "pending" and set(t.get("depends_on", [])) <= done]
     lines += ["## Ready now", ""]
     if ready:
+        by_id = {t.get("id"): t for t in tasks}
         for task in ready:
             lines.append(f"- `{task.get('id')}` {task.get('title', '')}")
+            # Handoff notes of the tasks this one depends on, so a fresh session needs no old transcript
+            for dep in task.get("depends_on", []):
+                for note in by_id.get(dep, {}).get("handoff", []):
+                    lines.append(f"  - from `{dep}`: {note}")
     else:
         lines.append("- none")
     lines.append("")

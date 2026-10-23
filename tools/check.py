@@ -39,8 +39,31 @@ TASK_FIELDS = (
 )
 
 
+# Context budgets. Tokens are estimated as characters / 4, a rough rule of thumb.
+STATUS_WORD_LIMIT = 300          # STATUS.md is read in every session
+PACK_TOKEN_WARN = 15000          # context pack of one task; the worker budget of 30k input also holds prompt, tools and conversation
+HANDOFF_MAX_LINES = 3
+HANDOFF_MAX_CHARS = 200
+TEXT_SUFFIXES = {
+    ".md", ".txt", ".json", ".yaml", ".yml", ".toml", ".py", ".js", ".ts", ".tsx", ".jsx",
+    ".rs", ".go", ".java", ".kt", ".swift", ".c", ".h", ".cpp", ".cs", ".rb", ".php",
+    ".sh", ".sql", ".html", ".css", ".cfg", ".ini",
+}
+MAX_FILE_BYTES = 200_000
+
 def words(path: Path) -> int:
     return len(path.read_text(encoding="utf-8").split())
+
+def estimate_tokens(path: Path) -> int:
+    """Rough token estimate of a file or folder; skips binary and very large files."""
+    if path.is_dir():
+        return sum(estimate_tokens(p) for p in sorted(path.rglob("*")) if p.is_file())
+    if path.suffix.lower() not in TEXT_SUFFIXES or path.stat().st_size > MAX_FILE_BYTES:
+        return 0
+    try:
+        return len(path.read_text(encoding="utf-8")) // 4
+    except (UnicodeDecodeError, OSError):
+        return 0
 
 
 def normalized(path: str) -> str:
@@ -99,9 +122,20 @@ def check_board(root: Path, errors: list[str], warnings: list[str]) -> None:
     if len(ids) != len(set(ids)):
         errors.append("board.json: duplicate task IDs")
     known = set(ids)
+    needed_by_others = {d for t in tasks for d in t.get("depends_on", []) if isinstance(t, dict)}
 
     for task in tasks:
         tid = task.get("id", "?")
+        handoff = task.get("handoff")
+        if handoff is not None:
+            if not isinstance(handoff, list) or not all(isinstance(h, str) for h in handoff):
+                errors.append(f"{tid}: handoff must be a list of strings")
+            elif len(handoff) > HANDOFF_MAX_LINES:
+                errors.append(f"{tid}: handoff has {len(handoff)} lines (max. {HANDOFF_MAX_LINES})")
+            elif any(len(h) > HANDOFF_MAX_CHARS for h in handoff):
+                errors.append(f"{tid}: handoff line longer than {HANDOFF_MAX_CHARS} characters")
+        elif task.get("status") == "done" and tid in needed_by_others:
+            warnings.append(f"{tid}: done and other tasks depend on it, but no handoff (max. {HANDOFF_MAX_LINES} lines)")
         for key in TASK_FIELDS:
             if key not in task:
                 errors.append(f"{tid}: mandatory field missing: {key}")
@@ -341,6 +375,25 @@ def check_consistency(root: Path, board: dict, errors: list[str], warnings: list
         errors.append(f"docs/quality.md: {ref} is not covered by any task (satisfies)")
 
 
+def check_context_packs(root: Path, board: dict, warnings: list[str]) -> None:
+    """Warn when what a worker must load for one task grows large (estimate)."""
+    base = [root / n for n in ("ARCHITECTURE.md", "AGENTS.md", "STATUS.md", "docs/module-map.md")]
+    base_tokens = sum(estimate_tokens(p) for p in base if p.exists())
+    for task in board.get("tasks", []):
+        if not isinstance(task, dict) or task.get("status") == "done":
+            continue
+        tid = task.get("id", "?")
+        brief = root / "tasks" / f"{tid}.md"
+        if not brief.exists():
+            continue
+        reads = [root / normalized(p) for p in task.get("scope_read", []) if isinstance(p, str)]
+        extra = {p for p in reads if p.exists() and p not in base}
+        total = base_tokens + estimate_tokens(brief) + sum(estimate_tokens(p) for p in extra)
+        if total > PACK_TOKEN_WARN:
+            warnings.append(
+                f"{tid}: context pack is about {total} tokens (warning at {PACK_TOKEN_WARN}); "
+                f"trim scope_read, split the task or shorten the base files")
+
 def main() -> int:
     root = Path(sys.argv[1] if len(sys.argv) > 1 else ".").resolve()
     errors: list[str] = []
@@ -361,6 +414,11 @@ def main() -> int:
         count = words(root / "AGENTS.md")
         if count > 400:
             warnings.append(f"AGENTS.md: {count} words (target max. 400)")
+
+    if (root / "STATUS.md").exists():
+        count = words(root / "STATUS.md")
+        if count > STATUS_WORD_LIMIT:
+            warnings.append(f"STATUS.md: {count} words (target max. {STATUS_WORD_LIMIT}); it is read in every session")
 
     for brief in sorted((root / "tasks").glob("M*.md")):
         count = words(brief)
@@ -393,6 +451,7 @@ def main() -> int:
             board = None
         if isinstance(board, dict):
             check_consistency(root, board, errors, warnings)
+            check_context_packs(root, board, warnings)
             check_version(board, warnings)
             check_status_fresh(root, board, errors)
 
