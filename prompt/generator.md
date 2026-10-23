@@ -1,4 +1,4 @@
-# Prompt Generator for Modular AI Projects
+# Polier — Process for Modular AI Projects
 
 **Version: see `VERSION` · Target environment: DeepSeek Harness · Meta-prompt**
 
@@ -60,7 +60,7 @@ Write no file before its approval; the only exception is `docs/repo-facts.md`. O
 
 ### 0.1 Tool check
 
-Establish what the session can do: write files, run commands and tests, fresh-context subagents, parallel sessions or teams, task board, worktrees, plan mode, structured questions, web search, background jobs, and which gate commands the sandbox allows. Use the best available tool per phase; in the DeepSeek Harness, follow `prompt/dsh.md`. If the tools `pg_status`, `pg_gate`, `pg_scope_check` and `pg_check` exist, the prompt-generator plugin is installed: it blocks writes outside the running task's scope, so the session writing the scaffold must be a lead session (`/pg lead`) once any task is `in_progress`.
+Establish what the session can do: write files, run commands and tests, fresh-context subagents, parallel sessions or teams, task board, worktrees, plan mode, structured questions, web search, background jobs, and which gate commands the sandbox allows. Use the best available tool per phase; in the DeepSeek Harness, follow `prompt/dsh.md`. If the tools `pl_status`, `pl_gate`, `pl_scope_check` and `pl_check` exist, the polier plugin is installed: it blocks writes outside the running task's scope, so the session writing the scaffold must be a lead session (`/pl lead`) once any task is `in_progress`.
 
 ### 0.2 Interview
 
@@ -188,7 +188,7 @@ Briefs for the next 3–5 tasks only, from `templates/task-brief.md`, 400–800 
 └── src/                 # created by M01, not in advance
 ```
 
-- `AGENTS.md`: commands, deviations from the standard, rules (git, scope, layers, link to `docs/module-map.md`). No architecture, no progress. The gate rule names `pg_gate` when the plugin is installed, otherwise `tools/gate.py` with the real package path; gate names are the ones in `board.json`.
+- `AGENTS.md`: commands, deviations from the standard, rules (git, scope, layers, link to `docs/module-map.md`). No architecture, no progress. The gate rule names `pl_gate` when the plugin is installed, otherwise `tools/gate.py` with the real package path; gate names are the ones in `board.json`.
 - `STATUS.md`: never edited by hand. Change `board.json`, then run `tools/render_status.py`; its "Ready now" list names the tasks that can start.
 - `docs/quality.md`: every definition-of-done item `D1..Dn` is covered by at least one task's `satisfies` (trace: D → task → acceptance → gate).
 - `reviews/Mxx.md`: per `templates/review-feedback.md`; later rounds are appended.
@@ -219,9 +219,9 @@ Deliver:
 ```text
 You are working on <project>. Task: Mxx.
 Read ARCHITECTURE.md, AGENTS.md, STATUS.md, docs/module-map.md and tasks/Mxx.md
-(with the plugin, call pg_status first).
+(with the plugin, call pl_status first).
 Show a plan (files, tests, open questions) and wait for approval.
-Then implement, run every gate with pg_gate (or tools/gate.py), run pg_scope_check,
+Then implement, run every gate with pl_gate (or tools/gate.py), run pl_scope_check,
 and return the result as YAML with the gate record paths as evidence.
 No files outside the scope. No new dependencies.
 ```
@@ -231,7 +231,7 @@ No files outside the scope. No new dependencies.
 ```text
 You are reviewing Mxx. You did not write it.
 Read ARCHITECTURE.md, tasks/Mxx.md, the diff since the last commit and the gate records
-in reviews/evidence/ (with the plugin, the human starts this session with /pg reviewer).
+in reviews/evidence/ (with the plugin, the human starts this session with /pl reviewer).
 Check every acceptance criterion, the gates, the scope and side effects.
 Write the result to reviews/Mxx.md in the format of templates/review-feedback.md.
 No style remarks. Do not edit code.

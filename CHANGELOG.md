@@ -2,6 +2,17 @@
 
 Each release lists what a running project must do to adopt it. Update between stages, never during a task (see `guide/cheatsheet.md`). The current version is in `VERSION`; projects record theirs in `board.json` → `generator_version`.
 
+## 0.8.0
+
+**Renamed to Polier.** The project was the "Prompt Generator"; it now plans and enforces, so it is called Polier (German for site foreman).
+
+- Repository `atshv/polier` (GitHub redirects the old `atshv/prompt-generator`), package `dsh-polier`, plugin row and skill `polier`.
+- Tools `pl_status`, `pl_gate`, `pl_scope_check`, `pl_check` (were `pg_*`); human command `/pl` (was `/pg`).
+- Messages start with `Polier:`. `install.sh` and `update.sh` install the skill as `polier`.
+- Unchanged: file layout, `board.json` fields (including `generator_version`), the Python tools and their output.
+
+**Migration:** set `generator_version` to `0.8.0`. In each project's `AGENTS.md`, replace `pg_gate` with `pl_gate` (and any other `pg_*`). Plugin users: `dsh plugin --profile <name> remove dsh-prompt-generator`, then `dsh plugin --profile <name> add ./polier`. Skill-only users: delete `~/.dsh/skills/prompt-generator/` and run `./install.sh` again. Use `/pl` instead of `/pg`.
+
 ## 0.7.1
 
 - Plugin: `/pg reviewer` makes a session write only under `reviews/` (with or without a running task).

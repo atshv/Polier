@@ -16,7 +16,7 @@ import * as plugin from '../index.mjs'
 const PY = process.platform === 'win32' ? 'python' : 'python3'
 
 function project(tasks) {
-  const root = mkdtempSync(path.join(tmpdir(), 'pg-dsh-'))
+  const root = mkdtempSync(path.join(tmpdir(), 'pl-dsh-'))
   writeFileSync(path.join(root, 'board.json'), JSON.stringify({ project: 't', profile: 'S', base_branch: 'main', tasks }, null, 2))
   mkdirSync(path.join(root, 'src'))
   writeFileSync(path.join(root, 'src/app.py'), 'x = 1\n')
@@ -102,7 +102,7 @@ test('forbidden paths win and no running task means no guard', async () => {
   assert.equal((await call(tools, agent(idle), 'write', { file_path: 'README.md', content: 'ok\n' })).error, false)
 })
 
-test('/pg lead lifts the guard for that session only', async () => {
+test('/pl lead lifts the guard for that session only', async () => {
   const root = project([task()])
   const { ctx, tools } = await boot()
   const cmd = plugin.command(ctx, plugin.resolveConfig())
@@ -116,7 +116,7 @@ test('/pg lead lifts the guard for that session only', async () => {
   assert.equal((await call(tools, lead, 'write', { file_path: 'README.md', content: 'x\n' })).error, true)
 })
 
-test('/pg reviewer may write only under reviews/, with or without a running task', async () => {
+test('/pl reviewer may write only under reviews/, with or without a running task', async () => {
   for (const status of ['in_progress', 'pending']) {
     const root = project([task('M01', status)])
     const { ctx, tools } = await boot()
@@ -130,7 +130,7 @@ test('/pg reviewer may write only under reviews/, with or without a running task
   }
 })
 
-test('/pg task binds a session when several tasks run', async () => {
+test('/pl task binds a session when several tasks run', async () => {
   const root = project([task('M01'), task('M02', 'in_progress', { scope_write: ['README.md'] })])
   const { ctx, tools } = await boot()
   const a = agent(root)
@@ -150,14 +150,14 @@ test('enforce off and ask', async () => {
   assert.equal((await call(ask.tools, agent(root), 'write', { file_path: 'README.md', content: 'y\n' })).error, true)
 })
 
-test('pg_status lists the running and ready tasks with handoffs', async () => {
+test('pl_status lists the running and ready tasks with handoffs', async () => {
   const root = project([
     task('M01', 'done', { handoff: ['use uv'], evidence: ['x'] }),
     task('M02', 'in_progress'),
     task('M03', 'pending', { depends_on: ['M01'] }),
   ])
   const { tools } = await boot()
-  const { error, value } = await call(tools, agent(root), 'pg_status', {})
+  const { error, value } = await call(tools, agent(root), 'pl_status', {})
   assert.equal(error, false)
   assert.equal(value.running[0].id, 'M02')
   assert.deepEqual(value.running[0].scope_write, ['src/app.py'])
@@ -165,29 +165,29 @@ test('pg_status lists the running and ready tasks with handoffs', async () => {
   assert.deepEqual(value.ready[0].handoff, ['M01: use uv'])
 })
 
-test('pg_gate writes a record and reports pass and fail', async () => {
+test('pl_gate writes a record and reports pass and fail', async () => {
   const root = project([task()])
   const { tools } = await boot({ python: PY })
   const a = agent(root)
-  const pass = await call(tools, a, 'pg_gate', { task: 'M01', gate: 'tests', command: 'echo green' })
+  const pass = await call(tools, a, 'pl_gate', { task: 'M01', gate: 'tests', command: 'echo green' })
   assert.equal(pass.error, false, pass.text)
   assert.equal(pass.value.passed, true)
   assert.ok(existsSync(path.join(root, pass.value.record)))
-  const fail = await call(tools, a, 'pg_gate', { task: 'M01', gate: 'tests', command: 'echo red; exit 3' })
+  const fail = await call(tools, a, 'pl_gate', { task: 'M01', gate: 'tests', command: 'echo red; exit 3' })
   assert.equal(fail.value.passed, false)
   assert.equal(fail.value.exit_code, 3)
-  const unknown = await call(tools, a, 'pg_gate', { task: 'M01', gate: 'deploy', command: 'true' })
+  const unknown = await call(tools, a, 'pl_gate', { task: 'M01', gate: 'deploy', command: 'true' })
   assert.equal(unknown.error, true)
   assert.match(unknown.text, /not listed/)
 })
 
-test('pg_scope_check and the stop check see writes made outside the tools', async () => {
+test('pl_scope_check and the stop check see writes made outside the tools', async () => {
   const root = project([task()])
   const config = { python: PY }
   const { ctx, tools } = await boot(config)
   const a = agent(root)
   writeFileSync(path.join(root, 'README.md'), 'changed by bash\n')
-  const check = await call(tools, a, 'pg_scope_check', {})
+  const check = await call(tools, a, 'pl_scope_check', {})
   assert.equal(check.value.ok, false)
   assert.equal(check.value.violations[0].path, 'README.md')
 
@@ -199,21 +199,21 @@ test('pg_scope_check and the stop check see writes made outside the tools', asyn
   assert.equal(a.steered.length, cfg.maxStopReminders + 1)
 })
 
-test('pg_check runs tools/check.py', async () => {
+test('pl_check runs tools/check.py', async () => {
   const { tools } = await boot({ python: PY })
   const example = path.resolve(import.meta.dirname, '../../examples/minimal-cli')
-  const res = await call(tools, agent(example), 'pg_check', {})
+  const res = await call(tools, agent(example), 'pl_check', {})
   assert.equal(res.value.ok, true, res.value.output)
 })
 
 test('the bundled skill parses', () => {
   const s = plugin.skill()
-  assert.equal(s.name, 'prompt-generator')
+  assert.equal(s.name, 'polier')
   assert.ok(s.description.length > 50)
   assert.match(s.content, /Package folder/)
 })
 
-test('registers tools, the /pg command and the skill with the real services', async () => {
+test('registers tools, the /pl command and the skill with the real services', async () => {
   const Commands = await import('@deepseek-ai/dsh-commands')
   const Skill = await import('@deepseek-ai/dsh-skill')
   const ctx = new Context()
@@ -224,9 +224,9 @@ test('registers tools, the /pg command and the skill with the real services', as
   await ctx.plugin(plugin)
   await new Promise((r) => setTimeout(r, 100))
   const names = ctx.get('tools').schemas().map((s) => s.name)
-  for (const n of ['pg_status', 'pg_gate', 'pg_scope_check', 'pg_check']) assert.ok(names.includes(n), n)
+  for (const n of ['pl_status', 'pl_gate', 'pl_scope_check', 'pl_check']) assert.ok(names.includes(n), n)
   const fake = { id: 'x', ctx, session: { header: {} } }
-  assert.deepEqual(ctx.get('commands').list(fake).map((c) => c.name), ['pg'])
+  assert.deepEqual(ctx.get('commands').list(fake).map((c) => c.name), ['pl'])
   const skills = await ctx.get('skills').list({})
-  assert.ok(skills.some((s) => s.name === 'prompt-generator'))
+  assert.ok(skills.some((s) => s.name === 'polier'))
 })

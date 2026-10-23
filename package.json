@@ -1,13 +1,13 @@
 {
-  "name": "dsh-prompt-generator",
-  "version": "0.7.1",
-  "description": "Prompt generator for AI coding projects as a DeepSeek Harness plugin: plans the project, then enforces task scopes, records gate evidence and checks the board.",
+  "name": "dsh-polier",
+  "version": "0.8.0",
+  "description": "Polier for DeepSeek Harness: plans an AI coding project, then keeps the agents to the plan. Enforces task scopes, records gate evidence and checks the board.",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/atshv/prompt-generator.git"
+    "url": "git+https://github.com/atshv/polier.git"
   },
-  "keywords": ["deepseek-harness", "dsh", "dsh-plugin", "cordis", "agents", "planning", "prompt-generator"],
+  "keywords": ["deepseek-harness", "dsh", "dsh-plugin", "cordis", "agents", "planning", "polier"],
   "type": "module",
   "main": "dsh/index.mjs",
   "exports": {

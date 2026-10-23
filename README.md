@@ -1,19 +1,19 @@
-# Prompt Generator
+# Polier
 
-Plan an AI coding project before the first line of code.
+Plan an AI coding project before the first line of code, then keep the agents to the plan.
 
-![version](https://img.shields.io/badge/version-0.7.1-blue?style=flat-square)
+![version](https://img.shields.io/badge/version-0.8.0-blue?style=flat-square)
 ![license](https://img.shields.io/badge/license-MIT-green?style=flat-square)
 
-The Prompt Generator is a DeepSeek Harness plugin and agent skill. It interviews you, drafts a one-page architecture and a task plan, and after your approval writes a project scaffold that coding agents build from, one reviewed task at a time. As a plugin it also enforces the plan while agents build: writes outside a task's scope are blocked, and gate results are recorded so they cannot be made up.
+*Polier* is the German word for the site foreman, the one who keeps the crew to the plan. Polier is a DeepSeek Harness plugin and agent skill. It interviews you, drafts a one-page architecture and a task plan, and after your approval writes a project scaffold that coding agents build from, one reviewed task at a time. As a plugin it also enforces the plan while agents build: writes outside a task's scope are blocked, and gate results are recorded so they cannot be made up.
 
 ## Quick start
 
 Requirements: DeepSeek Harness, git, Python 3.9+.
 
 ```bash
-git clone https://github.com/atshv/prompt-generator.git
-dsh plugin --profile web add ./prompt-generator
+git clone https://github.com/atshv/polier.git
+dsh plugin --profile web add ./polier
 ```
 
 Use your own profile name instead of `web`, then restart the harness. Without the plugin, install only the skill with `./install.sh` (see [Installation and updates](#installation-and-updates)).
@@ -73,8 +73,8 @@ The plugin registers the skill and adds four parts around the build.
 |---|---|
 | Write guard | While a task is `in_progress`, `write`, `edit` and `str_replace_editor` work only inside its `scope_write`, never in `scope_write_forbidden`. `board.json`, `STATUS.md` and `tasks/` are lead-owned; `reviews/evidence/` is always open. |
 | Stop check | Before a turn ends, the git diff is compared with the scope. Changes made through `bash` are caught here and sent back to the agent. |
-| Tools | `pg_status` (running and ready tasks, scope, handoffs), `pg_gate` (runs a gate, writes a record), `pg_scope_check`, `pg_check`. |
-| `/pg` | Your command per session: `/pg lead` before planning, merging or editing the board, `/pg worker` to return, `/pg reviewer` for review sessions (writes only under `reviews/`), `/pg task M03` with several tasks in progress, `/pg status`, `/pg render`. |
+| Tools | `pl_status` (running and ready tasks, scope, handoffs), `pl_gate` (runs a gate, writes a record), `pl_scope_check`, `pl_check`. |
+| `/pl` | Your command per session: `/pl lead` before planning, merging or editing the board, `/pl worker` to return, `/pl reviewer` for review sessions (writes only under `reviews/`), `/pl task M03` with several tasks in progress, `/pl status`, `/pl render`. |
 
 Every session starts as a worker, also after a restart. Configure the plugin row in the profile with `enforce: deny | ask | off`, `stopCheck`, `maxStopReminders`, `python` and `skill` (defaults in [`cordis.patch.yml`](cordis.patch.yml)). Gate commands run through the harness shell and its sandbox on macOS and Linux; on Windows they run as a direct process.
 
@@ -82,9 +82,9 @@ Every session starts as a worker, also after a restart. Configure the plugin row
 
 | Task | Command |
 |---|---|
-| Plugin (skill + guard + tools) | `dsh plugin --profile <name> add ./prompt-generator` |
-| Update the plugin | `git -C prompt-generator pull && dsh plugin --profile <name> add ./prompt-generator` |
-| Remove the plugin | `dsh plugin --profile <name> remove dsh-prompt-generator` |
+| Plugin (skill + guard + tools) | `dsh plugin --profile <name> add ./polier` |
+| Update the plugin | `git -C polier pull && dsh plugin --profile <name> add ./polier` |
+| Remove the plugin | `dsh plugin --profile <name> remove dsh-polier` |
 | Skill only, all projects | `./install.sh --ref "v$(cat VERSION)"` |
 | Install for one project | `./install.sh <project>/.dsh/skills` |
 | Update to the latest version | `git pull && ./update.sh --ref "v$(cat VERSION)"` |
@@ -119,7 +119,7 @@ Without skill support, attach `prompt/generator.md`, `prompt/rubric.md`, `templa
 python3 tools/check.py examples/minimal-cli
 ```
 
-M01 and M02 were finished before 0.7.0 and still carry free-text evidence, so `check.py` passes with two warnings. Tasks done from now on use the record paths from `pg_gate` or `tools/gate.py`.
+M01 and M02 were finished before 0.7.0 and still carry free-text evidence, so `check.py` passes with two warnings. Tasks done from now on use the record paths from `pl_gate` or `tools/gate.py`.
 
 ## License
 

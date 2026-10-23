@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Update an installed prompt generator skill to this working copy or a tagged version.
+# Update an installed Polier skill to this working copy or a tagged version.
 #
 # Usage:
 #   ./update.sh [--ref <tag>] [target ...]

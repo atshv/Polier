@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check a generated project against the rules of the prompt generator.
+"""Check a generated project against the rules of Polier.
 
 Usage:
     python3 tools/check.py examples/minimal-cli

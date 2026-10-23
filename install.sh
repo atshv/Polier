@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Install the prompt generator as an agent skill.
+# Install Polier as an agent skill.
 #
 # Usage:
 #   ./install.sh [--ref <tag>] [--update] [target ...]
@@ -10,7 +10,7 @@
 # working copy. --update replaces an existing installation (see update.sh).
 set -euo pipefail
 
-NAME="prompt-generator"
+NAME="polier"
 SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REF=""
 UPDATE=0
