@@ -138,7 +138,7 @@ Rules:
 
 ## 8. The generator as a DSH plugin
 
-Install the package as a plugin: `dsh plugin --profile <name> add <path or package>`, then restart the harness. The bundle patch inserts one row; `package.json` → `dsh.bundle.patch` points to it. The plugin:
+Install the package as a plugin: `dsh plugin --profile <name> add <path or package>`, then restart the harness. Update with `git pull` in the clone and the same `add` command; remove with `dsh plugin --profile <name> remove dsh-polier`. Plugin settings (row config) are `enforce: deny | ask | off`, `stopCheck`, `maxStopReminders`, `python` and `skill`, with defaults in `cordis.patch.yml`. The skill-only scripts take `--ref <tag>` for a tagged version and the target `claude` for Claude Code. The bundle patch inserts one row; `package.json` → `dsh.bundle.patch` points to it. The plugin:
 
 | Part | DSH seam | Effect |
 |---|---|---|
