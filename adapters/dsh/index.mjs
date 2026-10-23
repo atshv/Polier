@@ -17,7 +17,7 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { activeTasks, decide, findRoot, inside, loadBoard, readyTasks, relative } from './lib/project.mjs'
+import { activeTasks, checkPath, findRoot, loadBoard, readyTasks, relative } from './lib/project.mjs'
 import { agentCwd, run } from './lib/run.mjs'
 
 export const name = 'polier'
@@ -120,13 +120,11 @@ export function checkWrite(ctx, config, exec) {
   if (!info) return undefined
   const abs = path.resolve(info.cwd, target)
   const rel = relative(info.root, abs)
+  const verdict = checkPath(rel, info.tasks, info.state.role)
+  if (verdict.ok) return undefined
   if (info.state.role === 'reviewer') {
-    if (inside(rel, 'reviews') && !rel.startsWith('../')) return undefined
     return `Polier: write to ${rel || target} blocked, a reviewer session writes only under reviews/. Report the problem in the review instead of fixing it.`
   }
-  if (info.state.role !== 'worker' || info.tasks.length === 0) return undefined
-  const verdict = decide(rel, info.tasks)
-  if (verdict.ok) return undefined
   const ids = info.tasks.map((t) => t.id).join(', ')
   const allowed = [...new Set(info.tasks.flatMap((t) => t.scope_write ?? []))].join(', ') || 'nothing'
   return [
