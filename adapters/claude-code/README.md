@@ -24,7 +24,8 @@ Requirements: Claude Code, git, Python 3.9+.
    project's `.claude/settings.json` (or `~/.claude/settings.json` for all
    projects). If you keep the package elsewhere, change the path in both
    commands. Merge the `hooks` block with any hooks you already have.
-3. Restart Claude Code, or review the hooks with `/hooks`.
+3. Commit `.claude/settings.json`; otherwise the stop check reports it as a change outside the task scope.
+4. Restart Claude Code, or review the hooks with `/hooks`.
 
 Update with `./update.sh claude`; the hook path stays the same.
 
@@ -51,6 +52,8 @@ Bash specifics: deleting a file git does not track is allowed (it undoes a
 write); writes outside the project to `/tmp`, the system temp folder or `/dev`
 are not checked. The stop counter lives in `.git/polier/`, outside the working
 tree.
+
+What the hooks do not cover is listed in the main [README](../../README.md#what-the-guard-does-not-cover).
 
 ## Tests
 
