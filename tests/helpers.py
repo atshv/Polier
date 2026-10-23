@@ -27,7 +27,7 @@ def task(tid: str = "M01", status: str = "in_progress", **extra) -> dict:
 
 
 def make_project(tasks: list[dict], commit: bool = True) -> Path:
-    root = Path(tempfile.mkdtemp(prefix="pg-test-"))
+    root = Path(tempfile.mkdtemp(prefix="pl-test-"))
     (root / "board.json").write_text(json.dumps(
         {"project": "t", "profile": "S", "base_branch": "main", "tasks": tasks}, indent=2))
     (root / "src").mkdir()

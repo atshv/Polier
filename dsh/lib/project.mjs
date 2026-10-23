@@ -55,7 +55,7 @@ export function relative(root, abs) {
 
 /**
  * The tasks whose scope applies to a session.
- * Order: the task pinned with `/pg task <ID>`, the in_progress task whose
+ * Order: the task pinned with `/pl task <ID>`, the in_progress task whose
  * `worktree` contains the session's directory, every in_progress task.
  * @returns {{ tasks: object[], how: 'pinned'|'worktree'|'single'|'several'|'none' }}
  */

@@ -1,11 +1,11 @@
-# Bundle patch for `dsh plugin --profile <name> add dsh-prompt-generator`.
+# Bundle patch for `dsh plugin --profile <name> add dsh-polier`.
 # Inserts one row; the loader resolves `name` from this package's installation.
 # Optional config (defaults shown):
 #   enforce: deny          # deny | ask | off
 #   stopCheck: true        # compare the git diff with the scope before a turn ends
 #   maxStopReminders: 2
 #   python: python3        # python on Windows
-#   skill: true            # register the prompt-generator skill
+#   skill: true            # register the Polier skill
 - insert:
-    - id: prompt-generator
-      name: 'dsh-prompt-generator'
+    - id: polier
+      name: 'dsh-polier'

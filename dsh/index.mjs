@@ -1,13 +1,13 @@
-// DeepSeek Harness plugin for the prompt generator.
+// DeepSeek Harness plugin for Polier.
 //
 // What it adds to every session:
 // - a write guard: a worker session may only write inside the scope of its
 //   running task (board.json → scope_write / scope_write_forbidden);
 // - a stop check: before a turn ends, the git diff is compared with the scope
 //   (catches writes through bash), and the agent is told to fix violations;
-// - tools: pg_status, pg_gate, pg_scope_check, pg_check;
-// - the human command /pg (lead, worker, off, task, status, render);
-// - the prompt-generator skill, with its files resolved inside this package.
+// - tools: pl_status, pl_gate, pl_scope_check, pl_check;
+// - the human command /pl (lead, worker, off, task, status, render);
+// - the Polier skill, with its files resolved inside this package.
 //
 // No build step and no static imports of harness packages: every service is
 // looked up at call time, so a missing optional service degrades instead of
@@ -20,11 +20,11 @@ import { fileURLToPath } from 'node:url'
 import { activeTasks, decide, findRoot, inside, loadBoard, readyTasks, relative } from './lib/project.mjs'
 import { agentCwd, run } from './lib/run.mjs'
 
-export const name = 'prompt-generator'
+export const name = 'polier'
 
 const PACKAGE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const TOOLS = path.join(PACKAGE, 'tools')
-const SOURCE = 'prompt-generator'
+const SOURCE = 'polier'
 
 const DEFAULTS = {
   /** deny: block out-of-scope writes · ask: ask the human · off: no guard */
@@ -37,7 +37,7 @@ const DEFAULTS = {
   maxStopReminders: 2,
   /** Python interpreter for the package tools. */
   python: process.platform === 'win32' ? 'python' : 'python3',
-  /** Register the bundled prompt-generator skill. */
+  /** Register the bundled Polier skill. */
   skill: true,
 }
 
@@ -85,7 +85,7 @@ function context(ctx, agent) {
 
 function message(text) {
   return {
-    id: `pg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    id: `pl-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     role: 'user',
     content: [{ type: 'text', text }],
     source: { kind: 'plugin', plugin: SOURCE },
@@ -122,7 +122,7 @@ export function checkWrite(ctx, config, exec) {
   const rel = relative(info.root, abs)
   if (info.state.role === 'reviewer') {
     if (inside(rel, 'reviews') && !rel.startsWith('../')) return undefined
-    return `prompt-generator: write to ${rel || target} blocked, a reviewer session writes only under reviews/. Report the problem in the review instead of fixing it.`
+    return `Polier: write to ${rel || target} blocked, a reviewer session writes only under reviews/. Report the problem in the review instead of fixing it.`
   }
   if (info.state.role !== 'worker' || info.tasks.length === 0) return undefined
   const verdict = decide(rel, info.tasks)
@@ -130,7 +130,7 @@ export function checkWrite(ctx, config, exec) {
   const ids = info.tasks.map((t) => t.id).join(', ')
   const allowed = [...new Set(info.tasks.flatMap((t) => t.scope_write ?? []))].join(', ') || 'nothing'
   return [
-    `prompt-generator: write to ${rel || target} blocked, the path ${verdict.reason} of ${ids}.`,
+    `Polier: write to ${rel || target} blocked, the path ${verdict.reason} of ${ids}.`,
     `Allowed: ${allowed}.`,
     'Do not try another way to write it. If the change is needed, stop and report it under open_questions.',
   ].join(' ')
@@ -172,7 +172,7 @@ export async function onTurnStopping(ctx, config, payload) {
   state.stop.count += 1
   const lines = result.violations.slice(0, 20).map((v) => `- ${v.path}: ${v.reason}`)
   agent.steer(message([
-    `prompt-generator: the working tree has changes outside the scope of ${task.id}.`,
+    `Polier: the working tree has changes outside the scope of ${task.id}.`,
     ...lines,
     `Allowed: ${(task.scope_write ?? []).join(', ') || 'nothing'}.`,
     'Undo these changes (git checkout/rm for files you created or edited), or, if they are needed,',
@@ -199,7 +199,7 @@ function jsonTool(def) {
 function needProject(ctx, agent, project) {
   const base = agentCwd(ctx, agent)
   const root = findRoot(project ? path.resolve(base, project) : base)
-  if (!root) throw new Error('no board.json found in this folder or above; is this a prompt-generator project?')
+  if (!root) throw new Error('no board.json found in this folder or above; is this a Polier project?')
   const board = loadBoard(root)
   if (!board) throw new Error(`board.json in ${root} is missing or invalid`)
   return { root, board }
@@ -212,8 +212,8 @@ const PROJECT_PARAM = {
 
 export function tools(ctx, config) {
   const status = jsonTool({
-    name: 'pg_status',
-    description: 'Show the prompt-generator board: the running task with its write scope and brief, the tasks ready to start with handoff notes from their dependencies, and open questions. Read this first in a project that has a board.json.',
+    name: 'pl_status',
+    description: 'Show the Polier board: the running task with its write scope and brief, the tasks ready to start with handoff notes from their dependencies, and open questions. Read this first in a project that has a board.json.',
     parameters: { type: 'object', properties: { project: PROJECT_PARAM } },
     isConcurrencySafe: () => true,
     async execute(args, exec) {
@@ -244,7 +244,7 @@ export function tools(ctx, config) {
   })
 
   const gate = jsonTool({
-    name: 'pg_gate',
+    name: 'pl_gate',
     description: 'Run one quality gate of a task through tools/gate.py. The full output goes to reviews/evidence/, the result shows pass/fail, the failing lines and the record path. Put the record path into your result as evidence; it is the only accepted proof that a gate passed.',
     parameters: {
       type: 'object',
@@ -286,7 +286,7 @@ export function tools(ctx, config) {
   })
 
   const scope = jsonTool({
-    name: 'pg_scope_check',
+    name: 'pl_scope_check',
     description: 'Compare every changed file in the project (git status) with the write scope of a task. Run it before you submit a task.',
     parameters: {
       type: 'object',
@@ -304,7 +304,7 @@ export function tools(ctx, config) {
   })
 
   const check = jsonTool({
-    name: 'pg_check',
+    name: 'pl_check',
     description: 'Run tools/check.py on the project: mandatory files, word budgets, board consistency, traceability and gate evidence. Exit 0 means no errors.',
     parameters: { type: 'object', properties: { project: PROJECT_PARAM } },
     isConcurrencySafe: () => true,
@@ -320,23 +320,23 @@ export function tools(ctx, config) {
 }
 
 // ---------------------------------------------------------------------------
-// human command /pg
+// human command /pl
 // ---------------------------------------------------------------------------
 
 const HELP = [
-  '/pg status        role, running task and scope of this session',
-  '/pg lead          this session may write everything (planning, board, briefs, merge)',
-  '/pg worker        back to the scope of the running task (default)',
-  '/pg reviewer      this session writes only under reviews/ (independent review)',
-  '/pg task <ID>     bind this session to one task (several tasks in progress)',
-  '/pg task          remove the binding',
-  '/pg render        regenerate STATUS.md from board.json (lead only)',
+  '/pl status        role, running task and scope of this session',
+  '/pl lead          this session may write everything (planning, board, briefs, merge)',
+  '/pl worker        back to the scope of the running task (default)',
+  '/pl reviewer      this session writes only under reviews/ (independent review)',
+  '/pl task <ID>     bind this session to one task (several tasks in progress)',
+  '/pl task          remove the binding',
+  '/pl render        regenerate STATUS.md from board.json (lead only)',
 ].join('\n')
 
 export function command(ctx, config) {
   return {
-    name: 'pg',
-    description: 'Prompt generator: switch this session between lead, worker and reviewer, bind it to a task, show status.',
+    name: 'pl',
+    description: 'Polier: switch this session between lead, worker and reviewer, bind it to a task, show status.',
     input: { hint: 'status | lead | worker | reviewer | task <ID> | render' },
     async handler({ agent, rawInput, signal }) {
       const [verb = 'status', arg] = String(rawInput ?? '').trim().split(/\s+/).filter(Boolean)
@@ -345,16 +345,16 @@ export function command(ctx, config) {
       switch (verb.toLowerCase()) {
         case 'lead':
           state.role = 'lead'
-          return { kind: 'success', text: 'Lead mode: this session may write outside task scopes. Use /pg worker to return.' }
+          return { kind: 'success', text: 'Lead mode: this session may write outside task scopes. Use /pl worker to return.' }
         case 'worker':
           state.role = 'worker'
           return { kind: 'success', text: 'Worker mode: writes are limited to the running task\'s scope.' }
         case 'reviewer':
           state.role = 'reviewer'
-          return { kind: 'success', text: 'Reviewer mode: this session writes only under reviews/. Use /pg worker to return.' }
+          return { kind: 'success', text: 'Reviewer mode: this session writes only under reviews/. Use /pl worker to return.' }
         case 'off':
           state.role = 'off'
-          return { kind: 'success', text: 'Guard off for this session. Use /pg worker to turn it on again.' }
+          return { kind: 'success', text: 'Guard off for this session. Use /pl worker to turn it on again.' }
         case 'task': {
           if (!arg) {
             state.pinned = undefined
@@ -366,7 +366,7 @@ export function command(ctx, config) {
           return { kind: 'success', text: `This session now works on ${id}.` }
         }
         case 'render': {
-          if (state.role !== 'lead') return { kind: 'error', text: 'Only a lead session renders STATUS.md. Use /pg lead first.' }
+          if (state.role !== 'lead') return { kind: 'error', text: 'Only a lead session renders STATUS.md. Use /pl lead first.' }
           if (!info) return { kind: 'error', text: 'No board.json in this folder or above.' }
           const result = await run(ctx, agent, [config.python, path.join(TOOLS, 'render_status.py'), info.root],
             { cwd: info.root, timeoutMs: 60_000, signal })
