@@ -1,6 +1,6 @@
 {
   "name": "dsh-prompt-generator",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "Prompt generator for AI coding projects as a DeepSeek Harness plugin: plans the project, then enforces task scopes, records gate evidence and checks the board.",
   "license": "MIT",
   "repository": {

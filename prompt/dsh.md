@@ -55,7 +55,7 @@ Subagents and `workflow` only read, research and criticise. `spawn_teammate` and
 - **Before the worker starts:** set the task to `in_progress` in `board.json` from a lead session (`/pg lead`). From then on the plugin limits every worker session to that task's scope.
 - **Stop condition as a goal:** `create_goal` with "gates green for Mxx" as `objective` and a small `max_goal_rounds` derived from the brief's stop rule. DSH counts goal rounds as continuation turns, so the cap is an upper bound, not the rework-round count itself. When the goal is blocked or paused, only the human can resume it.
 - **Gates:** `pg_gate` with the gate name from the board; it runs `tools/gate.py` through the harness shell and returns the record path, which is the evidence. Without the plugin, run `tools/gate.py` with `bash` (long gates with `run_in_background`, then `job_output`).
-- **Reviewer:** a fresh `subagent` that sees only the diff, the criteria and the gate output, never the author's session.
+- **Reviewer:** a fresh session (`/pg reviewer`) or `subagent` that sees only the diff, the criteria and the gate records, never the author's session. A subagent starts as a worker; it is limited to the task scope, not to `reviews/`.
 
 ### M — lead + 2–3 workers
 
@@ -146,11 +146,11 @@ Install the package as a plugin: `dsh plugin --profile <name> add <path or packa
 | Write guard | `ctx.tools.guard` (monotonic; `enforce: ask` uses `tools/pre-execute` instead) | `write`, `edit`, `str_replace_editor` outside the running task's scope are denied. No other listener can turn the denial back into an allow. |
 | Stop check | `agent/turn-stopping` + `agent.steer` | `tools/scope_check.py` against the git diff; violations go back to the agent, max. `maxStopReminders` per turn. |
 | Tools | `ctx.tools.register` | `pg_status`, `pg_gate`, `pg_scope_check`, `pg_check`. |
-| `/pg` | `ctx.commands.register` | Human-only role switch per session: `lead`, `worker` (default), `off`, `task <ID>`, `status`, `render`. |
+| `/pg` | `ctx.commands.register` | Human-only role switch per session: `lead`, `worker` (default), `reviewer` (writes only under `reviews/`), `off`, `task <ID>`, `status`, `render`. |
 
 Which tasks bind a session: the one pinned with `/pg task`, else the `in_progress` task whose `worktree` contains the session directory, else every `in_progress` task (a path must fit one of their scopes). No task in progress, no board, or a lead session: the guard stays out of the way. In a worktree the session finds the worktree's own copy of `board.json`, where the task may still be `pending`; bind the session with `/pg task <ID>`.
 
-Limits: the guard sees only the guarded file tools; `bash` writes are caught afterwards by the stop check and the review. Roles are in memory and reset to `worker` on restart. Gate commands run through `ctx.shell` with the session's sandbox policy on macOS and Linux; on Windows `gate.py` starts them directly. Reviewer sessions are not made read-only by the plugin; use a read-only sandbox for them.
+Limits: the guard sees only the guarded file tools; `bash` writes are caught afterwards by the stop check and the review. Roles are in memory and reset to `worker` on restart. Gate commands run through `ctx.shell` with the session's sandbox policy on macOS and Linux; on Windows `gate.py` starts them directly. A reviewer session (`/pg reviewer`) may write only under `reviews/`; its `bash` is not limited, so a read-only sandbox is still the stronger option.
 
 Without the plugin, copy the package as a plain skill (`./install.sh`) to `~/.dsh/skills/prompt-generator/` (all projects) or `<project>/.dsh/skills/prompt-generator/` (one project, add it to `.gitignore`). Use one of the two, not both.
 

@@ -2,6 +2,16 @@
 
 Each release lists what a running project must do to adopt it. Update between stages, never during a task (see `guide/cheatsheet.md`). The current version is in `VERSION`; projects record theirs in `board.json` → `generator_version`.
 
+## 0.7.1
+
+- Plugin: `/pg reviewer` makes a session write only under `reviews/` (with or without a running task).
+- `prompt/generator.md`: tool check detects the plugin; the gate rule in `AGENTS.md` names `pg_gate` or the real `gate.py` path; the human checklist sets each task `in_progress` before the worker starts; start and review prompts use `pg_status`, `pg_gate`, `pg_scope_check` and gate records.
+- `guide/cheatsheet.md`: new "Before every task" checklist, evidence and `/pg` steps after every task, red flags for the guard.
+- GitHub workflow runs `npm test` and `check.py` on the example for every push to `main` and every pull request.
+- Example: gate rule in `AGENTS.md` updated; leftover `brief.md` and `review-feedback.md` removed (`project-input.md` and `reviews/M03.md` are the current versions).
+
+**Migration:** set `generator_version` to `0.7.1`. Optional: take the new gate rule from `templates/AGENTS.template.md`; use `/pg reviewer` for review sessions.
+
 ## 0.7.0
 
 **DeepSeek Harness plugin.** The package is now also an installable DSH plugin (`dsh plugin --profile <name> add …`, see `README.md`). It registers the skill with its files resolved inside the package and adds:
