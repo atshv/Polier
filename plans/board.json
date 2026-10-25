@@ -9,7 +9,7 @@
   "stages": [
     {
       "id": "incident-fixes",
-      "title": "Stage 1 \u2014 incident fixes",
+      "title": "incident fixes",
       "goal": "The four incidents of the Calm Canvas run cannot happen again.",
       "exit_criteria": [
         "slots, exclusive gates, claims and worktree enforcement tested",
@@ -20,7 +20,7 @@
     },
     {
       "id": "scale-to-l",
-      "title": "Stage 2 \u2014 scale to L",
+      "title": "scale to L",
       "goal": "Monorepos with packages, services and apps are planned, scaffolded and checked.",
       "exit_criteria": [
         "examples/monorepo-mini passes check.py",
@@ -33,7 +33,7 @@
     },
     {
       "id": "release-contracts",
-      "title": "Stage 3 \u2014 release and contracts",
+      "title": "release and contracts",
       "goal": "Deployments are gated and interfaces are versioned.",
       "exit_criteria": [
         "release_check.py + smoke.py + contracts.py tested"
@@ -45,7 +45,7 @@
     },
     {
       "id": "brief-quality",
-      "title": "Stage 4 \u2014 quality of briefs",
+      "title": "quality of briefs",
       "goal": "Gates, UI briefs and drift detection cover the real stacks.",
       "exit_criteria": [
         "gate catalogue and templates complete"
@@ -57,7 +57,7 @@
     },
     {
       "id": "ship-1-0",
-      "title": "Stage 5 \u2014 ship 1.0",
+      "title": "ship 1.0",
       "goal": "1.0.0 is released with a migration guide.",
       "exit_criteria": [
         "VERSION, CHANGELOG and both examples green in CI"

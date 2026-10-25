@@ -6,35 +6,35 @@
 
 ## Stages
 
-### Stage 1 — `incident-fixes` Stage 1 — incident fixes
+### Stage 1 — `incident-fixes` incident fixes
 
 - State: complete
 - Owner decision: `continue`
 - Exit criteria: slots, exclusive gates, claims and worktree enforcement tested; 0.9 projects unchanged
 - Tasks: PL-01, PL-02, PL-03, PL-04, PL-05, PL-16
 
-### Stage 2 — `scale-to-l` Stage 2 — scale to L
+### Stage 2 — `scale-to-l` scale to L
 
 - State: complete
 - Owner decision: `continue`
 - Exit criteria: examples/monorepo-mini passes check.py; boundaries gate available
 - Tasks: PL-06, PL-07, PL-08, PL-09
 
-### Stage 3 — `release-contracts` Stage 3 — release and contracts
+### Stage 3 — `release-contracts` release and contracts
 
 - State: complete
 - Owner decision: `continue`
 - Exit criteria: release_check.py + smoke.py + contracts.py tested
 - Tasks: PL-10, PL-11, PL-12
 
-### Stage 4 — `brief-quality` Stage 4 — quality of briefs
+### Stage 4 — `brief-quality` quality of briefs
 
 - State: complete
 - Owner decision: `continue`
 - Exit criteria: gate catalogue and templates complete
 - Tasks: PL-13, PL-14, PL-15
 
-### Stage 5 — `ship-1-0` Stage 5 — ship 1.0
+### Stage 5 — `ship-1-0` ship 1.0
 
 - State: complete
 - Owner decision: `continue`
