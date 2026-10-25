@@ -105,3 +105,50 @@ class Tracked(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+from core.shell import process_kills  # noqa: E402
+
+
+class ProcessKills(unittest.TestCase):
+    """PL-16: a command line that would stop processes."""
+
+    def test_killers_in_command_position(self):
+        cases = {
+            "pkill -f 'next dev'": ["pkill"],
+            "kill -9 123": ["kill"],
+            "killall node": ["killall"],
+            "sudo -E kill 42": ["kill"],
+            "env A=b pkill -f app": ["pkill"],
+            "cd src && pkill -f app": ["pkill"],
+            "make | tee log; pkill app": ["pkill"],
+            "echo done\npkill app": ["pkill"],
+        }
+        for command, expected in cases.items():
+            with self.subTest(command):
+                self.assertEqual(process_kills(command), expected)
+
+    def test_text_and_arguments_are_not_commands(self):
+        for command in ("echo kill", "echo 'pkill -f node'", 'printf "%s" killall',
+                        "grep -rn kill src/", "grep -n pkill README.md", "git log --grep kill",
+                        "ls kill", "echo x > kill", "cat kill", "make kill"):
+            with self.subTest(command):
+                self.assertEqual(process_kills(command), [])
+
+    def test_heredoc_body_is_data(self):
+        self.assertEqual(process_kills("cat <<'EOF'\npkill node\nEOF"), [])
+        self.assertEqual(process_kills("cat <<EOF\nkill 1\nEOF\necho ok"), [])
+
+    def test_xargs_after_lsof(self):
+        self.assertEqual(process_kills("lsof -ti:3000 | xargs kill -9"), ["kill"])
+        self.assertEqual(process_kills("lsof -ti:3000 | xargs -r kill"), ["kill"])
+        self.assertEqual(process_kills("xargs -n 1 kill"), ["kill"])
+        self.assertEqual(process_kills("xargs -0 -P 2 killall node"), ["killall"])
+
+    def test_nested_shells(self):
+        self.assertEqual(process_kills("bash -c 'pkill -f node'"), ["pkill"])
+        self.assertEqual(process_kills('sh -c "kill 1"'), ["kill"])
+
+    def test_duplicates_are_collapsed_and_unreadable_lines_ignored(self):
+        self.assertEqual(process_kills("pkill a; kill 1; pkill b"), ["pkill", "kill"])
+        self.assertEqual(process_kills('pkill "open'), [])

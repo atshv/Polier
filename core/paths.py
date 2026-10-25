@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import platform
 import posixpath
 import re
 import subprocess
@@ -11,6 +12,10 @@ from typing import Optional
 from .errors import PolierError
 
 _DRIVE = re.compile(r"^[A-Za-z]:/")
+
+# macOS and Windows file systems are case-insensitive by default: `Board.json`
+# is the same file as `board.json` (PL-16). Elsewhere the comparison stays exact.
+CASE_INSENSITIVE = platform.system() in ("Darwin", "Windows")
 
 
 def normalized(path) -> str:
@@ -23,10 +28,15 @@ def normalized(path) -> str:
 
 
 def inside(path, entry) -> bool:
-    """True if `path` equals `entry` or lies below the folder `entry`."""
+    """True if `path` equals `entry` or lies below the folder `entry`.
+
+    On macOS and Windows the comparison ignores case, as the file system does.
+    """
     path, entry = normalized(path), normalized(entry)
     if not entry:
         return False
+    if CASE_INSENSITIVE:
+        path, entry = path.casefold(), entry.casefold()
     return path == entry or path.startswith(entry + "/")
 
 

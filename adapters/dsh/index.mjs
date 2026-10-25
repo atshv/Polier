@@ -17,7 +17,7 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { activeTasks, checkPath, findRoot, loadBoard, readyTasks, relative } from './lib/project.mjs'
+import { activeTasks, checkPath, findRoot, loadBoard, processKills, readyTasks, relative } from './lib/project.mjs'
 import { agentCwd, run } from './lib/run.mjs'
 
 export const name = 'polier'
@@ -54,20 +54,25 @@ export function resolveConfig(config = {}) {
 }
 
 // ---------------------------------------------------------------------------
-// per-session state: role and pinned task. In memory only; a restarted
-// harness starts every session as a worker again (the safe side).
+// per-session state: role, pinned task and the claims of this session. In
+// memory only; a restarted harness starts every session as a worker again
+// (the safe side).
 // ---------------------------------------------------------------------------
 
 const sessions = new Map()
 
 function stateOf(agent) {
   const id = agent?.id
-  if (!id) return { role: 'worker' }
+  if (!id) return { role: 'worker', pinned: undefined, claims: [], stop: { turn: -1, count: 0 } }
   let state = sessions.get(id)
   if (!state) {
-    state = { role: 'worker', pinned: undefined, stop: { turn: -1, count: 0 } }
+    state = {
+      role: 'worker', pinned: undefined, claims: [], lastBeat: 0,
+      stop: { turn: -1, count: 0 }, turn: 0, killTurn: -1,
+    }
     sessions.set(id, state)
   }
+  if (!Array.isArray(state.claims)) state.claims = []
   return state
 }
 
@@ -81,6 +86,80 @@ function context(ctx, agent) {
   const state = stateOf(agent)
   const active = activeTasks(board, { root, cwd, pinned: state.pinned })
   return { cwd, root, board, state, ...active }
+}
+
+// ---------------------------------------------------------------------------
+// claims (PL-04): one JSON file per task in <git-common-dir>/polier/claims/,
+// shared by every harness. The Python core owns the format; the plugin calls
+// tools/claim.py so there is one implementation.
+// ---------------------------------------------------------------------------
+
+const CLAIM_TOOL = path.join(TOOLS, 'claim.py')
+const HEARTBEAT_MS = 60_000
+
+function polierSlot(folder) {
+  try {
+    const data = JSON.parse(readFileSync(path.join(String(folder), '.polier-slot'), 'utf8'))
+    const value = data && typeof data === 'object' ? data.slot ?? data.N : undefined
+    return Number.isInteger(value) && value >= 0 ? value : undefined
+  } catch {
+    return undefined
+  }
+}
+
+function claimArgv(config, ...args) {
+  return [config.python, CLAIM_TOOL, ...args]
+}
+
+function claimError(result) {
+  const text = (result.stderr || result.stdout || `exit ${result.code}`).trim()
+  return text.split('\n').filter(Boolean).pop() || `exit ${result.code}`
+}
+
+async function takeClaim(ctx, config, agent, root, id) {
+  const argv = claimArgv(config, 'take', id, '--harness', 'dsh', '--session', String(agent.id), '--root', String(root))
+  const task = (loadBoard(root)?.tasks ?? []).find((t) => t?.id === id)
+  if (task && typeof task.worktree === 'string' && task.worktree.trim()) {
+    argv.push('--worktree', path.resolve(root, task.worktree))
+  }
+  const slot = polierSlot(agentCwd(ctx, agent) || root)
+  if (slot !== undefined) argv.push('--slot', String(slot))
+  const result = await run(ctx, agent, argv, { cwd: String(root), timeoutMs: 30_000 })
+  return { ok: result.code === 0, code: result.code, message: claimError(result), claim: result.stdout.trim() }
+}
+
+async function releaseClaim(ctx, config, agent, root, id) {
+  try {
+    const result = await run(ctx, agent,
+      claimArgv(config, 'release', id, '--session', String(agent.id), '--root', String(root)),
+      { cwd: String(root), timeoutMs: 20_000 })
+    return result.code === 0
+  } catch {
+    return false
+  }
+}
+
+async function beatClaims(ctx, config, agent, root) {
+  const tasks = stateOf(agent).claims
+  for (const id of tasks) {
+    try {
+      await run(ctx, agent,
+        claimArgv(config, 'beat', id, '--session', String(agent.id), '--root', String(root)),
+        { cwd: String(root), timeoutMs: 20_000 })
+    } catch { /* best effort */ }
+  }
+}
+
+async function liveClaims(ctx, config, agent, root) {
+  try {
+    const result = await run(ctx, agent,
+      claimArgv(config, 'list', '--root', String(root), '--json'),
+      { cwd: String(root), timeoutMs: 20_000 })
+    const rows = JSON.parse(result.stdout.trim() || '[]')
+    return Array.isArray(rows) ? rows : []
+  } catch {
+    return []
+  }
 }
 
 function message(text) {
@@ -120,12 +199,20 @@ export function checkWrite(ctx, config, exec) {
   if (!info) return undefined
   const abs = path.resolve(info.cwd, target)
   const rel = relative(info.root, abs)
-  const verdict = checkPath(rel, info.tasks, info.state.role)
+  const verdict = checkPath(rel, info.tasks, info.state.role,
+    { board: info.board, root: info.root, cwd: info.cwd })
   if (verdict.ok) return undefined
   if (info.state.role === 'reviewer') {
     return `Polier: write to ${rel || target} blocked, a reviewer session writes only under reviews/. Report the problem in the review instead of fixing it.`
   }
   const ids = info.tasks.map((t) => t.id).join(', ')
+  if (verdict.code === 'worktree') {
+    return [
+      `Polier: write to ${rel || target} blocked, ${verdict.reason} (${ids}).`,
+      "Do the work in the task's worktree, not in the main checkout.",
+      'If the change is needed elsewhere, stop and report it under open_questions.',
+    ].join(' ')
+  }
   const allowed = [...new Set(info.tasks.flatMap((t) => t.scope_write ?? []))].join(', ') || 'nothing'
   return [
     `Polier: write to ${rel || target} blocked, the path ${verdict.reason} of ${ids}.`,
@@ -169,6 +256,13 @@ export async function onTurnStopping(ctx, config, payload) {
   if (!result || result.ok || !Array.isArray(result.violations)) return
   state.stop.count += 1
   const lines = result.violations.slice(0, 20).map((v) => `- ${v.path}: ${v.reason}`)
+  const foreign = Array.isArray(result.foreign) ? result.foreign : []
+  if (foreign.length > 0) {
+    lines.push('', 'Foreign changes from other live claims (not yours):')
+    for (const item of foreign.slice(0, 20)) {
+      lines.push(`- foreign changes (task ${item.task}, harness ${item.harness}): ${item.path}`)
+    }
+  }
   agent.steer(message([
     `Polier: the working tree has changes outside the scope of ${task.id}.`,
     ...lines,
@@ -176,6 +270,67 @@ export async function onTurnStopping(ctx, config, payload) {
     'Undo these changes (git checkout/rm for files you created or edited), or, if they are needed,',
     'keep them and report each one under open_questions in your result. Then finish.',
   ].join('\n')))
+}
+
+// ---------------------------------------------------------------------------
+// heartbeat and kill warning on tool calls (PL-04, PL-16)
+// ---------------------------------------------------------------------------
+
+/**
+ * Before every tool call: refresh the session's claim heartbeat (at most once
+ * per minute) and warn once per turn when a bash command stops processes.
+ * Never changes the call itself; a warning is a message, not a denial.
+ */
+export async function onToolPreExecute(ctx, config, exec, next) {
+  try {
+    const agent = exec.agent
+    if (agent) {
+      const state = stateOf(agent)
+      if (state.claims.length > 0 && Date.now() - (state.lastBeat ?? 0) >= HEARTBEAT_MS) {
+        state.lastBeat = Date.now()
+        const info = context(ctx, agent)
+        if (info) await beatClaims(ctx, config, agent, info.root)
+      }
+      if (exec.name === 'bash') {
+        const args = exec.arguments && typeof exec.arguments === 'object' ? exec.arguments : {}
+        if (typeof args.command === 'string' && processKills(args.command).length > 0) {
+          const turn = Number.isInteger(state.turn) ? state.turn : 0
+          if (state.killTurn !== turn) {
+            state.killTurn = turn
+            try {
+              const outcome = agent.steer(message("Polier: do not stop processes you did not start; use your slot's ports."))
+              if (outcome && typeof outcome.catch === 'function') outcome.catch(() => {})
+            } catch { /* advisory only */ }
+          }
+        }
+      }
+    }
+  } catch { /* never block a tool call on our own error */ }
+  return next()
+}
+
+/** Release the claims a disposed session still holds (best effort). */
+export async function onAgentDisposed(ctx, config, payload) {
+  const agent = payload?.agent
+  const id = agent?.id
+  if (!id) return
+  const state = sessions.get(id)
+  sessions.delete(id)
+  if (!state || !Array.isArray(state.claims) || state.claims.length === 0) return
+  let root
+  try {
+    root = findRoot(agentCwd(ctx, agent))
+  } catch {
+    root = undefined
+  }
+  if (!root) return
+  for (const task of state.claims) {
+    try {
+      await run(ctx, agent,
+        claimArgv(config, 'release', task, '--session', String(id), '--root', String(root)),
+        { cwd: String(root), timeoutMs: 20_000 })
+    } catch { /* best effort */ }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -235,6 +390,7 @@ export function tools(ctx, config) {
           round: t.round ?? 0,
         })),
         selected_by: active.how,
+        claims: await liveClaims(ctx, config, exec.agent, root),
         ready: readyTasks(board),
         open_questions: (board.open_questions ?? []).filter((q) => q?.status === 'open'),
       }
@@ -251,6 +407,7 @@ export function tools(ctx, config) {
         gate: { type: 'string', description: 'Gate name exactly as in the task\'s gates list, e.g. tests.' },
         command: { type: 'string', description: 'Shell command of the gate, from AGENTS.md or the brief.' },
         timeout_s: { type: 'integer', description: 'Seconds before the gate is stopped. Default 600.' },
+        lock_wait_s: { type: 'integer', description: 'Seconds to wait for an exclusive resource; default 0 (report busy at once).' },
         project: PROJECT_PARAM,
       },
       required: ['task', 'gate', 'command'],
@@ -263,21 +420,31 @@ export function tools(ctx, config) {
         throw new Error(`gate ${args.gate} is not listed for ${args.task}; listed: ${task.gates.join(', ')}`)
       }
       const timeout = Number.isInteger(args.timeout_s) && args.timeout_s > 0 ? args.timeout_s : 600
+      const lockWait = Number.isInteger(args.lock_wait_s) && args.lock_wait_s >= 0 ? args.lock_wait_s : 0
       const argv = [config.python, path.join(TOOLS, 'gate.py'), '--task', args.task, '--name', args.gate,
-        '--root', root, '--timeout', String(timeout), '--shell', args.command]
+        '--root', root, '--timeout', String(timeout), '--lock-wait', String(lockWait)]
+      const slot = polierSlot(root)
+      if (slot !== undefined) argv.push('--slot', String(slot))
+      for (const resource of task.exclusive ?? []) {
+        if (typeof resource === 'string' && resource) argv.push('--exclusive', resource)
+      }
+      argv.push('--shell', args.command)
       const result = await run(ctx, exec.agent, argv, {
         cwd: root, timeoutMs: (timeout + 30) * 1000, signal: exec.signal, strictShell: true,
       })
       const lines = result.stdout.trim().split('\n')
       const last = lines[lines.length - 1] ?? ''
       const record = last.startsWith('record: ') ? last.slice(8).trim() : null
+      const busy = result.code === 75
+      const summary = (record ? lines.slice(0, -1) : lines).join('\n').slice(-4000)
       return {
         task: args.task,
         gate: args.gate,
         passed: result.code === 0 && record !== null,
+        busy,
         exit_code: result.code,
         record,
-        summary: (record ? lines.slice(0, -1) : lines).join('\n').slice(-4000),
+        summary: busy ? `resource busy, rerun alone (the gate did not run).\n${summary}` : summary,
         ...(result.stderr.trim() ? { stderr: result.stderr.trim().slice(-2000) } : {}),
       }
     },
@@ -297,7 +464,12 @@ export function tools(ctx, config) {
     async execute(args, exec) {
       const { root } = needProject(ctx, exec.agent, args.project)
       const state = stateOf(exec.agent)
-      return scopeCheck(ctx, config, exec.agent, { root, state }, args.task || state.pinned, exec.signal)
+      const result = await scopeCheck(ctx, config, exec.agent, { root, state }, args.task || state.pinned, exec.signal)
+      if (result && Array.isArray(result.foreign) && result.foreign.length > 0) {
+        result.foreign_changes = result.foreign.map(
+          (item) => `foreign changes (task ${item.task}, harness ${item.harness}): ${item.path}`)
+      }
+      return result
     },
   })
 
@@ -355,11 +527,39 @@ export function command(ctx, config) {
           return { kind: 'success', text: 'Guard off for this session. Use /pl worker to turn it on again.' }
         case 'task': {
           if (!arg) {
+            const released = []
+            if (info && agent?.id) {
+              for (const task of [...state.claims]) {
+                if (await releaseClaim(ctx, config, agent, info.root, task)) released.push(task)
+              }
+            }
+            state.claims = []
             state.pinned = undefined
-            return { kind: 'success', text: 'Task binding removed.' }
+            return {
+              kind: 'success',
+              text: `Task binding removed.${released.length ? ` Claim released: ${released.join(', ')}.` : ''}`,
+            }
           }
           const id = arg.toUpperCase()
           if (info && !info.board.tasks.some((t) => t?.id === id)) return { kind: 'error', text: `Task ${id} is not on the board.` }
+          if (info && agent?.id) {
+            let taken
+            try {
+              taken = await takeClaim(ctx, config, agent, info.root, id)
+            } catch (error) {
+              return { kind: 'error', text: `Cannot claim ${id}: ${String(error?.message ?? error)}` }
+            }
+            if (!taken.ok) {
+              if (taken.code !== 2) return { kind: 'error', text: `Cannot claim ${id}: ${taken.message}` }
+              // No git repository yet: binding still works, the claim is best effort.
+              state.pinned = id
+              return {
+                kind: 'success',
+                text: `This session now works on ${id}. The claim was not taken: ${taken.message}`,
+              }
+            }
+            state.claims = [...new Set([...state.claims, id])]
+          }
           state.pinned = id
           return { kind: 'success', text: `This session now works on ${id}.` }
         }
@@ -447,6 +647,7 @@ export function apply(ctx, rawConfig) {
         return reason ? { kind: 'ask', reason } : next()
       })
     }
+    c.on('tools/pre-execute', (exec, next) => onToolPreExecute(c, config, exec, next))
     for (const def of tools(c, config)) c.tools.register(def)
   })
 
@@ -464,9 +665,16 @@ export function apply(ctx, rawConfig) {
     })
   }
 
-  ctx.on('agent/turn-stopping', (payload) => onTurnStopping(ctx, config, payload))
+  ctx.on('agent/turn-stopping', (payload) => {
+    const agent = payload?.agent
+    if (agent?.id && Number.isInteger(payload.turn)) {
+      const state = sessions.get(agent.id)
+      if (state) state.turn = payload.turn
+    }
+    return onTurnStopping(ctx, config, payload)
+  })
   ctx.on('agent/disposed', (payload) => {
-    if (payload?.agent?.id) sessions.delete(payload.agent.id)
+    onAgentDisposed(ctx, config, payload).catch(() => {})
   })
   ctx.effect(() => () => sessions.clear())
 }

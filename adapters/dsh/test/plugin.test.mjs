@@ -12,6 +12,7 @@ import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 
 import * as plugin from '../index.mjs'
+import { readyTasks } from '../lib/project.mjs'
 
 const PY = process.platform === 'win32' ? 'python' : 'python3'
 
@@ -229,4 +230,275 @@ test('registers tools, the /pl command and the skill with the real services', as
   assert.deepEqual(ctx.get('commands').list(fake).map((c) => c.name), ['pl'])
   const skills = await ctx.get('skills').list({})
   assert.ok(skills.some((s) => s.name === 'polier'))
+})
+
+// ---------------------------------------------------------------------------
+// PL-04 claims, PL-05 worktrees + foreign changes, PL-16 guard extras
+// ---------------------------------------------------------------------------
+
+import { checkPath, inside } from '../lib/project.mjs'
+
+const CLAIM_TOOL = path.resolve(import.meta.dirname, '../../../tools/claim.py')
+
+function claimPath(root, id) {
+  return path.join(root, '.git', 'polier', 'claims', `${id}.json`)
+}
+
+function readClaim(root, id) {
+  return JSON.parse(readFileSync(claimPath(root, id), 'utf8'))
+}
+
+function claimTakeCli(root, id, harness = 'claude-code', session = 'other') {
+  execFileSync(PY, [CLAIM_TOOL, 'take', id, '--harness', harness, '--session', session, '--root', root], { stdio: 'pipe' })
+}
+
+function setBoard(root, changes = {}, taskChanges = {}) {
+  const file = path.join(root, 'board.json')
+  const board = JSON.parse(readFileSync(file, 'utf8'))
+  Object.assign(board, changes)
+  for (const t of board.tasks) Object.assign(t, taskChanges)
+  writeFileSync(file, JSON.stringify(board, null, 2))
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+async function waitFor(check, timeoutMs = 5000) {
+  const end = Date.now() + timeoutMs
+  while (Date.now() < end) {
+    if (await check()) return true
+    await sleep(25)
+  }
+  return false
+}
+
+/** boot() plus a stand-in for the harness `bash` tool (the kill warning guards it). */
+async function bootWithBash(config = {}) {
+  const booted = await boot(config)
+  await new Promise((resolve) => booted.ctx.inject(['tools'], (c) => {
+    c.tools.register({
+      name: 'bash',
+      description: 'run a shell command',
+      parameters: { type: 'object', properties: { command: { type: 'string' } }, required: ['command'] },
+      output: { schema: { type: 'string' }, render: (_a, v) => [{ type: 'text', text: String(v) }] },
+      async execute() { return 'ran' },
+    })
+    resolve()
+  }))
+  return booted
+}
+
+test('/pl task takes the claim and pl_status lists the live claims', async () => {
+  const root = project([task()])
+  const { ctx, tools } = await boot({ python: PY })
+  const a = agent(root)
+  const cmd = plugin.command(ctx, plugin.resolveConfig({ python: PY }))
+  const res = await cmd.handler({ agent: a, rawInput: 'task m01', signal: new AbortController().signal })
+  assert.equal(res.kind, 'success', res.text)
+  const claim = readClaim(root, 'M01')
+  assert.equal(claim.task, 'M01')
+  assert.equal(claim.harness, 'dsh')
+  assert.equal(claim.session, a.id)
+  const status = await call(tools, a, 'pl_status', {})
+  assert.equal(status.error, false)
+  assert.equal(status.value.claims.length, 1)
+  assert.equal(status.value.claims[0].task, 'M01')
+  assert.equal(status.value.claims[0].harness, 'dsh')
+})
+
+test('/pl task refuses a task claimed by another harness and names the holder', async () => {
+  const root = project([task()])
+  claimTakeCli(root, 'M01', 'claude-code', 'claude-9')
+  const { ctx } = await boot({ python: PY })
+  const a = agent(root)
+  const cmd = plugin.command(ctx, plugin.resolveConfig({ python: PY }))
+  const res = await cmd.handler({ agent: a, rawInput: 'task m01' })
+  assert.equal(res.kind, 'error')
+  assert.match(res.text, /claude-code/)
+  assert.match(res.text, /claude-9/)
+  assert.equal(readClaim(root, 'M01').session, 'claude-9')
+})
+
+test('tool calls refresh the claim heartbeat at most once per minute', async () => {
+  const root = project([task()])
+  const { ctx, tools } = await boot({ python: PY })
+  const a = agent(root)
+  const cmd = plugin.command(ctx, plugin.resolveConfig({ python: PY }))
+  await cmd.handler({ agent: a, rawInput: 'task m01' })
+  const stale = () => {
+    const claim = readClaim(root, 'M01')
+    claim.heartbeat = '2020-01-01T00:00:00+00:00'
+    writeFileSync(claimPath(root, 'M01'), JSON.stringify(claim))
+  }
+  stale()
+  assert.equal((await call(tools, a, 'write', { file_path: 'src/app.py', content: 'x = 2\n' })).error, false)
+  assert.notEqual(readClaim(root, 'M01').heartbeat, '2020-01-01T00:00:00+00:00')
+  // Second call within the same minute: throttled, the heartbeat stays as it is.
+  stale()
+  assert.equal((await call(tools, a, 'write', { file_path: 'src/app.py', content: 'x = 3\n' })).error, false)
+  assert.equal(readClaim(root, 'M01').heartbeat, '2020-01-01T00:00:00+00:00')
+})
+
+test('disposing an agent releases the claims it held', async () => {
+  const root = project([task()])
+  const { ctx } = await boot({ python: PY })
+  const a = agent(root)
+  const cmd = plugin.command(ctx, plugin.resolveConfig({ python: PY }))
+  await cmd.handler({ agent: a, rawInput: 'task m01' })
+  assert.ok(existsSync(claimPath(root, 'M01')))
+  ctx.emit('agent/disposed', { agent: a })
+  assert.ok(await waitFor(() => !existsSync(claimPath(root, 'M01'))))
+})
+
+test('the guard denies writes in the main checkout when worktrees are required', async () => {
+  const root = project([task()])
+  setBoard(root, { profile: 'M', schema_version: '1.0' }, { worktree: '/somewhere/repo-M01' })
+  const { tools } = await boot()
+  const a = agent(root)
+  const blocked = await call(tools, a, 'write', { file_path: 'src/app.py', content: 'x' })
+  assert.equal(blocked.error, true)
+  assert.match(blocked.text, /work in \/somewhere\/repo-M01/)
+  const evidence = await call(tools, a, 'write', { file_path: 'reviews/evidence/x.log', content: 'x' })
+  assert.equal(evidence.error, false)
+})
+
+test('foreign changes are reported separately and do not trigger the stop reminder', async () => {
+  const root = project([task('M01'), task('M02', 'pending', { scope_write: ['docs/'] })])
+  claimTakeCli(root, 'M02', 'dsh', 'other-agent')
+  const { ctx, tools } = await boot({ python: PY })
+  const a = agent(root)
+  const cmd = plugin.command(ctx, plugin.resolveConfig({ python: PY }))
+  const config = plugin.resolveConfig({ python: PY })
+  await cmd.handler({ agent: a, rawInput: 'task m01' })
+  mkdirSync(path.join(root, 'docs'), { recursive: true })
+  writeFileSync(path.join(root, 'docs', 'x.md'), 'foreign\n')
+
+  const check = await call(tools, a, 'pl_scope_check', {})
+  assert.equal(check.error, false)
+  assert.equal(check.value.ok, true)
+  assert.deepEqual(check.value.violations, [])
+  assert.equal(check.value.foreign.length, 1)
+  assert.equal(check.value.foreign[0].task, 'M02')
+  assert.equal(check.value.foreign[0].harness, 'dsh')
+  assert.match(check.value.foreign_changes[0], /foreign changes \(task M02, harness dsh\)/)
+
+  await plugin.onTurnStopping(ctx, config, { agent: a, turn: 1 })
+  assert.equal(a.steered.length, 0, 'foreign changes alone must not trigger the reminder')
+
+  writeFileSync(path.join(root, 'README.md'), 'changed\n')
+  await plugin.onTurnStopping(ctx, config, { agent: a, turn: 2 })
+  assert.equal(a.steered.length, 1)
+  assert.match(a.steered[0].content[0].text, /README.md: outside scope/)
+  assert.match(a.steered[0].content[0].text, /foreign changes \(task M02, harness dsh\)/)
+})
+
+test('a bash kill command steers once per turn and is never a denial', async () => {
+  const root = project([task()])
+  const { tools } = await bootWithBash()
+  const a = agent(root)
+  const first = await call(tools, a, 'bash', { command: "pkill -f 'next dev'" })
+  assert.equal(first.error, false)
+  assert.equal(a.steered.length, 1)
+  assert.match(a.steered[0].content[0].text,
+    /do not stop processes you did not start; use your slot's ports/)
+  await call(tools, a, 'bash', { command: 'kill 123' })
+  assert.equal(a.steered.length, 1)
+  const plain = await call(tools, a, 'bash', { command: 'echo kill' })
+  assert.equal(plain.error, false)
+  assert.equal(a.steered.length, 1)
+})
+
+test('the JS guard mirrors the case rule and the worktree rule', () => {
+  const caseInsensitive = process.platform === 'darwin' || process.platform === 'win32'
+  assert.equal(inside('Board.json', 'board.json'), caseInsensitive)
+  assert.equal(inside('SRC/a.py', 'src'), caseInsensitive)
+  assert.equal(inside('src/a.py', 'src'), true)
+
+  const root = project([task()])
+  const tasks = [{ id: 'M01', status: 'in_progress', scope_write: ['src/app.py'], worktree: '/tmp/repo-M01' }]
+  const denied = checkPath('src/app.py', tasks, 'worker', { board: { profile: 'M', schema_version: '1.0', tasks }, root, cwd: root })
+  assert.equal(denied.ok, false)
+  assert.equal(denied.code, 'worktree')
+  assert.match(denied.reason, /work in \/tmp\/repo-M01/)
+  assert.equal(checkPath('src/app.py', tasks).ok, true, 'three arguments keep the old behaviour')
+  assert.equal(checkPath('reviews/evidence/a.log', tasks, 'worker', { board: { profile: 'M' }, root }).ok, true)
+  assert.equal(checkPath('src/app.py', tasks, 'worker', { board: { profile: 'S' }, root }).ok, true)
+})
+
+test('pl_gate passes the slot and the exclusive resources of the task', { skip: gateSupportsExclusive() }, async () => {
+  const root = project([task('M01', 'in_progress', { exclusive: ['e2e'] })])
+  setBoard(root, { schema_version: '1.0' })
+  writeFileSync(path.join(root, '.polier-slot'), JSON.stringify({ slot: 0, worktree: root }))
+  const { tools } = await boot({ python: PY })
+  const result = await call(tools, agent(root), 'pl_gate', { task: 'M01', gate: 'tests', command: 'echo green' })
+  assert.equal(result.error, false, result.text)
+  assert.equal(result.value.passed, true, result.text)
+  assert.equal(result.value.busy, false)
+  const record = JSON.parse(readFileSync(path.join(root, result.value.record), 'utf8'))
+  assert.equal(record.slot, 0)
+  assert.deepEqual(record.exclusive, ['e2e'])
+
+  // A gate that never ran because the resource is busy exits 75.
+  const holder = {
+    task: 'M01', slot: 0, harness: 'cli', pid: process.pid, host: osHostname(),
+    started: new Date().toISOString(),
+  }
+  mkdirSync(path.join(root, '.git', 'polier', 'locks'), { recursive: true })
+  writeFileSync(path.join(root, '.git', 'polier', 'locks', 'e2e.lock'), JSON.stringify(holder))
+  const busy = await call(tools, agent(root), 'pl_gate', { task: 'M01', gate: 'tests', command: 'echo never' })
+  assert.equal(busy.error, false, busy.text)
+  assert.equal(busy.value.busy, true)
+  assert.equal(busy.value.exit_code, 75)
+  assert.match(busy.value.summary, /resource busy, rerun alone/)
+  assert.ok(existsSync(path.join(root, busy.value.record)), 'the busy record is kept')
+})
+
+function gateSupportsExclusive() {
+  if (gateSupportsExclusive.cache !== undefined) return gateSupportsExclusive.cache
+  try {
+    const help = execFileSync(PY, [path.resolve(import.meta.dirname, '../../../tools/gate.py'), '--help'], { encoding: 'utf8' })
+    gateSupportsExclusive.cache = !help.includes('--exclusive')
+      ? 'tools/gate.py has no --exclusive yet (PL-03)'
+      : !help.includes('--lock-wait') ? 'tools/gate.py has no --lock-wait yet (PL-03)' : false
+  } catch {
+    gateSupportsExclusive.cache = 'tools/gate.py not runnable'
+  }
+  return gateSupportsExclusive.cache
+}
+
+function osHostname() {
+  try {
+    return execFileSync(PY, ['-c', 'import socket; print(socket.gethostname())'], { encoding: 'utf8' }).trim() || 'localhost'
+  } catch {
+    return 'localhost'
+  }
+}
+
+// PL-08: the JS mirror of core.board.ready_tasks excludes tasks behind an
+// incomplete stage (owner decision pending) and lets them through once the
+// stage's exit gates are evidenced and the owner continues.
+test('ready tasks respect stage exit gates and the owner decision', () => {
+  const stages = [
+    { id: 'foundation', title: 'Foundation', exit_gates: ['tests'] },
+    { id: 'engine', title: 'Engine', depends_on: ['foundation'], exit_gates: ['wasm-build'],
+      owner_decision: 'pending' },
+    { id: 'web', title: 'Web', depends_on: ['engine'] },
+  ]
+  const tasks = [
+    { id: 'F-01', title: 'Scaffold', status: 'done', stage: 'foundation', gates: ['tests'],
+      evidence: ['reviews/evidence/F-01-tests-1.json'], depends_on: [] },
+    { id: 'ENG-01', title: 'Spike', status: 'pending', stage: 'engine', depends_on: ['F-01'],
+      gates: ['wasm-build'] },
+    { id: 'WEB-01', title: 'App', status: 'pending', stage: 'web', depends_on: ['F-01'],
+      gates: ['e2e'] },
+  ]
+  const board = { project: 't', profile: 'L', base_branch: 'main', schema_version: '1.0', stages, tasks }
+  assert.deepEqual(readyTasks(board).map((t) => t.id), ['ENG-01'])
+
+  const continued = JSON.parse(JSON.stringify(board))
+  continued.stages[1].owner_decision = 'continue'
+  continued.tasks[1].status = 'done'
+  continued.tasks[1].evidence = ['reviews/evidence/ENG-01-wasm-build-1.json']
+  assert.deepEqual(readyTasks(continued).map((t) => t.id), ['WEB-01'])
 })

@@ -5,11 +5,14 @@ Usage:
     python3 tools/scope_check.py [project] [--task M03] [--allow-board] [--json]
 
 Changed files are everything `git status` reports: modified, staged, untracked,
-deleted and both sides of a rename. Ignored files are not counted.
+deleted and both sides of a rename. Ignored files are not counted. Changed
+files that are inside the scope of a task claimed by another live session are
+printed separately as FOREIGN and do not count as violations of this task.
 
 Exit 0 = every change is inside the task's scope, 1 = at least one violation,
 2 = usage or environment error (no git repo, invalid board, no unique task).
-No external dependencies. The rules live in core/scope.py.
+Foreign changes alone do not fail the check. No external dependencies. The
+rules live in core/scope.py.
 """
 from __future__ import annotations
 
@@ -54,10 +57,14 @@ def main(argv: list[str] | None = None) -> int:
     elif result["ok"]:
         suffix = "" if result["changed"] else " (no changes)"
         print(f"SCOPE OK {result['task']}{suffix}")
+        for item in result.get("foreign") or []:
+            print(f"FOREIGN (task {item['task']}, harness {item['harness']}): {item['path']}")
     else:
         print(f"SCOPE FAIL {result['task']}")
         for item in result["violations"]:
             print(f"- {item['path']}: {item['reason']}")
+        for item in result.get("foreign") or []:
+            print(f"FOREIGN (task {item['task']}, harness {item['harness']}): {item['path']}")
         print(f"allowed: {', '.join(result['scope_write']) or 'nothing'}")
     return 0 if result["ok"] else 1
 

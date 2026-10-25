@@ -243,3 +243,126 @@ class EndToEnd(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Claims(unittest.TestCase):
+    """PL-04: cross-harness claims taken by PreToolUse when POLIER_TASK is set."""
+
+    def claim_file(self, root: Path, task_id: str = "M01") -> Path:
+        return root / ".git" / "polier" / "claims" / f"{task_id}.json"
+
+    def test_polier_task_takes_and_refreshes_the_claim(self):
+        root = project([task()])
+        self.assertIsNone(write(root, "src/app.py", POLIER_TASK="M01"))
+        self.assertTrue(self.claim_file(root).exists())
+        claim = json.loads(self.claim_file(root).read_text())
+        self.assertEqual((claim["task"], claim["harness"], claim["session"]),
+                         ("M01", "claude-code", "s1"))
+        self.assertEqual(claim["worktree"], str(root))
+        self.assertIsNone(write(root, "src/app.py", POLIER_TASK="M01"))
+        self.assertEqual(json.loads(self.claim_file(root).read_text())["started"], claim["started"])
+
+    def test_claim_from_another_harness_denies_and_names_the_holder(self):
+        root = project([task()])
+        from core.claims import take
+        take(root, "M01", harness="dsh", session="agent-1")
+        out = write(root, "src/app.py", POLIER_TASK="M01")
+        self.assertEqual(decision(out), "deny")
+        self.assertIn("dsh", reason(out))
+        self.assertIn("agent-1", reason(out))
+        self.assertEqual(json.loads(self.claim_file(root).read_text())["session"], "agent-1")
+
+    def test_the_board_is_never_written_by_claims(self):
+        root = project([task()])
+        before = (root / "board.json").read_text()
+        write(root, "src/app.py", POLIER_TASK="M01")
+        self.assertEqual((root / "board.json").read_text(), before)
+
+    def test_claims_are_per_repository(self):
+        first = project([task()])
+        second = project([task()])
+        write(first, "src/app.py", POLIER_TASK="M01")
+        self.assertIsNone(write(second, "src/app.py", POLIER_TASK="M01"))
+
+
+class WorktreeRule(unittest.TestCase):
+    """PL-05: a bound task with a worktree blocks writes in the main checkout."""
+
+    def test_required_denies_the_main_checkout(self):
+        from core.tests.fixtures import set_board
+        root = project([task(worktree="/somewhere/repo-M01")])
+        set_board(root, profile="M", schema_version="1.0")
+        out = write(root, "src/app.py", POLIER_TASK="M01")
+        self.assertEqual(decision(out), "deny")
+        self.assertIn("work in /somewhere/repo-M01", reason(out))
+        self.assertIn("work in /somewhere/repo-M01", reason(bash(root, "echo x > src/app.py")))
+
+    def test_legacy_m_board_defaults_to_recommended(self):
+        from core.tests.fixtures import set_board
+        root = project([task(worktree="/somewhere/repo-M01")])
+        set_board(root, profile="M")  # no schema_version: a 0.9 board
+        self.assertIsNone(write(root, "src/app.py", POLIER_TASK="M01"))
+
+    def test_profile_s_defaults_to_off(self):
+        root = project([task(worktree="/somewhere/repo-M01")])
+        self.assertIsNone(write(root, "src/app.py"))
+
+    def test_evidence_stays_writable(self):
+        from core.tests.fixtures import set_board
+        root = project([task(worktree="/somewhere/repo-M01")])
+        set_board(root, profile="M", schema_version="1.0")
+        self.assertIsNone(write(root, "reviews/evidence/M01-tests.log"))
+
+
+class KillWarning(unittest.TestCase):
+    """PL-16: a Bash command that stops processes asks, it never denies."""
+
+    def test_kill_patterns_ask(self):
+        root = project([task()])
+        for command in ("pkill -f 'next dev'", "kill 123", "killall node",
+                        "lsof -ti:3000 | xargs kill -9"):
+            with self.subTest(command):
+                out = bash(root, command)
+                self.assertEqual(decision(out), "ask")
+                self.assertIn("do not stop processes you did not start; use your slot's ports",
+                              reason(out))
+
+    def test_text_does_not_ask(self):
+        root = project([task()])
+        for command in ("echo 'pkill -f node'", "grep -rn pkill src/", "cat <<'EOF'\npkill node\nEOF"):
+            with self.subTest(command):
+                self.assertIsNone(bash(root, command))
+
+    def test_a_write_violation_still_wins(self):
+        root = project([task()])
+        out = bash(root, "echo x > README.md; pkill -f node")
+        self.assertEqual(decision(out), "deny")
+        self.assertIn("outside the write scope", reason(out))
+
+    def test_lead_does_not_get_the_warning(self):
+        root = project([task()])
+        self.assertIsNone(bash(root, "pkill -f node", POLIER_ROLE="lead"))
+
+
+class ForeignStop(unittest.TestCase):
+    """PL-05: foreign changes are listed separately and never block the stop."""
+
+    def setUp(self):
+        self.root = project([task("M01"), task("M02", "pending", scope_write=["docs/"])])
+        from core.claims import take
+        take(self.root, "M02", harness="dsh", session="agent-other")
+        (self.root / "docs").mkdir()
+        (self.root / "docs" / "x.md").write_text("foreign\n")
+
+    def test_foreign_only_is_reported_but_does_not_block(self):
+        out = stop(self.root, POLIER_TASK="M01")
+        self.assertIsNotNone(out)
+        self.assertNotIn("decision", out)
+        self.assertIn("foreign changes (task M02, harness dsh)", out["systemMessage"])
+
+    def test_a_violation_blocks_and_lists_foreign_changes_separately(self):
+        (self.root / "README.md").write_text("changed\n")
+        out = stop(self.root, POLIER_TASK="M01")
+        self.assertEqual(out["decision"], "block")
+        self.assertIn("README.md: outside scope", out["reason"])
+        self.assertIn("foreign changes (task M02, harness dsh)", out["reason"])

@@ -23,6 +23,12 @@ WRITE_REDIRECTS = {">", ">>", ">|", "&>", "&>>", "<>"}
 READ_REDIRECTS = {"<", "<<", "<<<"}
 WRAPPERS = {"sudo", "env", "nohup", "time", "command", "exec", "nice", "ionice", "stdbuf", "doas"}
 SHELLS = {"sh", "bash", "zsh", "dash", "ksh"}
+# Programs that stop processes (PL-16): warned about, never denied.
+KILLERS = ("kill", "killall", "pkill")
+# xargs options that consume the following word, so the program stays the first positional.
+XARGS_VALUE_OPTIONS = ("-n", "--max-args", "-I", "--replace", "-P", "--max-procs",
+                      "-d", "--delimiter", "-L", "--max-lines", "-s", "--max-chars",
+                      "-E", "--eof")
 UNRESOLVED = re.compile(r"[$`*?\[{]")
 ASSIGNMENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
 HEREDOC = re.compile(r"<<(-?)\s*(['\"]?)([A-Za-z_][A-Za-z0-9_]*)\2")
@@ -281,3 +287,58 @@ def write_targets(command: str, cwd: Optional[str], _depth: int = 0) -> Tuple[Li
         for path, how, prog, source in _command_targets(args):
             add(path, how, prog, source)
     return targets, unresolved
+
+
+# ---------------------------------------------------------------------------
+# processes a command would stop (PL-16)
+# ---------------------------------------------------------------------------
+
+def _command_position(args: List[str]) -> List[str]:
+    """`args` without leading assignments and wrapper programs (`sudo`, `env`, ...)."""
+    while args and ASSIGNMENT.match(args[0]):
+        args = args[1:]
+    while args and os.path.basename(args[0]) in WRAPPERS:
+        args = args[1:]
+        while args and (args[0].startswith("-") or ASSIGNMENT.match(args[0])):
+            args = args[1:]
+    return args
+
+
+def process_kills(command: str, _depth: int = 0) -> List[str]:
+    """Programs `command` would use to stop processes: kill, killall, pkill (and `xargs kill`).
+
+    Returns the matched program names in command order, without duplicates
+    (for example ``["pkill"]`` or ``["kill"]`` for ``lsof -ti:3000 | xargs
+    kill``). Text in heredocs, quoted strings and arguments of other programs
+    (`echo kill`, `grep kill file`) is not a command, so it does not match.
+    A line that cannot be tokenized (open quote) returns [].
+    """
+    try:
+        words = tokens(command)
+    except ValueError:
+        return []
+    found: List[str] = []
+    for segment in _segments(words):
+        if segment in (["("], [")"]):
+            continue
+        args = _command_position(list(segment))
+        if not args:
+            continue
+        name = os.path.basename(args[0])
+        if _depth < MAX_DEPTH and name in SHELLS and "-c" in args[1:]:
+            index = args.index("-c")
+            if index + 1 < len(args):
+                for inner in process_kills(args[index + 1], _depth + 1):
+                    if inner not in found:
+                        found.append(inner)
+            continue
+        if name in KILLERS:
+            if name not in found:
+                found.append(name)
+            continue
+        if name == "xargs":
+            _options, positional = _options_and_args(args[1:], XARGS_VALUE_OPTIONS)
+            program = os.path.basename(positional[0]) if positional else ""
+            if program in KILLERS and program not in found:
+                found.append(program)
+    return found

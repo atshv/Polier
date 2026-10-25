@@ -15,9 +15,10 @@ import subprocess
 from pathlib import Path
 from typing import Iterable, List, NamedTuple, Optional, Tuple, Union
 
-from .board import load_board, pick_task
+from .board import load_board, pick_task, schema_version, tasks_of
+from .claims import live_claims
 from .errors import PolierError
-from .paths import inside, normalized, outside, relative, resolve
+from .paths import inside, is_main_checkout, normalized, outside, relative, resolve
 
 # Always writable: gate logs and records belong to the task that produced them.
 ALWAYS_ALLOWED = ("reviews/evidence",)
@@ -42,18 +43,60 @@ def _strings(task: dict, key: str) -> List[str]:
     return [p for p in value if isinstance(p, str)] if isinstance(value, list) else []
 
 
+def worktree_mode(board) -> str:
+    """`worktrees` mode of the board: required, recommended or off (PL-05).
+
+    Without a valid board setting the profile decides: off for S, and for M/L
+    "required" on a 1.0 board but only "recommended" on a 0.9 board — an
+    existing project keeps working until its owner sets the mode (migration).
+    """
+    if not isinstance(board, dict):
+        return "off"
+    mode = board.get("worktrees")
+    if mode in ("required", "recommended", "off"):
+        return mode
+    if board.get("profile") not in ("M", "L"):
+        return "off"
+    return "required" if schema_version(board) == "1.0" else "recommended"
+
+
+def worktree_denial(tasks: Iterable[dict], board=None, root=None) -> Optional[str]:
+    """The task worktree a worker must use instead of the main checkout, or None.
+
+    The rule applies with `worktrees: required` (or its M/L default), a bound
+    task that has a non-empty `worktree`, and a session in the main checkout.
+    Inside a linked worktree, or without board/root, nothing is denied.
+    """
+    if root is None or worktree_mode(board) != "required":
+        return None
+    trees = [t.get("worktree") for t in tasks
+             if isinstance(t, dict) and isinstance(t.get("worktree"), str) and t.get("worktree").strip()]
+    if not trees:
+        return None
+    if not is_main_checkout(root):
+        return None
+    return trees[0]
+
+
 # ---------------------------------------------------------------------------
 # guard: one write, before it happens
 # ---------------------------------------------------------------------------
 
-def decide(rel: str, tasks: Iterable[dict]) -> Decision:
-    """May a worker write `rel` (relative to the project root)? With several tasks it must fit one."""
+def decide(rel: str, tasks: Iterable[dict], board=None, root=None, cwd=None) -> Decision:
+    """May a worker write `rel` (relative to the project root)? With several tasks it must fit one.
+
+    With `board` and `root` the worktree rule of PL-05 applies as well: a worker
+    write in the main checkout while a bound task has a worktree is denied.
+    """
     if outside(rel):
         return Decision(False, "outside-project", "is outside the project folder", rel)
     if any(inside(rel, a) for a in ALWAYS_ALLOWED):
         return Decision(True, path=rel)
     if any(inside(rel, b) for b in BOARD_FILES):
         return Decision(False, "lead-owned", "is lead-owned (board, status or brief)", rel)
+    tree = worktree_denial(tasks, board, root)
+    if tree:
+        return Decision(False, "worktree", f"work in {tree}", rel)
     forbidden = False
     for task in tasks:
         if any(inside(rel, d) for d in _strings(task, "scope_write_forbidden")):
@@ -67,13 +110,14 @@ def decide(rel: str, tasks: Iterable[dict]) -> Decision:
 
 
 def check_write(path: str, tasks: Union[dict, Iterable[dict], None], role: str = "worker",
-                root=None, cwd=None) -> Decision:
+                root=None, cwd=None, board=None) -> Decision:
     """Guard decision for writing `path`.
 
     `tasks` is the task (or list of tasks) bound to the session; empty means no
     task is running and a worker may write anything. With `root`, `path` may be
     absolute or relative to `cwd` (default: `root`); without it, `path` must
-    already be relative to the project root.
+    already be relative to the project root. With `board` and `root` the
+    worktree rule of PL-05 is enforced; without them the decision is the old one.
     """
     if isinstance(tasks, dict):
         tasks = [tasks]
@@ -85,7 +129,7 @@ def check_write(path: str, tasks: Union[dict, Iterable[dict], None], role: str =
         return Decision(False, "reviewer", "is outside reviews/", rel)
     if role != "worker" or not tasks:
         return Decision(True, path=rel)
-    return decide(rel, tasks)
+    return decide(rel, tasks, board=board, root=root, cwd=cwd)
 
 
 def write_denial(decision: Decision, tasks: Union[dict, Iterable[dict], None], role: str = "worker",
@@ -99,6 +143,12 @@ def write_denial(decision: Decision, tasks: Union[dict, Iterable[dict], None], r
         tasks = [tasks]
     tasks = [t for t in (tasks or []) if isinstance(t, dict)]
     ids = ", ".join(str(t.get("id")) for t in tasks)
+    if decision.code == "worktree":
+        return " ".join([
+            f"Polier: write to {shown} blocked, {decision.reason} ({ids}).",
+            "Do the work in the task's worktree, not in the main checkout.",
+            "If the change is needed elsewhere, stop and report it under open_questions.",
+        ])
     allowed: List[str] = []
     for task in tasks:
         for entry in task.get("scope_write") or []:
@@ -191,14 +241,62 @@ def violations(paths: Iterable[str], task: dict, allow_board: bool = False) -> L
     return found
 
 
-def check_stop(changed: List[str], task: dict, allow_board: bool = False) -> dict:
-    """Compare changed files (project-relative) with one task's scope."""
+def _foreign_changes(found: List[Tuple[str, str]], task: dict, root=None) -> List[dict]:
+    """Changed paths that belong to another live claim's scope (PL-05).
+
+    A path that is outside the current task's scope but inside the
+    `scope_write` of a task claimed by another live session is foreign: another
+    harness made it, so the current session is not blamed for it.
+    """
+    if root is None or not found:
+        return []
+    try:
+        board = load_board(root, strict=False)
+    except PolierError:  # pragma: no cover - load_board(strict=False) does not raise
+        return []
+    if not board:
+        return []
+    try:
+        claims = live_claims(root)
+    except PolierError:
+        return []
+    if not claims:
+        return []
+    by_id = {t.get("id"): t for t in tasks_of(board)}
+    foreign: List[dict] = []
+    for path, _reason in found:
+        for claim in claims:
+            claimed = claim.get("task")
+            if claimed is None or claimed == task.get("id"):
+                continue
+            other = by_id.get(claimed)
+            if other is None:
+                continue
+            allowed = [p for p in other.get("scope_write") or [] if isinstance(p, str)]
+            if any(inside(path, entry) for entry in allowed):
+                foreign.append({"path": path, "task": claimed, "harness": claim.get("harness")})
+                break
+    return foreign
+
+
+def check_stop(changed: List[str], task: dict, allow_board: bool = False, root=None) -> dict:
+    """Compare changed files (project-relative) with one task's scope.
+
+    With `root`, changed files that belong to another live claim's scope are
+    reported separately under `foreign` and do not count as violations of this
+    task; `ok` is driven by the violations only.
+    """
     found = violations(changed, task, allow_board)
+    foreign = _foreign_changes(found, task, root)
+    if foreign:
+        foreign_paths = {item["path"] for item in foreign}
+        found = [(path, reason) for path, reason in found if path not in foreign_paths]
     return {
         "task": task.get("id"),
         "ok": not found,
         "changed": list(changed),
         "violations": [{"path": p, "reason": r} for p, r in found],
+        "foreign": foreign,
         "scope_write": task.get("scope_write", []),
     }
 
@@ -208,7 +306,7 @@ def scope_check(root, task_id: Optional[str] = None, allow_board: bool = False) 
     root = Path(root)
     board = load_board(root)
     task = pick_task(board, task_id)
-    return check_stop(changed_files(root), task, allow_board)
+    return check_stop(changed_files(root), task, allow_board, root=root)
 
 
 def stop_message(task: dict, found: List[dict]) -> str:

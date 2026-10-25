@@ -97,3 +97,31 @@ class Board(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+import platform  # noqa: E402
+from unittest import mock  # noqa: E402
+
+from core import paths as paths_module  # noqa: E402
+
+
+class CaseRule(unittest.TestCase):
+    """PL-16: guarded paths compare case-insensitively on macOS and Windows only."""
+
+    def test_default_follows_the_platform(self):
+        self.assertEqual(paths_module.CASE_INSENSITIVE,
+                         platform.system() in ("Darwin", "Windows"))
+
+    def test_case_insensitive_rule(self):
+        with mock.patch.object(paths_module, "CASE_INSENSITIVE", True):
+            self.assertTrue(inside("Board.json", "board.json"))
+            self.assertTrue(inside("board.json", "Board.json"))
+            self.assertTrue(inside("SRC/App.py", "src"))
+            self.assertFalse(inside("srcx/a.py", "src"))
+            self.assertFalse(inside("a", ""))
+
+    def test_exact_rule_elsewhere(self):
+        with mock.patch.object(paths_module, "CASE_INSENSITIVE", False):
+            self.assertFalse(inside("Board.json", "board.json"))
+            self.assertFalse(inside("SRC/a.py", "src"))
+            self.assertTrue(inside("src/a.py", "src"))
