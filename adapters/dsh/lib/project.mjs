@@ -79,11 +79,16 @@ export function isMainCheckout(root) {
   return value
 }
 
-/** `worktrees` mode of the board: required, recommended or off; M/L default to required. */
+/**
+ * `worktrees` mode of the board: required, recommended or off.
+ * M/L default to required on a 1.0 board and to recommended on a 0.9 board
+ * (migration: an existing project keeps working until its owner opts in).
+ */
 export function worktreeMode(board) {
   if (!board || typeof board !== 'object') return 'off'
   if (['required', 'recommended', 'off'].includes(board.worktrees)) return board.worktrees
-  return board.profile === 'M' || board.profile === 'L' ? 'required' : 'off'
+  if (board.profile !== 'M' && board.profile !== 'L') return 'off'
+  return board.schema_version === '1.0' ? 'required' : 'recommended'
 }
 
 /** The worktree a worker must use instead of the main checkout, or undefined (PL-05). */

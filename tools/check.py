@@ -417,7 +417,9 @@ def check_status_fresh(root: Path, board: dict, errors: list[str]) -> None:
         return
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    if status.read_text(encoding="utf-8").strip() != module.render(board, root).strip():
+    current = status.read_text(encoding="utf-8")
+    strip = getattr(module, "strip_claims", lambda text: text)
+    if strip(current).strip() != module.render(board, root, with_claims=False).strip():
         errors.append("STATUS.md is out of date with board.json — run tools/render_status.py")
 
 
@@ -612,6 +614,10 @@ def main() -> int:
             check_versions(root, board, warnings)
             check_status_fresh(root, board, errors)
 
+    if board is not None and isinstance(board.get("resources"), dict):
+        gitignore = root / ".gitignore"
+        if gitignore.exists() and ".polier-slot" not in gitignore.read_text(encoding="utf-8"):
+            warnings.append(".gitignore: runtime slot file .polier-slot is not ignored")
     check_environments(root, warnings)
     check_drift(root, warnings)
     check_links(root, errors)

@@ -424,6 +424,10 @@ test('the JS guard mirrors the case rule and the worktree rule', () => {
   assert.equal(checkPath('src/app.py', tasks).ok, true, 'three arguments keep the old behaviour')
   assert.equal(checkPath('reviews/evidence/a.log', tasks, 'worker', { board: { profile: 'M' }, root }).ok, true)
   assert.equal(checkPath('src/app.py', tasks, 'worker', { board: { profile: 'S' }, root }).ok, true)
+  // PL-05 migration: a 0.9 M/L board defaults to recommended, a 1.0 board to required.
+  assert.equal(checkPath('src/app.py', tasks, 'worker', { board: { profile: 'M' }, root }).ok, true)
+  const legacy = checkPath('src/app.py', tasks, 'worker', { board: { profile: 'M', schema_version: '1.0' }, root })
+  assert.equal(legacy.code, 'worktree')
 })
 
 test('pl_gate passes the slot and the exclusive resources of the task', { skip: gateSupportsExclusive() }, async () => {

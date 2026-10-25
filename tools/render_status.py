@@ -9,12 +9,19 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from core.board import ready_tasks, stage_report  # noqa: E402
+
+# Live task claims (PL-04) are shown inside these markers. They change every
+# few minutes, so tools/check.py ignores the block when it compares STATUS.md
+# with a fresh render.
+CLAIMS_BEGIN = "<!-- polier:claims -->"
+CLAIMS_END = "<!-- /polier:claims -->"
 
 ICONS = {
     "done": "[x]",
@@ -66,6 +73,30 @@ def _render_stages(board: dict, tasks: list, root=None) -> list:
     return lines
 
 
+def _render_claims(root) -> list:
+    """Live claims of every harness: "in progress by <harness> since <time>" (PL-04)."""
+    if root is None:
+        return []
+    try:
+        from core.claims import live_claims
+        claims = live_claims(root)
+    except Exception:  # noqa: BLE001  no claims support or no git repo: stay silent
+        return []
+    if not claims:
+        return []
+    lines = [CLAIMS_BEGIN, "## Claims", ""]
+    for claim in claims:
+        parts = [f"- `{claim.get('task')}` in progress by {claim.get('harness')}",
+                 f"since {claim.get('heartbeat', claim.get('started', '?'))}"]
+        if claim.get("worktree"):
+            parts.append(f"— worktree: {claim['worktree']}")
+        if claim.get("slot") is not None:
+            parts.append(f"· slot {claim['slot']}")
+        lines.append(" ".join(parts))
+    lines += ["", CLAIMS_END, ""]
+    return lines
+
+
 def _render_packages(board: dict) -> list:
     packages = board.get("packages")
     if not isinstance(packages, list) or not packages:
@@ -101,7 +132,13 @@ def _render_runtime(board: dict) -> list:
 
 
 
-def render(board: dict, root=None) -> str:
+def strip_claims(text: str) -> str:
+    """`text` without the live-claims block, for the STATUS.md freshness check."""
+    without = re.sub(re.escape(CLAIMS_BEGIN) + r".*?" + re.escape(CLAIMS_END), "", text, flags=re.S)
+    return re.sub(r"\n{3,}", "\n\n", without)
+
+
+def render(board: dict, root=None, with_claims: bool = True) -> str:
     tasks = board.get("tasks", [])
     stages = [s for s in board.get("stages", []) if isinstance(s, dict)] \
         if isinstance(board.get("stages"), list) else []
@@ -162,6 +199,9 @@ def render(board: dict, root=None) -> str:
             )
         lines.append("")
 
+    if with_claims:
+        lines += _render_claims(root)
+
     decisions = board.get("decisions", [])
     lines += ["## Decisions", ""]
     if decisions:
@@ -200,7 +240,7 @@ def main() -> int:
 
     root = Path(args.project).resolve()
     board = json.loads((root / "board.json").read_text(encoding="utf-8"))
-    text = render(board, root)
+    text = render(board, root, with_claims=True)
     (root / args.out).write_text(text, encoding="utf-8")
     print(f"STATUS written: {root / args.out}")
     return 0

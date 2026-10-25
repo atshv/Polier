@@ -203,13 +203,13 @@ class CheckCli(unittest.TestCase):
 
 
 class Render(unittest.TestCase):
-    def _render(self, board: dict) -> str:
+    def _render(self, board: dict, root=None) -> str:
         spec = importlib.util.spec_from_file_location(
             "pl_render", TOOLS / "render_status.py")
         module = importlib.util.module_from_spec(spec)
         assert spec.loader is not None
         spec.loader.exec_module(module)
-        return module.render(board)
+        return module.render(board, root)
 
     def test_renders_stages_packages_resources(self):
         text = self._render(board_10())
@@ -221,6 +221,25 @@ class Render(unittest.TestCase):
         self.assertIn("## Runtime", text)
         self.assertIn("4100 + 50·N", text)
         self.assertIn("`P3-02`", text)
+
+    def test_live_claims_are_shown_and_ignored_by_the_freshness_check(self):
+        from core.board import load_board
+        from core.claims import take
+        from core.tests.fixtures import project, task as fixture_task
+        root = project([fixture_task("M01")])
+        take(root, "M01", harness="dsh", session="s1")
+        board = load_board(root)
+        text = self._render(board, root)
+        self.assertIn("in progress by dsh", text)
+        self.assertIn("`M01`", text)
+        spec = importlib.util.spec_from_file_location(
+            "pl_render_claims", TOOLS / "render_status.py")
+        module = importlib.util.module_from_spec(spec)
+        assert spec.loader is not None
+        spec.loader.exec_module(module)
+        self.assertEqual(module.strip_claims(text).strip(),
+                         module.render(board, root, with_claims=False).strip())
+        self.assertNotIn("polier:claims", module.strip_claims(text))
 
     def test_classic_board_rendering_is_unchanged(self):
         text = self._render(board_09())
