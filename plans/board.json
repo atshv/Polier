@@ -10,7 +10,7 @@
     {
       "id": "incident-fixes",
       "title": "incident fixes",
-      "goal": "The four incidents of the Calm Canvas run cannot happen again.",
+      "goal": "The four incidents observed in a real multi-agent project run cannot happen again.",
       "exit_criteria": [
         "slots, exclusive gates, claims and worktree enforcement tested",
         "0.9 projects unchanged"
