@@ -22,7 +22,8 @@ def git(root: Path, *args: str) -> None:
 
 
 def project(tasks: list, repo: bool = True) -> Path:
-    root = Path(tempfile.mkdtemp(prefix="pl-core-"))
+    # Resolved so comparisons stay valid on macOS, where /var is a symlink to /private/var.
+    root = Path(tempfile.mkdtemp(prefix="pl-core-")).resolve()
     (root / "board.json").write_text(json.dumps(
         {"project": "t", "profile": "S", "base_branch": "main", "tasks": tasks}, indent=2))
     (root / "src").mkdir()
