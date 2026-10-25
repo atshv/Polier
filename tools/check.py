@@ -18,6 +18,12 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+try:  # PL-15: optional, so a package without tools/drift.py still checks
+    import drift as _drift  # noqa: E402
+except Exception:  # noqa: BLE001
+    _drift = None
 
 from core.board import board_errors, stage_report, task_stage_id  # noqa: E402
 from core.evidence import verify_evidence  # noqa: E402
@@ -162,6 +168,37 @@ def check_packages(root: Path, board: dict, errors: list[str], warnings: list[st
             errors.append(
                 f"{task.get('id')}: scope_write {scope} is outside its package {package} "
                 f"(add the contract path to board.json contracts[] if it is a shared contract)")
+
+
+def check_drift(root: Path, warnings: list[str]) -> None:
+    """Warn when the project-local generator copy differs from its manifest (PL-15)."""
+    if _drift is None:
+        return
+    try:
+        report = _drift.drift(root)
+    except Exception:  # noqa: BLE001  never fail the project check because of drift
+        return
+    warnings.extend(report.get("warnings") or [])
+
+
+def check_environments(root: Path, warnings: list[str]) -> None:
+    """docs/environments.md: every environment needs a smoke URL (PL-11)."""
+    path = root / "docs/environments.md"
+    if not path.exists():
+        return
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.lstrip().startswith("|"):
+            continue
+        cells = [cell.strip().strip("`") for cell in line.strip().strip("|").split("|")]
+        if not cells:
+            continue
+        name = cells[0].lower()
+        if name not in ("local", "preview", "staging", "production"):
+            continue
+        if not any("http://" in cell or "https://" in cell for cell in cells[1:]):
+            warnings.append(
+                f"docs/environments.md: environment {cells[0]} has no smoke URL — "
+                f"run tools/smoke.py after every deployment")
 
 
 def check_versions(root: Path, board: dict, warnings: list[str]) -> None:
@@ -575,6 +612,8 @@ def main() -> int:
             check_versions(root, board, warnings)
             check_status_fresh(root, board, errors)
 
+    check_environments(root, warnings)
+    check_drift(root, warnings)
     check_links(root, errors)
     check_git(root, warnings)
 
