@@ -1,10 +1,28 @@
 # Module Structure: <Project name>
 
-> Detail document for `ARCHITECTURE.md`. Contains folders and import rules, no architecture decisions.
+> Detail document for `ARCHITECTURE.md`. Contains folders and import rules, no architecture decisions. S/M: layers. L: package map.
+
+## Package map (profile L)
+
+> L: this table replaces the layer model. `docs/module-map.md` is the package map; keep the folder tree out of the root `ARCHITECTURE.md`.
+
+| Package path | Kind | Owner | May import | Build / test |
+|---|---|---|---|---|
+| `packages/<name>/` | `package` | `<role>` | `packages/<other>/` | `<build cmd>`, `<test cmd>` |
+| `services/<name>/` | `service` | `<role>` | `packages/<name>/` | `<build cmd>`, `<test cmd>` |
+| `apps/<name>/` | `app` | `<role>` | `packages/<name>/`, `services/<name>/` | `<build cmd>`, `<e2e cmd>` |
+| `tools/<name>/` | `tool` | `<role>` | `packages/<name>/` | `<cmd>` |
+
+- Kinds: `package` shared library, `service` deployable backend, `app` deployable UI, `tool` dev/build helper, `infra` configuration.
+- Packages import only what `packages[].may_import` allows; the `boundaries` gate (`python3 <package>/tools/boundaries.py .`) enforces it.
+- No cycles; a cycle means merge the packages or move the shared types into a contract.
+- Cross-package interfaces live in `docs/contracts/` and are versioned; every dependant changes in the same task.
+- Each package has `ARCHITECTURE.md` (≤ 400 words) and optional `AGENTS.md` (≤ 200 words); layout rules in `docs/monorepo-layout.md`.
+- S/M: delete this section and use the layer model below.
 
 ## Layers
 
-> **Model:** classic layering. Dependencies only point downwards: UI → logic → data. Domain types live in the logic layer; the data layer does not import them.
+> **Model (S/M):** classic layering. Dependencies only point downwards: UI → logic → data. Domain types live in the logic layer; the data layer does not import them.
 
 | Layer | Folder | Purpose | May import | May not import |
 |---|---|---|---|---|

@@ -45,6 +45,21 @@ A3 ...
 - **New files:** `<path>`
 - **Changed files:** `<path>` — <what exactly>
 - **Reference:** `<existing file>`
+- **Package:** `packages/<name>` — profile L only. This task's `scope_write` stays inside the package; contract paths from `board.json` are the only exception.
+
+## UI specification
+
+> Required when the task changes a UI path; otherwise delete the section. Cite tokens from `docs/design-rules.md`. **A UI task without numbers is not ready.**
+
+| Element | Property | Value | Token |
+| --- | --- | --- | --- |
+| `<element>` | `<height / gap / duration>` | `<32 px / 120 ms>` | `<--control-h>` |
+
+**States:** specify each applicable state with its visual change in px/ms/tokens: rest, hover, pressed, focus, selected, dragging, disabled, saving, error. Write `n/a` for states that cannot occur.
+
+**Do not:** <e.g. no new hex colours, no layout animation, no focus removal, no text below 11 px, no other views changed>
+
+**Evidence screenshots:** `reviews/evidence/<ID>-<view>-before-<viewport>.png` and `…-after-…`, at <1440×900> and <390×844>. Screenshot only the changed view.
 
 ## Pitfalls
 
@@ -67,7 +82,7 @@ If a gate fails: read the cause, fix the code, rerun the gate. Never adjust the 
 
 ## Limits
 
-- **Scope:** only `<paths>`
+- **Scope:** only `<paths>` — inside the task's package; contract paths are the only exception
 - **Stop:** <max. rounds/time/tokens>; when blocked, `status: blocked` + reason
 - No architecture change; no new dependencies without approval
 
