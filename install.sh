@@ -60,6 +60,14 @@ for target in "${TARGETS[@]}"; do
   rm -rf "$dest.new"
   mkdir -p "$dest.new"
   (cd "$SRC" && tar -cf - --exclude .git --exclude .DS_Store --exclude node_modules --exclude __pycache__ --exclude ./tests --exclude ./core/tests --exclude ./adapters/dsh/test --exclude ./adapters/claude-code/tests .) | (cd "$dest.new" && tar -xf -)
+  # Drift detection: ship the release manifest (SHA-256 of every shipped file) with the copy,
+  # so tools/drift.py and tools/check.py can compare the installed files with the release.
+  if [ -f "$SRC/tools/manifest.json" ]; then
+    mkdir -p "$dest.new/tools"
+    cp "$SRC/tools/manifest.json" "$dest.new/tools/manifest.json"
+  else
+    echo "note: $SRC has no tools/manifest.json; drift detection stays off for this copy until the next release tag" >&2
+  fi
   rm -rf "$dest"
   mv "$dest.new" "$dest"
 
