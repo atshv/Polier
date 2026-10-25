@@ -1,0 +1,38 @@
+{
+  "contract": "state",
+  "version": "1.0.0",
+  "documentId": "doc-01HZX4M8R2",
+  "nodes": [
+    {
+      "id": "n1",
+      "type": "rect",
+      "x": 120.5,
+      "y": 80,
+      "width": 240,
+      "height": 160,
+      "rotation": 0
+    },
+    {
+      "id": "n2",
+      "type": "text",
+      "x": 32,
+      "y": 16,
+      "width": 180,
+      "height": 24,
+      "rotation": 0
+    }
+  ],
+  "edges": [
+    {
+      "from": "n1",
+      "to": "n2",
+      "label": "owns"
+    }
+  ],
+  "viewport": {
+    "x": 0,
+    "y": 0,
+    "zoom": 1.0
+  },
+  "updatedAt": "2026-10-17T09:30:00Z"
+}

@@ -1,0 +1,17 @@
+{
+  "task": "F-01",
+  "gate": "layout",
+  "command": "python3 tools/layout_check.py",
+  "exit_code": 0,
+  "result": "pass",
+  "slot": null,
+  "exclusive": [],
+  "lock_wait_s": 0.0,
+  "lock_warning": null,
+  "started": "2026-10-25T01:05:16+00:00",
+  "finished": "2026-10-25T01:05:16+00:00",
+  "commit": "a65e47990214d1b066af90e9a99caa4310122e73",
+  "dirty": true,
+  "log": "F-01-layout-20261025T010516Z.log",
+  "log_sha256": "3a6069617a59f8296e6cad67e42bca9410b9b9fc1881799bb3b0d0dcbf037df7"
+}

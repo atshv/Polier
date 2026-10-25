@@ -1,0 +1,580 @@
+{
+  "schema_version": "1.0",
+  "project": "canvas-mini",
+  "profile": "L",
+  "base_branch": "main",
+  "generator_version": "1.0.0",
+  "stage": 1,
+  "stages": [
+    {
+      "id": "foundation",
+      "title": "Foundation",
+      "goal": "Workspace, package map and the state contract are in place; every later task starts from a small context.",
+      "exit_criteria": [
+        "All four package folders exist with their ARCHITECTURE.md and stay inside the package word budget.",
+        "The state contract has a schema, one valid and one invalid fixture and version 1.0.0 on the board.",
+        "The layout and contract gates pass with records in reviews/evidence."
+      ],
+      "exit_gates": [
+        "layout",
+        "contracts"
+      ],
+      "owner_decision": "continue",
+      "depends_on": []
+    },
+    {
+      "id": "engine-spike",
+      "title": "Engine spike",
+      "goal": "Prove that the C++ core builds for the browser and that the WebAssembly size is acceptable.",
+      "exit_criteria": [
+        "The C++ unit suite is green.",
+        "The WebAssembly module builds and its size is within the documented budget.",
+        "The owner records continue or stop for the stage after the size review."
+      ],
+      "exit_gates": [
+        "cpp-unit",
+        "wasm-build"
+      ],
+      "owner_decision": "pending",
+      "depends_on": [
+        "foundation"
+      ]
+    },
+    {
+      "id": "surface",
+      "title": "Surface",
+      "goal": "Service and UI kit are built in parallel against the state contract.",
+      "exit_criteria": [
+        "The service validates and serves the contract version on its slot port.",
+        "The UI kit renders the stage and the toolbar from design tokens with component tests.",
+        "Both packages pass types, tests and boundaries."
+      ],
+      "exit_gates": [
+        "types",
+        "tests",
+        "boundaries"
+      ],
+      "owner_decision": "continue",
+      "depends_on": [
+        "engine-spike"
+      ]
+    },
+    {
+      "id": "web",
+      "title": "Web app and release",
+      "goal": "Wire the app end to end, check every environment and ship the tag.",
+      "exit_criteria": [
+        "The e2e flow passes against the slot ports and the smoke check passes on every environment.",
+        "The release check passes on a tagged main.",
+        "CHANGELOG.md describes the release and every dependency is pinned."
+      ],
+      "exit_gates": [
+        "e2e",
+        "smoke",
+        "release"
+      ],
+      "owner_decision": "pending",
+      "depends_on": [
+        "surface"
+      ]
+    }
+  ],
+  "packages": [
+    {
+      "path": "packages/engine",
+      "kind": "package",
+      "may_import": []
+    },
+    {
+      "path": "packages/ui-kit",
+      "kind": "package",
+      "may_import": [
+        "packages/engine"
+      ]
+    },
+    {
+      "path": "services/sync",
+      "kind": "service",
+      "may_import": [
+        "packages/engine"
+      ]
+    },
+    {
+      "path": "apps/web",
+      "kind": "app",
+      "may_import": [
+        "packages/engine",
+        "packages/ui-kit",
+        "services/sync"
+      ]
+    }
+  ],
+  "resources": {
+    "slots": 3,
+    "port_base": 4100,
+    "port_stride": 50,
+    "services": {
+      "web": 0,
+      "api": 1
+    },
+    "infra_patterns": [
+      "ECONNREFUSED"
+    ]
+  },
+  "worktrees": "required",
+  "contracts": [
+    {
+      "name": "state",
+      "path": "contracts/state",
+      "version": "1.0.0",
+      "schema_files": [
+        "contracts/state/state.schema.json"
+      ],
+      "fixtures_dir": "contracts/state/fixtures",
+      "dependants": [
+        "packages/engine/include/engine",
+        "packages/ui-kit/src",
+        "services/sync/src",
+        "apps/web/src"
+      ]
+    }
+  ],
+  "tasks": [
+    {
+      "id": "F-01",
+      "title": "Workspace scaffold and package map",
+      "goal": "The four workspace folders, their package files, the root documents and the layout gate exist and agree with packages[] on the board.",
+      "why": "Every later task writes inside this skeleton; the package map and the root documents are the context every worker loads.",
+      "satisfies": [
+        "D1"
+      ],
+      "status": "done",
+      "depends_on": [],
+      "complexity": 3,
+      "stage": "foundation",
+      "parallel_group": null,
+      "scope_write": [
+        "ARCHITECTURE.md",
+        "AGENTS.md",
+        "README.md",
+        ".gitignore",
+        ".env.example",
+        "docs/",
+        "packages/",
+        "services/",
+        "apps/",
+        "tools/layout_check.py"
+      ],
+      "scope_read": [
+        "docs/quality.md",
+        "docs/monorepo-layout.md"
+      ],
+      "acceptance": [
+        "A1",
+        "A2",
+        "A3"
+      ],
+      "gates": [
+        "layout"
+      ],
+      "owner": "worker-1",
+      "branch": "task/F-01",
+      "worktree": null,
+      "round": 0,
+      "evidence": [
+        "reviews/evidence/F-01-layout-20261025T010516Z.json"
+      ],
+      "scope_write_forbidden": [
+        "contracts/"
+      ],
+      "handoff": [
+        "Workspace folders: packages/engine, packages/ui-kit, services/sync, apps/web; package map in docs/module-map.md.",
+        "Scaffold gate: python3 tools/layout_check.py fails when a packages[].path or its ARCHITECTURE.md is missing."
+      ]
+    },
+    {
+      "id": "F-02",
+      "title": "State contract schema and fixtures",
+      "goal": "The state contract is a JSON Schema 2020-12 at version 1.0.0 with one valid and one invalid fixture and a passing contract gate.",
+      "why": "The engine, UI kit, service and app exchange document state only through this contract. Every later stage consumes it.",
+      "satisfies": [
+        "D2"
+      ],
+      "status": "done",
+      "depends_on": [
+        "F-01"
+      ],
+      "complexity": 3,
+      "stage": "foundation",
+      "parallel_group": null,
+      "scope_write": [
+        "contracts/state/README.md",
+        "contracts/state/state.schema.json",
+        "contracts/state/fixtures/valid/state.json",
+        "contracts/state/fixtures/invalid/state.json",
+        "tools/contract_check.py"
+      ],
+      "scope_read": [
+        "docs/versions.md",
+        "ARCHITECTURE.md"
+      ],
+      "acceptance": [
+        "A1",
+        "A2",
+        "A3"
+      ],
+      "gates": [
+        "layout",
+        "contracts"
+      ],
+      "owner": "worker-1",
+      "branch": "task/F-02",
+      "worktree": null,
+      "round": 0,
+      "evidence": [
+        "reviews/evidence/F-02-layout-20261025T010516Z.json",
+        "reviews/evidence/F-02-contracts-20261025T010516Z.json"
+      ],
+      "scope_write_forbidden": [
+        "packages/",
+        "services/",
+        "apps/"
+      ],
+      "handoff": [
+        "State contract 1.0.0 lives in contracts/state; consumers mirror it in services/sync/src/state.ts and packages/ui-kit/src/index.ts.",
+        "Change the contract in its own task: bump board.json and the schema $id together, then run python3 tools/contract_check.py."
+      ]
+    },
+    {
+      "id": "ENG-01",
+      "title": "C++ scene core and unit tests",
+      "goal": "The engine library exposes node operations with a passing CTest suite and a documented geometry API.",
+      "why": "ENG-02 only wraps this library for WebAssembly; the stage exit decision needs green unit tests.",
+      "satisfies": [
+        "D3"
+      ],
+      "status": "pending",
+      "depends_on": [
+        "F-01",
+        "F-02"
+      ],
+      "complexity": 5,
+      "stage": "engine-spike",
+      "parallel_group": null,
+      "package": "packages/engine",
+      "scope_write": [
+        "packages/engine/CMakeLists.txt",
+        "packages/engine/include/engine/canvas.h",
+        "packages/engine/include/engine/color.h",
+        "packages/engine/src/canvas.cpp",
+        "packages/engine/src/color.cpp",
+        "packages/engine/tests/engine_tests.cpp"
+      ],
+      "scope_read": [
+        "packages/engine/ARCHITECTURE.md",
+        "packages/engine/CMakeLists.txt",
+        "packages/engine/include/engine/canvas.h",
+        "docs/gates/cpp-cmake.md"
+      ],
+      "acceptance": [
+        "A1",
+        "A2",
+        "A3",
+        "A4"
+      ],
+      "gates": [
+        "configure",
+        "build",
+        "cpp-unit",
+        "boundaries"
+      ],
+      "owner": null,
+      "branch": null,
+      "worktree": null,
+      "round": 0,
+      "evidence": [],
+      "scope_write_forbidden": [
+        "packages/engine/src/wasm_bindings.cpp"
+      ]
+    },
+    {
+      "id": "ENG-02",
+      "title": "WASM bindings and size budget",
+      "goal": "The engine builds to a browser-loadable WebAssembly module within the documented size budget.",
+      "why": "The web app loads the engine as WASM; the engine-spike exit decision needs a measured size.",
+      "satisfies": [
+        "D3"
+      ],
+      "status": "pending",
+      "depends_on": [
+        "ENG-01"
+      ],
+      "complexity": 4,
+      "stage": "engine-spike",
+      "parallel_group": null,
+      "package": "packages/engine",
+      "scope_write": [
+        "packages/engine/src/wasm_bindings.cpp",
+        "packages/engine/types/index.d.ts",
+        "packages/engine/CMakeLists.txt",
+        "packages/engine/tools/size_check.py"
+      ],
+      "scope_read": [
+        "packages/engine/ARCHITECTURE.md",
+        "packages/engine/include/engine/canvas.h",
+        "docs/gates/wasm-emscripten.md",
+        "docs/quality.md"
+      ],
+      "acceptance": [
+        "A1",
+        "A2",
+        "A3"
+      ],
+      "gates": [
+        "wasm-build",
+        "wasm-test",
+        "wasm-size",
+        "boundaries"
+      ],
+      "owner": null,
+      "branch": null,
+      "worktree": null,
+      "round": 0,
+      "evidence": [],
+      "scope_write_forbidden": [
+        "packages/engine/src/canvas.cpp",
+        "packages/engine/src/color.cpp"
+      ]
+    },
+    {
+      "id": "API-01",
+      "title": "Sync service over the state contract",
+      "goal": "The sync service validates document state against contract 1.0.0 and serves it on the API slot port.",
+      "why": "WEB-02 wires the app to this service; the version check keeps browser and service state compatible.",
+      "satisfies": [
+        "D4"
+      ],
+      "status": "pending",
+      "depends_on": [
+        "F-02"
+      ],
+      "complexity": 4,
+      "stage": "surface",
+      "parallel_group": "surface-wave",
+      "package": "services/sync",
+      "scope_write": [
+        "services/sync/src/server.ts",
+        "services/sync/src/state.ts",
+        "services/sync/src/index.ts",
+        "services/sync/tests/server.test.ts"
+      ],
+      "scope_read": [
+        "services/sync/ARCHITECTURE.md",
+        "services/sync/src/state.ts",
+        "contracts/state/state.schema.json",
+        "docs/environments.md"
+      ],
+      "acceptance": [
+        "A1",
+        "A2",
+        "A3",
+        "A4"
+      ],
+      "gates": [
+        "types",
+        "tests",
+        "contracts",
+        "boundaries",
+        "smoke"
+      ],
+      "resources": [
+        "ports"
+      ],
+      "owner": null,
+      "branch": null,
+      "worktree": null,
+      "round": 0,
+      "evidence": []
+    },
+    {
+      "id": "WEB-01",
+      "title": "Toolbar and stage in the UI kit",
+      "goal": "The UI kit renders the canvas stage and toolbar with design tokens and covers their states in component tests.",
+      "why": "WEB-02 assembles the app shell from these components; the UI section of this brief is the reference for later UI work.",
+      "satisfies": [
+        "D4"
+      ],
+      "status": "pending",
+      "depends_on": [
+        "F-02",
+        "ENG-02"
+      ],
+      "complexity": 4,
+      "stage": "surface",
+      "parallel_group": "surface-wave",
+      "package": "packages/ui-kit",
+      "scope_write": [
+        "packages/ui-kit/src/index.ts",
+        "packages/ui-kit/src/components/Toolbar.tsx",
+        "packages/ui-kit/src/components/Stage.tsx",
+        "packages/ui-kit/src/theme.css",
+        "packages/ui-kit/tests/components.test.tsx"
+      ],
+      "scope_read": [
+        "packages/ui-kit/ARCHITECTURE.md",
+        "packages/ui-kit/src/theme.css",
+        "docs/design-rules.md",
+        "contracts/state/README.md"
+      ],
+      "acceptance": [
+        "A1",
+        "A2",
+        "A3",
+        "A4",
+        "A5"
+      ],
+      "gates": [
+        "types",
+        "tests",
+        "visual-diff",
+        "boundaries"
+      ],
+      "owner": null,
+      "branch": null,
+      "worktree": null,
+      "round": 0,
+      "evidence": [],
+      "resources": [
+        "ports"
+      ]
+    },
+    {
+      "id": "WEB-02",
+      "title": "Web app shell and sync wiring",
+      "goal": "The web app loads the engine, renders the UI kit and exchanges document state with the sync service on its slot port.",
+      "why": "Last functional task before release; it proves the contract end to end in a browser.",
+      "satisfies": [
+        "D4",
+        "D5"
+      ],
+      "status": "pending",
+      "depends_on": [
+        "WEB-01",
+        "API-01"
+      ],
+      "complexity": 5,
+      "stage": "web",
+      "parallel_group": null,
+      "package": "apps/web",
+      "scope_write": [
+        "apps/web/src/app/page.tsx",
+        "apps/web/src/app/layout.tsx",
+        "apps/web/src/lib/sync-client.ts",
+        "apps/web/package.json",
+        "apps/web/tsconfig.json",
+        "apps/web/tests/e2e/canvas.spec.ts"
+      ],
+      "scope_read": [
+        "apps/web/ARCHITECTURE.md",
+        "packages/ui-kit/src/index.ts",
+        "services/sync/src/index.ts",
+        "contracts/state/README.md",
+        "docs/design-rules.md"
+      ],
+      "acceptance": [
+        "A1",
+        "A2",
+        "A3",
+        "A4",
+        "A5"
+      ],
+      "gates": [
+        "types",
+        "tests",
+        "e2e",
+        "smoke",
+        "boundaries"
+      ],
+      "exclusive": [
+        "e2e"
+      ],
+      "resources": [
+        "ports"
+      ],
+      "owner": null,
+      "branch": null,
+      "worktree": null,
+      "round": 0,
+      "evidence": []
+    },
+    {
+      "id": "REL-01",
+      "title": "Release readiness and environments",
+      "goal": "Every environment has a smoke URL and a passing smoke check, and the release check passes on a tagged main.",
+      "why": "Closes D5; the release routine is reused for every later tag.",
+      "satisfies": [
+        "D5"
+      ],
+      "status": "pending",
+      "depends_on": [
+        "WEB-02",
+        "ENG-02",
+        "API-01"
+      ],
+      "complexity": 3,
+      "stage": "web",
+      "parallel_group": null,
+      "scope_write": [
+        "docs/releasing.md",
+        "docs/environments.md",
+        "CHANGELOG.md"
+      ],
+      "scope_read": [
+        "docs/quality.md",
+        "docs/environments.md",
+        "docs/releasing.md"
+      ],
+      "acceptance": [
+        "A1",
+        "A2",
+        "A3"
+      ],
+      "gates": [
+        "release",
+        "smoke"
+      ],
+      "resources": [
+        "ports"
+      ],
+      "owner": null,
+      "branch": null,
+      "worktree": null,
+      "round": 0,
+      "evidence": []
+    }
+  ],
+  "decisions": [
+    {
+      "date": "2026-10-17",
+      "id": "ADR-0001",
+      "title": "Monorepo with four workspace packages",
+      "file": "docs/adr/ADR-0001-monorepo.md"
+    },
+    {
+      "date": "2026-10-17",
+      "id": "ADR-0002",
+      "title": "The state contract is JSON Schema 2020-12",
+      "file": "docs/adr/ADR-0002-state-contract.md"
+    }
+  ],
+  "open_questions": [
+    {
+      "id": "Q1",
+      "question": "Does the 1.0 release need offline editing before the engine spike ends?",
+      "blocks": [
+        "WEB-02"
+      ],
+      "status": "open"
+    }
+  ]
+}

@@ -1,0 +1,4 @@
+$ python3 tools/layout_check.py
+[exit 0]
+
+OK: canvas-mini: 4 package(s), 1 contract(s) agree with board.json

@@ -1,0 +1,12 @@
+{
+  "name": "@canvas/engine",
+  "version": "0.1.0",
+  "private": true,
+  "description": "C++17 scene core of canvas-mini, compiled to WebAssembly",
+  "main": "build-wasm/canvas_engine_wasm.js",
+  "types": "types/index.d.ts",
+  "files": [
+    "build-wasm",
+    "types"
+  ]
+}

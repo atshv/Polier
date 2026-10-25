@@ -1,0 +1,4 @@
+$ python3 tools/contract_check.py
+[exit 0]
+
+OK: canvas-mini: 1 contract(s), 2 fixture check(s) agree with the schema
