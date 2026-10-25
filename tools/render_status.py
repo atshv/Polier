@@ -9,7 +9,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from core.board import ready_tasks, stage_report  # noqa: E402
 
 ICONS = {
     "done": "[x]",
@@ -28,27 +33,35 @@ def _stage_key(stage) -> str:
     return f"stage:{stage}" if isinstance(stage, int) else f"id:{stage}"
 
 
-def _render_stages(board: dict, tasks: list, stages: list) -> list:
-    """Per declared stage: title, tasks, exit criteria, exit gates, owner decision."""
-    if not stages:
+def _render_stages(board: dict, tasks: list, root=None) -> list:
+    """Per declared stage: state, owner decision, exit gates, exit criteria, tasks."""
+    report = stage_report(board, root)
+    if not report:
         return []
     lines = ["## Stages", ""]
-    for index, stage in enumerate(stages, 1):
-        sid = stage.get("id", f"S{index}")
-        title = stage.get("title", "")
-        decision = stage.get("owner_decision", "pending")
-        members = [t.get("id") for t in tasks if _stage_key(t.get("stage")) == _stage_key(sid)]
-        lines.append(f"### Stage {index} — `{sid}` {title}".rstrip())
+    for stage in report:
+        lines.append(f"### Stage {stage['index']} — `{stage['id']}` {stage['title']}".rstrip())
         lines.append("")
-        lines.append(f"- Owner decision: `{decision}`")
-        if members:
-            lines.append(f"- Tasks: {', '.join(str(m) for m in members)}")
-        criteria = [c for c in stage.get("exit_criteria", []) if isinstance(c, str)]
-        if criteria:
-            lines.append("- Exit criteria: " + "; ".join(criteria))
-        gates = [g for g in stage.get("exit_gates", []) if isinstance(g, str)]
-        if gates:
-            lines.append("- Exit gates: " + ", ".join(f"`{g}`" for g in gates))
+        if stage["stopped"]:
+            state = "stopped by the owner"
+        elif stage["owner_pending"]:
+            state = "waiting for the owner decision"
+        elif stage["missing_gates"]:
+            state = "exit gates missing: " + ", ".join(stage["missing_gates"])
+        elif stage["incomplete_deps"]:
+            state = "blocked by stage " + ", ".join(stage["incomplete_deps"])
+        else:
+            state = "complete"
+        lines.append(f"- State: {state}")
+        lines.append(f"- Owner decision: `{stage['owner_decision']}`")
+        if stage["exit_gates"]:
+            shown = [f"`{g}`" + (" (missing record)" if g in stage["missing_gates"] else "")
+                     for g in stage["exit_gates"]]
+            lines.append("- Exit gates: " + ", ".join(shown))
+        if stage["exit_criteria"]:
+            lines.append("- Exit criteria: " + "; ".join(stage["exit_criteria"]))
+        if stage["tasks"]:
+            lines.append("- Tasks: " + ", ".join(str(t) for t in stage["tasks"]))
         lines.append("")
     return lines
 
@@ -88,7 +101,7 @@ def _render_runtime(board: dict) -> list:
 
 
 
-def render(board: dict) -> str:
+def render(board: dict, root=None) -> str:
     tasks = board.get("tasks", [])
     stages = [s for s in board.get("stages", []) if isinstance(s, dict)] \
         if isinstance(board.get("stages"), list) else []
@@ -113,23 +126,18 @@ def render(board: dict) -> str:
         "",
     ]
 
-    lines += _render_stages(board, tasks, stages)
+    lines += _render_stages(board, tasks, root)
     lines += _render_packages(board)
     lines += _render_runtime(board)
 
-    # Ready now: pending tasks whose dependencies are all done
-    done = {t.get("id") for t in tasks if t.get("status") == "done"}
-    ready = [t for t in tasks
-             if t.get("status") == "pending" and set(t.get("depends_on", [])) <= done]
+    # Ready now: pending tasks whose dependencies are done and blocking stages complete
+    ready = ready_tasks(board, root)
     lines += ["## Ready now", ""]
     if ready:
-        by_id = {t.get("id"): t for t in tasks}
         for task in ready:
-            lines.append(f"- `{task.get('id')}` {task.get('title', '')}")
-            # Handoff notes of the tasks this one depends on, so a fresh session needs no old transcript
-            for dep in task.get("depends_on", []):
-                for note in by_id.get(dep, {}).get("handoff", []):
-                    lines.append(f"  - from `{dep}`: {note}")
+            lines.append(f"- `{task['id']}` {task.get('title', '')}")
+            for note in task.get("handoff", []):
+                lines.append(f"  - {note}")
     else:
         lines.append("- none")
     lines.append("")
@@ -192,7 +200,7 @@ def main() -> int:
 
     root = Path(args.project).resolve()
     board = json.loads((root / "board.json").read_text(encoding="utf-8"))
-    text = render(board)
+    text = render(board, root)
     (root / args.out).write_text(text, encoding="utf-8")
     print(f"STATUS written: {root / args.out}")
     return 0

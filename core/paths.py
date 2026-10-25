@@ -4,6 +4,11 @@ from __future__ import annotations
 import os
 import posixpath
 import re
+import subprocess
+from pathlib import Path
+from typing import Optional
+
+from .errors import PolierError
 
 _DRIVE = re.compile(r"^[A-Za-z]:/")
 
@@ -47,3 +52,46 @@ def relative(root, target) -> str:
     except ValueError:  # another drive on Windows
         return normalized(target)
     return normalized(rel.replace(os.sep, "/"))
+
+
+# ---------------------------------------------------------------------------
+# git locations shared by all worktrees of a project (PL-02, PL-03, PL-04)
+# ---------------------------------------------------------------------------
+
+def _git(root, *args: str) -> Optional[str]:
+    """stdout of a git command, or None when git is missing or the call fails."""
+    try:
+        result = subprocess.run(["git", "-C", str(root), *args],
+                                capture_output=True, text=True, check=False)
+    except FileNotFoundError:
+        return None
+    return result.stdout.strip() if result.returncode == 0 else None
+
+
+def git_common_dir(root) -> Path:
+    """The .git folder shared by every worktree of the repo (`<repo>/.git`).
+
+    Raises PolierError when `root` is not inside a git repository.
+    """
+    value = _git(root, "rev-parse", "--git-common-dir")
+    if not value:
+        raise PolierError(f"not a git repository: {root}")
+    path = Path(value)
+    if not path.is_absolute():
+        top = _git(root, "rev-parse", "--show-toplevel")
+        path = (Path(top) if top else Path(root)) / path
+    return path.resolve()
+
+
+def main_checkout(root) -> Path:
+    """The main working tree of the repo (slot 0), also from inside a linked worktree."""
+    return git_common_dir(root).parent
+
+
+def is_main_checkout(root) -> bool:
+    """True when `root` is the main working tree; False in a linked worktree or outside git."""
+    try:
+        top = _git(root, "rev-parse", "--show-toplevel")
+        return bool(top) and Path(top).resolve() == main_checkout(root)
+    except PolierError:
+        return False

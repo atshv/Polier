@@ -158,25 +158,6 @@ def active_tasks(board: Optional[dict], root=None, cwd=None, pinned: Optional[st
     return running, "single" if len(running) == 1 else "several"
 
 
-def ready_tasks(board: Optional[dict]) -> List[dict]:
-    """Pending tasks whose dependencies are all done, with their dependencies' handoff notes."""
-    tasks = tasks_of(board)
-    done = {t.get("id") for t in tasks if t.get("status") == "done"}
-    by_id = {t.get("id"): t for t in tasks}
-    out = []
-    for task in tasks:
-        deps = task.get("depends_on") or []
-        if task.get("status") != "pending" or not all(d in done for d in deps):
-            continue
-        out.append({
-            "id": task.get("id"),
-            "title": task.get("title"),
-            "brief": f"tasks/{task.get('id')}.md",
-            "handoff": [f"{d}: {h}" for d in deps for h in (by_id.get(d, {}).get("handoff") or [])],
-        })
-    return out
-
-
 # ---------------------------------------------------------------------------
 # schema 1.0 helpers
 # ---------------------------------------------------------------------------
@@ -577,3 +558,139 @@ def board_errors(board) -> List[str]:
     for task in tasks:
         _check_task(task, version, known_ids, errors, set(stage_id_list), set(package_list))
     return errors
+
+
+# ---------------------------------------------------------------------------
+# stages (PL-08): a task is ready only when the stages it depends on are done
+# ---------------------------------------------------------------------------
+
+BAD_GATE_RESULTS = {"infra", "busy", "timeout"}
+
+
+def _passing_gates(root) -> set:
+    """Gate names with a passing record in <root>/reviews/evidence."""
+    folder = Path(root) / "reviews" / "evidence"
+    passed: set = set()
+    if not folder.is_dir():
+        return passed
+    for path in sorted(folder.glob("*.json")):
+        try:
+            record = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if not isinstance(record, dict) or record.get("exit_code") != 0:
+            continue
+        if record.get("result") in BAD_GATE_RESULTS:
+            continue
+        gate = record.get("gate")
+        if isinstance(gate, str):
+            passed.add(gate)
+    return passed
+
+
+def _board_gate_satisfied(stage_tasks: List[dict], gate: str) -> bool:
+    """Approximation without the file system: a done task of the stage lists evidence for the gate."""
+    for task in stage_tasks:
+        if task.get("status") != "done" or gate not in (task.get("gates") or []):
+            continue
+        if task.get("evidence"):
+            return True
+    return False
+
+
+def task_stage_id(board: Optional[dict], task: dict) -> Optional[str]:
+    """The stages[].id a task belongs to; an integer stage counts from 1."""
+    ids = stage_ids(board)
+    if not ids:
+        return None
+    value = (task or {}).get("stage")
+    if isinstance(value, str):
+        return value if value in ids else None
+    if isinstance(value, int) and not isinstance(value, bool) and 1 <= value <= len(ids):
+        return ids[value - 1]
+    return None
+
+
+def stage_report(board: Optional[dict], root=None) -> List[dict]:
+    """One entry per declared stage: exit state, missing gate records, owner decision.
+
+    A stage is complete when every stage it depends on is complete, its
+    `owner_decision` is not "pending", and every `exit_gates` name has a
+    passing gate record. With `root` the records in reviews/evidence/ are
+    verified; without it, a done task of the stage listing evidence for the
+    gate is accepted (the guard and the JS mirror work without a file scan).
+    """
+    board = board or {}
+    stages = [s for s in board.get("stages") or [] if isinstance(s, dict)]
+    if not stages:
+        return []
+    passing = _passing_gates(root) if root is not None else None
+    report: Dict[str, dict] = {}
+    for index, stage in enumerate(stages, 1):
+        sid = stage.get("id")
+        if not isinstance(sid, str):
+            continue
+        members = [t for t in tasks_of(board) if task_stage_id(board, t) == sid]
+        gates = [g for g in stage.get("exit_gates") or [] if isinstance(g, str)]
+        if passing is not None:
+            missing = [g for g in gates if g not in passing]
+        else:
+            missing = [g for g in gates if not _board_gate_satisfied(members, g)]
+        decision = stage.get("owner_decision", "continue")
+        depends_on = [d for d in stage.get("depends_on") or [] if isinstance(d, str)]
+        report[sid] = {
+            "id": sid,
+            "index": index,
+            "title": stage.get("title", ""),
+            "goal": stage.get("goal", ""),
+            "owner_decision": decision,
+            "owner_pending": decision == "pending",
+            "stopped": decision == "stop",
+            "exit_criteria": [c for c in stage.get("exit_criteria") or [] if isinstance(c, str)],
+            "exit_gates": gates,
+            "missing_gates": missing,
+            "depends_on": depends_on,
+            "tasks": [t.get("id") for t in members],
+            "incomplete_deps": [],
+            "complete": False,
+        }
+
+    def complete(sid: str, seen: set) -> bool:
+        entry = report.get(sid)
+        if entry is None or sid in seen:
+            return False
+        blocked = [d for d in entry["depends_on"] if not complete(d, seen | {sid})]
+        entry["incomplete_deps"] = blocked
+        entry["complete"] = (not entry["stopped"] and not entry["owner_pending"]
+                             and not entry["missing_gates"] and not blocked)
+        return entry["complete"]
+
+    for sid in report:
+        complete(sid, set())
+    return list(report.values())
+
+
+def ready_tasks(board: Optional[dict], root=None) -> List[dict]:
+    """Pending tasks whose dependencies are all done and whose blocking stages are complete,
+    with their dependencies' handoff notes."""
+    tasks = tasks_of(board)
+    done = {t.get("id") for t in tasks if t.get("status") == "done"}
+    by_id = {t.get("id"): t for t in tasks}
+    report = {entry["id"]: entry for entry in stage_report(board, root)}
+    out = []
+    for task in tasks:
+        deps = task.get("depends_on") or []
+        if task.get("status") != "pending" or not all(d in done for d in deps):
+            continue
+        sid = task_stage_id(board, task)
+        if sid and sid in report:
+            stage = report[sid]
+            if stage["stopped"] or stage["incomplete_deps"]:
+                continue
+        out.append({
+            "id": task.get("id"),
+            "title": task.get("title"),
+            "brief": f"tasks/{task.get('id')}.md",
+            "handoff": [f"{d}: {h}" for d in deps for h in (by_id.get(d, {}).get("handoff") or [])],
+        })
+    return out

@@ -19,7 +19,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from core.board import board_errors  # noqa: E402
+from core.board import board_errors, stage_report, task_stage_id  # noqa: E402
 from core.evidence import verify_evidence  # noqa: E402
 
 REQUIRED = [
@@ -40,8 +40,18 @@ STATUS = {
 QUESTION_STATUS = {"open", "answered", "dropped"}
 
 
+# Word budgets per profile (PL-09). A board may override one with a reason.
+BUDGETS = {
+    "S": {"architecture": 600, "agents": 300, "status": 300, "brief": 800,
+          "package_architecture": 400, "package_agents": 200},
+    "M": {"architecture": 700, "agents": 350, "status": 500, "brief": 800,
+          "package_architecture": 400, "package_agents": 200},
+    "L": {"architecture": 800, "agents": 400, "status": 900, "brief": 900,
+          "package_architecture": 400, "package_agents": 200},
+}
+BUDGET_MINIMUM = {"architecture": 300, "brief": 400}
+
 # Context budgets. Tokens are estimated as characters / 4, a rough rule of thumb.
-STATUS_WORD_LIMIT = 300          # STATUS.md is read in every session
 PACK_TOKEN_WARN = 15000          # context pack of one task; the worker budget of 30k input also holds prompt, tools and conversation
 HANDOFF_MAX_LINES = 3
 HANDOFF_MAX_CHARS = 200
@@ -69,6 +79,136 @@ def estimate_tokens(path: Path) -> int:
 
 def normalized(path: str) -> str:
     return path.strip().replace("\\", "/").rstrip("/")
+
+
+def under(path: str, folder: str) -> bool:
+    """True when `path` is `folder` or lies below it."""
+    path, folder = normalized(path), normalized(folder)
+    return path == folder or path.startswith(folder + "/")
+
+
+def budget_limits(board: dict) -> tuple[dict, list[str]]:
+    """Word budgets of the project profile, with the board's reasoned overrides."""
+    profile = board.get("profile") if board.get("profile") in BUDGETS else "S"
+    limits = dict(BUDGETS[profile])
+    overrides: list[str] = []
+    raw = board.get("budgets")
+    if isinstance(raw, dict):
+        for key, value in raw.items():
+            if key in limits and isinstance(value, dict) and isinstance(value.get("limit"), int):
+                limits[key] = value["limit"]
+                overrides.append(
+                    f"budgets.{key} overridden to {value['limit']} words "
+                    f"(reason: {value.get('reason', '')})")
+    return limits, overrides
+
+
+def check_packages(root: Path, board: dict, errors: list[str], warnings: list[str]) -> None:
+    """Per-package layout (PL-06): folders exist, task scopes stay inside their package."""
+    packages = board.get("packages") if isinstance(board.get("packages"), list) else []
+    profile = board.get("profile")
+    if profile == "L" and not packages:
+        errors.append("board.json: profile L needs packages[] (the package map) — see templates/monorepo-layout.md")
+        return
+    tasks = [t for t in board.get("tasks", []) if isinstance(t, dict)]
+    contracts = [c for c in board.get("contracts", []) if isinstance(c, dict)] \
+        if isinstance(board.get("contracts"), list) else []
+    contract_paths = [c.get("path") for c in contracts if isinstance(c.get("path"), str)]
+    limits, _overrides = budget_limits(board)
+
+    module_map = root / "docs/module-map.md"
+    module_text = module_map.read_text(encoding="utf-8") if module_map.exists() else ""
+
+    for package in packages:
+        if not isinstance(package, dict):
+            continue
+        path = package.get("path")
+        if not isinstance(path, str) or not path:
+            continue
+        folder = root / normalized(path)
+        creates = any(
+            under(str(scope), path)
+            for task in tasks for scope in task.get("scope_write") or []
+            if isinstance(scope, str))
+        if not folder.exists():
+            if not creates:
+                errors.append(
+                    f"board.json: package folder {path} does not exist and no task creates it in scope_write")
+            continue
+        if profile == "L":
+            arch = folder / "ARCHITECTURE.md"
+            if not arch.exists():
+                errors.append(f"{path}: package ARCHITECTURE.md is missing (purpose, inputs, outputs, invariants)")
+            elif words(arch) > limits["package_architecture"]:
+                errors.append(f"{path}/ARCHITECTURE.md: {words(arch)} words (max. {limits['package_architecture']})")
+            agents = folder / "AGENTS.md"
+            if agents.exists() and words(agents) > limits["package_agents"]:
+                warnings.append(f"{path}/AGENTS.md: {words(agents)} words (target max. {limits['package_agents']})")
+        if module_text and path not in module_text:
+            warnings.append(f"docs/module-map.md: package {path} is not listed in the package map")
+
+    package_paths = {p.get("path") for p in packages if isinstance(p, dict) and isinstance(p.get("path"), str)}
+    for task in tasks:
+        package = task.get("package")
+        if not isinstance(package, str) or package not in package_paths:
+            continue
+        for scope in task.get("scope_write") or []:
+            if not isinstance(scope, str):
+                continue
+            if under(scope, package):
+                continue
+            if any(under(scope, c) for c in contract_paths):
+                continue
+            errors.append(
+                f"{task.get('id')}: scope_write {scope} is outside its package {package} "
+                f"(add the contract path to board.json contracts[] if it is a shared contract)")
+
+
+def check_versions(root: Path, board: dict, warnings: list[str]) -> None:
+    """Profile L: every manifest dependency must be pinned in docs/versions.md (PL-13)."""
+    if board.get("profile") != "L":
+        return
+    versions = root / "docs/versions.md"
+    if not versions.exists():
+        warnings.append("docs/versions.md is missing (profile L: pin every tool and library with source URL and date)")
+        return
+    text = versions.read_text(encoding="utf-8").lower()
+    names: set[str] = set()
+    for manifest in sorted(root.rglob("package.json")):
+        if "node_modules" in manifest.parts:
+            continue
+        try:
+            data = json.loads(manifest.read_text(encoding="utf-8"))
+        except (ValueError, OSError):
+            continue
+        for key in ("dependencies", "devDependencies"):
+            for name in (data.get(key) or {}):
+                names.add(name)
+    for name in sorted(names):
+        if name.lower() not in text:
+            warnings.append(f"docs/versions.md: dependency {name} is in a manifest but not pinned with a source")
+
+
+def check_stages(root: Path, board: dict, errors: list[str], warnings: list[str]) -> None:
+    """Stage exit gates and stop points (PL-08)."""
+    if not isinstance(board.get("stages"), list) or not board.get("stages"):
+        return
+    report = {entry["id"]: entry for entry in stage_report(board, root)}
+    for sid, entry in report.items():
+        if not entry["exit_gates"]:
+            warnings.append(f"stage {sid}: no exit_gates declared — the stage cannot be checked mechanically")
+    for task in board.get("tasks", []):
+        if not isinstance(task, dict) or task.get("status") != "in_progress":
+            continue
+        sid = task_stage_id(board, task)
+        entry = report.get(sid) if sid else None
+        if entry is None:
+            continue
+        if entry["stopped"]:
+            errors.append(f"{task.get('id')}: stage {sid} is stopped by the owner — do not work there")
+        elif entry["incomplete_deps"]:
+            errors.append(
+                f"{task.get('id')}: stage {sid} needs stage(s) {', '.join(entry['incomplete_deps'])} complete first")
 
 
 def paths_overlap(a: str, b: str) -> bool:
@@ -240,7 +380,7 @@ def check_status_fresh(root: Path, board: dict, errors: list[str]) -> None:
         return
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    if status.read_text(encoding="utf-8").strip() != module.render(board).strip():
+    if status.read_text(encoding="utf-8").strip() != module.render(board, root).strip():
         errors.append("STATUS.md is out of date with board.json — run tools/render_status.py")
 
 
@@ -372,27 +512,38 @@ def main() -> int:
         if not (root / name).exists():
             errors.append(f"mandatory file missing: {name}")
 
+    board: dict | None = None
+    if (root / "board.json").exists():
+        try:
+            loaded = json.loads((root / "board.json").read_text(encoding="utf-8"))
+        except ValueError:
+            loaded = None
+        board = loaded if isinstance(loaded, dict) else None
+    limits, overrides = budget_limits(board or {})
+    for line in overrides:
+        warnings.append(line)
+
     if (root / "ARCHITECTURE.md").exists():
         count = words(root / "ARCHITECTURE.md")
-        if count > 800:
-            errors.append(f"ARCHITECTURE.md: {count} words (max. 800)")
-        elif count < 300:
+        if count > limits["architecture"]:
+            errors.append(f"ARCHITECTURE.md: {count} words (max. {limits['architecture']} for profile {(board or {}).get('profile', 'S')})")
+        elif count < BUDGET_MINIMUM["architecture"]:
             warnings.append(f"ARCHITECTURE.md: only {count} words — fine for a small project, otherwise check.")
 
     if (root / "AGENTS.md").exists():
         count = words(root / "AGENTS.md")
-        if count > 400:
-            warnings.append(f"AGENTS.md: {count} words (target max. 400)")
+        if count > limits["agents"]:
+            warnings.append(f"AGENTS.md: {count} words (target max. {limits['agents']})")
 
     if (root / "STATUS.md").exists():
         count = words(root / "STATUS.md")
-        if count > STATUS_WORD_LIMIT:
-            warnings.append(f"STATUS.md: {count} words (target max. {STATUS_WORD_LIMIT}); it is read in every session")
+        if count > limits["status"]:
+            warnings.append(f"STATUS.md: {count} words (target max. {limits['status']}); it is read in every session")
 
     for brief in sorted((root / "tasks").glob("*.md")):
         count = words(brief)
-        if not 400 <= count <= 800:
-            errors.append(f"{brief.relative_to(root)}: {count} words (target 400–800)")
+        if count > limits["brief"] or count < BUDGET_MINIMUM["brief"]:
+            errors.append(f"{brief.relative_to(root)}: {count} words (target {BUDGET_MINIMUM['brief']}–{limits['brief']})")
 
     for path in [root / "ARCHITECTURE.md", root / "AGENTS.md", root / "STATUS.md",
                  *sorted((root / "tasks").glob("*.md"))]:
@@ -414,15 +565,14 @@ def main() -> int:
 
     if (root / "board.json").exists():
         check_board(root, errors, warnings)
-        try:
-            board = json.loads((root / "board.json").read_text(encoding="utf-8"))
-        except ValueError:
-            board = None
-        if isinstance(board, dict):
+        if board is not None:
             check_consistency(root, board, errors, warnings)
             check_context_packs(root, board, warnings)
             check_evidence(root, board, errors, warnings)
             check_version(board, warnings)
+            check_stages(root, board, errors, warnings)
+            check_packages(root, board, errors, warnings)
+            check_versions(root, board, warnings)
             check_status_fresh(root, board, errors)
 
     check_links(root, errors)
