@@ -2,6 +2,45 @@
 
 Each release lists what a running project must do to adopt it. Update between stages, never during a task (see `guide/cheatsheet.md`). The current version is in `VERSION`; projects record theirs in `board.json` → `generator_version`.
 
+## 1.0.0
+
+**Parallel projects and monorepos.** 0.9 planned and guarded one project with one active writer well. Running a real project with two harnesses in parallel and planning a monorepo exposed gaps that file-scope guarding cannot catch: shared ports and test databases, gate runs that fail because another session holds a port, snapshots that look like flaky tests, releases from a working folder, missing environment variables, and no common record of who works on what.
+
+**Board 1.0.** `board.json` gets `"schema_version": "1.0"` (opt-in; a 0.9 board omits it and stays valid). Validation is strict per version: a 1.0 field on a 0.9 board is an error that says to set the version, unknown fields are errors.
+- Task IDs widen from `M03` to also `P3-02`, `ENG-14`; new optional task fields `package`, `exclusive`, `resources`, `claim` (tooling only), `contract_followups`.
+- New board fields: `stages` (exit criteria, exit gates, owner decision, dependencies), `packages` (path, kind, `may_import`), `resources` (slots, port formula, service offsets, `infra_patterns`), `budgets`, `worktrees`, `contracts`.
+- `stage` on a task may reference `stages[].id`. `render_status.py` shows per stage: state, exit gates, missing records, owner decision; plus packages and the runtime slot formula. Later-stage tasks are not "ready" while a blocking stage is incomplete, and `check.py` rejects `in_progress` work there.
+
+**Runtime slots and exclusive gates.** Two worktrees can run servers and tests at the same time.
+- New `tools/slot.py acquire | release | show | list` and `core/slots.py`: slot 0 is the owner's main checkout, worktrees get the lowest free slot, `.polier-slot` holds ports (`port_base + port_stride·N + service offset`), database name and bucket; registered in `<git-common-dir>/polier/slots.json`.
+- `tools/gate.py --exclusive <resource>` (and automatically for a task's `exclusive`) locks the resource in `<git-common-dir>/polier/locks/`; `--lock-wait`/`--lock-ttl`, exit 75 and `result: busy` when it stays held. `pl_gate` honours the same lock.
+- Records gain `slot`, `exclusive`, `lock_wait_s`, `result` (`pass | fail | timeout | busy | infra`) and a stale-lock warning. Infrastructure patterns (`ECONNREFUSED`, `EADDRINUSE`, project patterns) are recorded as `infra`; `check.py` rejects `infra`/`busy`/`timeout` records as evidence and says "infrastructure failure, rerun alone" instead of "gate failed".
+
+**Claims and worktrees.** One live session per task, across harnesses.
+- New `tools/claim.py take | release | beat | list` and `core/claims.py`: claims in `<git-common-dir>/polier/claims/<task>.json`, live while the heartbeat is younger than 10 minutes. `board.json` is never written by claims. DSH `/pl task` claims and refreshes the heartbeat at most once a minute; `pl_status` lists live claims. Claude Code takes/refreshes the claim when `POLIER_TASK` is set and denies a write while another live session holds the task.
+- New `tools/worktree.py start | finish` and `core/scope.py` worktree rule: `worktrees: required` (default at M/L on a 1.0 board; a 0.9 board stays `recommended`) denies a worker write in the main checkout while its task has a worktree ("work in <worktree path>"). `start` creates branch, slot and claim in one step; `finish` refuses uncommitted changes.
+- The stop check reports changed files inside another live claim's scope as "foreign changes (task X, harness Y)" instead of blaming the current task. They never block.
+
+**Profile L: monorepo.** Several deployable parts or packages with their own builds, integrated through contracts; L requires `packages`.
+- New templates `monorepo-layout.md`, `package-ARCHITECTURE.md`, `package-AGENTS.md`, `contract.md`, `releasing.md`, `environments.md`, `versions.md`, `design-rules.md` and `gates/*.md` (Node/TS, Python, C++/CMake, WASM/Emscripten, Postgres, Playwright, visual diff, load).
+- Root `ARCHITECTURE.md` states the system shape; each package gets `ARCHITECTURE.md` (≤ 400 words) and optional `AGENTS.md` (≤ 200); `docs/module-map.md` becomes the package map; briefs list root files plus the package's own files; package files only for packages created in the current stage.
+- `check.py` checks package folders, package files, task scopes inside their package (contract paths excepted), a missing or unpinned `docs/versions.md`, and an environment without a smoke URL.
+- New `tools/boundaries.py`: import boundaries from `packages[].may_import`, TS/JS/Python/C++ imports, `tsconfig` path aliases; exit 0/1/2; offered as gate `boundaries`.
+- New `tools/contracts.py check | list`: JSON Schema 2020-12 contracts with valid/invalid fixtures, SemVer rules (major for a removed or renamed field), dependants and `contract_followups`.
+- Profile-dependent budgets replace ad-hoc overrides: architecture 600/700/800, AGENTS 300/350/400, STATUS 300/500/900, briefs 800/800/900, package files 400/200. A board override needs a `reason`.
+
+**Release and smoke.** `templates/releasing.md` and `templates/environments.md` describe trunk-based flow, tags, CI-only release, rollback and the environment × variable checklist (names only). New `tools/release_check.py` (dirty tree, untagged HEAD, tag not on the base branch, released-stage tasks not done; `--allow-untagged` for previews) as gate `release-clean`, and `tools/smoke.py` (URL status paths, headers only as `--header "Name: env:VARIABLE"`, recorded via `gate.py`). Generated `AGENTS.md` says: agents never publish; releases run in CI from tags.
+
+**UI briefs.** `templates/task-brief.md` has an optional "UI specification" section: target values in px/ms/tokens, all applicable states, "do not", screenshot evidence. `templates/design-rules.md` is the binding token/state/accessibility reference. The rubric has a 13th criterion: a UI task without target values fails.
+
+**Drift detection.** `tools/manifest.json` lists the SHA-256 of every shipped file; `tools/drift.py` compares the project-local copy (`.generator/`) with it and `update.sh` prints the drift report (the files that differ) before updating. `check.py` warns "local edits or outdated copy" and names the files. Extra files next to the copy are ignored.
+
+**Guard extras.** `kill`, `pkill`, `killall` and `xargs kill` in a worker command get a warning (Claude Code: `ask`; DSH: one message per turn) — never a denial. Guarded paths compare case-insensitively on macOS and Windows, where the file system does.
+
+**Compatibility.** No field removed; a valid 0.9 board still validates and `check.py` reports the version difference as a migration warning. Validation is now strict per schema version, so unknown fields are errors — a board with invented fields drops them or moves them anywhere outside `board.json`. `drift.py`, `slot.py`, `claim.py`, `worktree.py`, `boundaries.py`, `contracts.py`, `release_check.py`, `smoke.py` and `manifest.py` are additive. The core gains `core/slots.py`, `core/locks.py`, `core/claims.py` and `core/boundaries.py`; the DSH guard mirror in `adapters/dsh/lib/project.mjs` gains the worktree rule, case-insensitive comparison and kill detection, tested against `core/tests/write_cases.json`.
+
+**Migration:** S and M projects need nothing. To adopt the new features: add `resources` to the board, `.polier-slot` to `.gitignore` and a `tools/dev/setup` that reads `.polier-slot`; add `"exclusive": ["e2e"]` (or `db`, `load`) to tasks whose gates share a resource; at M/L a 1.0 board defaults `worktrees` to `required`, while a 0.9 board stays on `recommended`, so an existing project is unchanged until the owner sets `required` after migrating. L projects: set `"schema_version": "1.0"`, add `packages[]` (with `may_import`), `stages[]` and `resources`, move to one package per folder with `ARCHITECTURE.md` and optional `AGENTS.md`, declare `contracts[]` with schemas and fixtures, and use `worktrees: required`. Plugin users: `git pull` in the clone, run `dsh plugin --profile <name> add ./polier` again and restart; one update is needed to get `tools/manifest.json` for drift detection. Claude Code users: replace the package copy (`./install.sh claude` or `./update.sh claude`); the hook entries stay the same, set `POLIER_TASK` so the hook claims the task (a second live claim now denies writes), and expect `ask` on process-killing commands and foreign changes in the stop message. Skill-only users: `./update.sh`; reinstall once for the manifest. Projects still on 0.9: `check.py` under 1.0 passes or prints only migration warnings (generator version, missing manifest), and schema errors only appear when a 1.0 field is used without `schema_version`.
+
 ## 0.9.0
 
 **Core split from the harness.** The enforcement rules now live in `core/`, a Python package without any DeepSeek Harness code, so later adapters (Claude Code, git hooks) can use the same rules.

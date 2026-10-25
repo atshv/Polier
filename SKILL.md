@@ -11,20 +11,26 @@ description: Plans an AI coding project before any code is written. Interviews t
 
 | Phase | Files |
 |---|---|
-| C | `templates/ARCHITECTURE.md`, `templates/module-map.md` |
-| D | `templates/board.schema.json`, `templates/adr.md` |
-| F | `templates/task-brief.md` |
-| G | `templates/AGENTS.template.md`, `templates/review-feedback.md` |
+| 0.1 | check for `tools/slot.py`, `tools/claim.py`, `tools/worktree.py` and `tools/gate.py` (runtime features available?) |
+| C | `templates/ARCHITECTURE.md`, `templates/module-map.md`; L: `templates/monorepo-layout.md`, `templates/package-ARCHITECTURE.md`, `templates/package-AGENTS.md` |
+| D | `templates/board.schema.json`, `templates/adr.md`, `templates/versions.md`, `templates/gates/<stack>.md`; L: `templates/contract.md` |
+| F | `templates/task-brief.md`; UI: `templates/design-rules.md` |
+| G | `templates/AGENTS.template.md`, `templates/review-feedback.md`, `templates/releasing.md`, `templates/environments.md` |
 | H | `prompt/rubric.md` §3–4 |
-| reference | `examples/minimal-cli/` |
+| reference | `examples/minimal-cli/` (profile S), `examples/monorepo-mini/` (profile L) |
 
 4. Run the tools from this folder against the project:
 
 ```bash
 python3 <skill-folder>/tools/check.py <project>
 python3 <skill-folder>/tools/render_status.py <project>
+# profile L only
+python3 <skill-folder>/tools/boundaries.py <project>
+python3 <skill-folder>/tools/contracts.py check --root <project>
+# projects that deploy
+python3 <skill-folder>/tools/release_check.py <project> --allow-untagged
 ```
 
-When the `pl_check` tool exists (DeepSeek Harness plugin), use it instead of the first command; regenerate `STATUS.md` with the second. In phase G write the real package path into the gate line of `AGENTS.md`, or point to `pl_gate` when the plugin is installed. Before writing the scaffold of a project that already has a task `in_progress`, ask the human to run `/pl lead`.
+When the `pl_check` tool exists (DeepSeek Harness plugin), use it instead of the first command; regenerate `STATUS.md` with the second. In phase G write the real package path into the gate line of `AGENTS.md`, or point to `pl_gate` when the plugin is installed. Write the runtime rules into `AGENTS.md` (ports, database and bucket names only from `.polier-slot`; never hard-code ports; never touch slot 0's data; no `kill`/`pkill`). Before writing the scaffold of a project that already has a task `in_progress`, ask the human to run `/pl lead`.
 
 This package is not part of the project: never copy or commit it there.
