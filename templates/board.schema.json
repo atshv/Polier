@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://example.local/board.schema.json",
   "title": "Project Task Board",
-  "description": "Machine-readable source of truth for tasks, dependencies and write scopes. STATUS.md is generated from it.",
+  "description": "Machine-readable source of truth for tasks, dependencies and write scopes. STATUS.md is generated from it. Schema 1.0 adds stages, packages, resources, budgets, worktrees and contracts; tools/check.py enforces the version rules (a 1.0 field on a board without \"schema_version\": \"1.0\" is an error).",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -55,6 +55,70 @@
       "items": {
         "$ref": "#/$defs/question"
       }
+    },
+    "schema_version": {
+      "enum": [
+        "1.0"
+      ],
+      "description": "Omit for a 0.9 board. '1.0' allows stages, packages, resources, budgets, worktrees, contracts and the extra task fields. tools/check.py rejects 1.0 fields on a board without it."
+    },
+    "worktrees": {
+      "enum": [
+        "required",
+        "recommended",
+        "off"
+      ],
+      "description": "Where task work happens. Default: required for M/L, off for S (PL-05). With 'required' a worker write in the main checkout is denied while its task has a worktree."
+    },
+    "stages": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/stage"
+      },
+      "description": "Stages with exit criteria and an owner decision (PL-08). Task.stage may reference stages[].id instead of using an integer."
+    },
+    "packages": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/package"
+      },
+      "description": "Packages, services, apps and tools of a monorepo (profile L, PL-06); may_import feeds the boundaries gate (PL-07)."
+    },
+    "resources": {
+      "$ref": "#/$defs/resources",
+      "description": "Runtime resources: slots, port formula, service offsets, infra-failure patterns (PL-02, PL-03)."
+    },
+    "budgets": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Overrides of the profile-dependent word budgets (PL-09). Every override needs a reason.",
+      "properties": {
+        "architecture": {
+          "$ref": "#/$defs/budget"
+        },
+        "agents": {
+          "$ref": "#/$defs/budget"
+        },
+        "status": {
+          "$ref": "#/$defs/budget"
+        },
+        "brief": {
+          "$ref": "#/$defs/budget"
+        },
+        "package_architecture": {
+          "$ref": "#/$defs/budget"
+        },
+        "package_agents": {
+          "$ref": "#/$defs/budget"
+        }
+      }
+    },
+    "contracts": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/contract"
+      },
+      "description": "Machine-readable contracts: JSON Schemas, fixtures, versions and dependants (PL-12)."
     }
   },
   "$defs": {
@@ -76,7 +140,8 @@
       "properties": {
         "id": {
           "type": "string",
-          "pattern": "^M[0-9]{2,3}$"
+          "pattern": "^(M[0-9]{2,3}|[A-Z][A-Z0-9]{0,5}-[0-9]{2,3})$",
+          "description": "0.9 boards allow M##/M###; a 1.0 board also allows P3-02, ENG-14 (prefix 1-6 characters, then -NN)."
         },
         "title": {
           "type": "string",
@@ -125,8 +190,17 @@
           "maximum": 10
         },
         "stage": {
-          "type": "integer",
-          "minimum": 1
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 1
+            },
+            {
+              "type": "string",
+              "minLength": 1
+            }
+          ],
+          "description": "Stage number (classic) or a stages[].id (1.0)."
         },
         "parallel_group": {
           "type": [
@@ -207,6 +281,39 @@
             "maxLength": 200
           },
           "description": "Up to 3 short lines for the tasks that depend on this one (decision, pitfall, changed interface). Written when the task is done."
+        },
+        "package": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Folder of the package/service/app this task belongs to; must be one of packages[].path (1.0)."
+        },
+        "exclusive": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true,
+          "description": "Resources this task's gates must hold exclusively, e.g. ['e2e'] (PL-03)."
+        },
+        "resources": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Named runtime resources the gates need, e.g. ['ports', 'db', 'bucket'] (PL-02)."
+        },
+        "claim": {
+          "$ref": "#/$defs/claim",
+          "description": "Live cross-harness claim, written only by tooling (PL-04); never edited by hand."
+        },
+        "contract_followups": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Contract dependants a task does not update itself, approved by the lead (PL-12)."
         }
       }
     },
@@ -267,6 +374,212 @@
         },
         "answer": {
           "type": "string"
+        }
+      }
+    },
+    "stage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "title"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "title": {
+          "type": "string",
+          "minLength": 3
+        },
+        "goal": {
+          "type": "string"
+        },
+        "exit_criteria": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "exit_gates": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "owner_decision": {
+          "enum": [
+            "pending",
+            "continue",
+            "stop"
+          ],
+          "default": "pending"
+        },
+        "depends_on": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        }
+      }
+    },
+    "package": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "kind"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "enum": [
+            "package",
+            "service",
+            "app",
+            "tool",
+            "infra"
+          ]
+        },
+        "may_import": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "resources": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "slots": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 3
+        },
+        "port_base": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 4000
+        },
+        "port_stride": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 100
+        },
+        "services": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "description": "Port offset per service name: port = port_base + port_stride·slot + offset."
+        },
+        "infra_patterns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Output patterns that mark a failed gate as an infrastructure failure, not a test failure (PL-03)."
+        }
+      }
+    },
+    "budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "limit",
+        "reason"
+      ],
+      "properties": {
+        "limit": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 3
+        }
+      }
+    },
+    "claim": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "task": {
+          "type": "string"
+        },
+        "harness": {
+          "enum": [
+            "dsh",
+            "claude-code",
+            "cli"
+          ]
+        },
+        "session": {
+          "type": "string"
+        },
+        "worktree": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "slot": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "started": {
+          "type": "string"
+        },
+        "heartbeat": {
+          "type": "string"
+        }
+      }
+    },
+    "contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "path",
+        "version"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "schema_files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "fixtures_dir": {
+          "type": "string"
+        },
+        "dependants": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       }
     }

@@ -19,6 +19,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from core.board import board_errors  # noqa: E402
 from core.evidence import verify_evidence  # noqa: E402
 
 REQUIRED = [
@@ -37,10 +38,6 @@ STATUS = {
     "rework", "done", "blocked", "failed",
 }
 QUESTION_STATUS = {"open", "answered", "dropped"}
-TASK_FIELDS = (
-    "title", "goal", "status", "depends_on", "complexity",
-    "stage", "scope_write", "acceptance", "gates",
-)
 
 
 # Context budgets. Tokens are estimated as characters / 4, a rough rule of thumb.
@@ -111,63 +108,24 @@ def check_board(root: Path, errors: list[str], warnings: list[str]) -> None:
         errors.append(f"board.json: invalid JSON: {exc}")
         return
 
-    if not board.get("project"):
-        errors.append("board.json: project is missing")
-    if board.get("profile") not in {"S", "M", "L"}:
-        errors.append("board.json: profile must be S, M or L")
-    if not board.get("base_branch"):
-        errors.append("board.json: base_branch is missing")
-    tasks = board.get("tasks")
-    if not isinstance(tasks, list) or not tasks:
-        errors.append("board.json: tasks is missing or empty")
+    # Schema version, allowed fields, ID pattern, stage/package references.
+    schema = board_errors(board)
+    if schema:
+        errors.extend(schema)
         return
 
-    ids = [t.get("id") for t in tasks]
-    if len(ids) != len(set(ids)):
-        errors.append("board.json: duplicate task IDs")
-    known = set(ids)
+    tasks = board["tasks"]
+    known = {t.get("id") for t in tasks}
     needed_by_others = {d for t in tasks for d in t.get("depends_on", []) if isinstance(t, dict)}
 
     for task in tasks:
         tid = task.get("id", "?")
-        handoff = task.get("handoff")
-        if handoff is not None:
-            if not isinstance(handoff, list) or not all(isinstance(h, str) for h in handoff):
-                errors.append(f"{tid}: handoff must be a list of strings")
-            elif len(handoff) > HANDOFF_MAX_LINES:
-                errors.append(f"{tid}: handoff has {len(handoff)} lines (max. {HANDOFF_MAX_LINES})")
-            elif any(len(h) > HANDOFF_MAX_CHARS for h in handoff):
-                errors.append(f"{tid}: handoff line longer than {HANDOFF_MAX_CHARS} characters")
-        elif task.get("status") == "done" and tid in needed_by_others:
+        if task.get("status") == "done" and tid in needed_by_others and not task.get("handoff"):
             warnings.append(f"{tid}: done and other tasks depend on it, but no handoff (max. {HANDOFF_MAX_LINES} lines)")
-        for key in TASK_FIELDS:
-            if key not in task:
-                errors.append(f"{tid}: mandatory field missing: {key}")
-        if task.get("status") not in STATUS:
-            errors.append(f"{tid}: unknown status {task.get('status')!r}")
-
-        complexity = task.get("complexity")
-        if not isinstance(complexity, int) or isinstance(complexity, bool):
-            errors.append(f"{tid}: complexity must be an integer, is {type(complexity).__name__}")
-        elif not 1 <= complexity <= 10:
-            errors.append(f"{tid}: complexity must be 1–10")
-        elif complexity >= 7:
+        if task["complexity"] >= 7:
             errors.append(f"{tid}: complexity >= 7 — split the task")
-
-        for dep in task.get("depends_on", []):
-            if dep not in known:
-                errors.append(f"{tid}: unknown dependency {dep}")
-        if not task.get("scope_write"):
-            errors.append(f"{tid}: scope_write is missing")
-        if not task.get("acceptance"):
-            errors.append(f"{tid}: acceptance is missing")
-        if not task.get("gates"):
-            errors.append(f"{tid}: gates is missing")
         if task.get("status") == "done" and not task.get("evidence"):
             errors.append(f"{tid}: status done without evidence — record the gate output")
-        for key in ("scope_read", "scope_write_forbidden", "satisfies"):
-            if key in task and not isinstance(task[key], list):
-                errors.append(f"{tid}: {key} must be a list")
 
         for allowed in task.get("scope_write", []):
             for forbidden in task.get("scope_write_forbidden", []):
@@ -304,10 +262,10 @@ def check_consistency(root: Path, board: dict, errors: list[str], warnings: list
     tasks = {t.get("id"): t for t in board.get("tasks", []) if isinstance(t, dict)}
 
     # Task briefs must agree with their board entry
-    for brief in sorted((root / "tasks").glob("M*.md")):
+    for brief in sorted((root / "tasks").glob("*.md")):
         rel = brief.relative_to(root)
         text = brief.read_text(encoding="utf-8")
-        heading = re.match(r"#\s+(M\d{2,3}[a-z]?)\s+—\s+(.+)", text)
+        heading = re.match(r"#\s+([A-Za-z][A-Za-z0-9-]*)\s+—\s+(.+)", text)
         if not heading:
             errors.append(f"{rel}: first line must be '# <ID> — <title>'")
             continue
@@ -431,13 +389,13 @@ def main() -> int:
         if count > STATUS_WORD_LIMIT:
             warnings.append(f"STATUS.md: {count} words (target max. {STATUS_WORD_LIMIT}); it is read in every session")
 
-    for brief in sorted((root / "tasks").glob("M*.md")):
+    for brief in sorted((root / "tasks").glob("*.md")):
         count = words(brief)
         if not 400 <= count <= 800:
             errors.append(f"{brief.relative_to(root)}: {count} words (target 400–800)")
 
     for path in [root / "ARCHITECTURE.md", root / "AGENTS.md", root / "STATUS.md",
-                 *sorted((root / "tasks").glob("M*.md"))]:
+                 *sorted((root / "tasks").glob("*.md"))]:
         if path.exists():
             for match in PLACEHOLDER.finditer(path.read_text(encoding="utf-8")):
                 errors.append(f"{path.relative_to(root)}: placeholder found: {match.group(0)}")
