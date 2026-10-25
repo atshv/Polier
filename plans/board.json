@@ -1,0 +1,679 @@
+{
+  "project": "polier",
+  "profile": "M",
+  "base_branch": "main",
+  "generator_version": "1.0.0",
+  "schema_version": "1.0",
+  "stage": 5,
+  "worktrees": "off",
+  "stages": [
+    {
+      "id": "incident-fixes",
+      "title": "Stage 1 \u2014 incident fixes",
+      "goal": "The four incidents of the Calm Canvas run cannot happen again.",
+      "exit_criteria": [
+        "slots, exclusive gates, claims and worktree enforcement tested",
+        "0.9 projects unchanged"
+      ],
+      "depends_on": [],
+      "owner_decision": "continue"
+    },
+    {
+      "id": "scale-to-l",
+      "title": "Stage 2 \u2014 scale to L",
+      "goal": "Monorepos with packages, services and apps are planned, scaffolded and checked.",
+      "exit_criteria": [
+        "examples/monorepo-mini passes check.py",
+        "boundaries gate available"
+      ],
+      "depends_on": [
+        "incident-fixes"
+      ],
+      "owner_decision": "continue"
+    },
+    {
+      "id": "release-contracts",
+      "title": "Stage 3 \u2014 release and contracts",
+      "goal": "Deployments are gated and interfaces are versioned.",
+      "exit_criteria": [
+        "release_check.py + smoke.py + contracts.py tested"
+      ],
+      "depends_on": [
+        "incident-fixes"
+      ],
+      "owner_decision": "continue"
+    },
+    {
+      "id": "brief-quality",
+      "title": "Stage 4 \u2014 quality of briefs",
+      "goal": "Gates, UI briefs and drift detection cover the real stacks.",
+      "exit_criteria": [
+        "gate catalogue and templates complete"
+      ],
+      "depends_on": [
+        "scale-to-l"
+      ],
+      "owner_decision": "continue"
+    },
+    {
+      "id": "ship-1-0",
+      "title": "Stage 5 \u2014 ship 1.0",
+      "goal": "1.0.0 is released with a migration guide.",
+      "exit_criteria": [
+        "VERSION, CHANGELOG and both examples green in CI"
+      ],
+      "depends_on": [
+        "scale-to-l",
+        "release-contracts",
+        "brief-quality"
+      ],
+      "owner_decision": "continue"
+    }
+  ],
+  "tasks": [
+    {
+      "id": "PL-01",
+      "title": "Board schema 1.0",
+      "goal": "board.json describes stages, packages, resources and claims; 0.9 boards stay valid.",
+      "status": "done",
+      "depends_on": [],
+      "complexity": 5,
+      "stage": "incident-fixes",
+      "scope_write": [
+        "core/board.py",
+        "tools/check.py",
+        "tools/render_status.py",
+        "templates/board.schema.json",
+        "core/tests/test_board.py"
+      ],
+      "acceptance": [
+        "A1",
+        "A2",
+        "A3",
+        "A4"
+      ],
+      "gates": [
+        "npm-test",
+        "check-examples",
+        "task-tests"
+      ],
+      "evidence": [
+        "npm test: exit 0",
+        "check.py examples/minimal-cli + examples/monorepo-mini: exit 0"
+      ],
+      "branch": "task/PL-01",
+      "worktree": null,
+      "round": 0
+    },
+    {
+      "id": "PL-02",
+      "title": "Runtime slots per worktree",
+      "goal": "Two worktrees run servers and tests without port or database collisions.",
+      "status": "done",
+      "depends_on": [
+        "PL-01"
+      ],
+      "complexity": 5,
+      "stage": "incident-fixes",
+      "scope_write": [
+        "core/slots.py",
+        "tools/slot.py",
+        "core/tests/test_slots.py"
+      ],
+      "acceptance": [
+        "A1",
+        "A2",
+        "A3",
+        "A4"
+      ],
+      "gates": [
+        "npm-test",
+        "check-examples",
+        "task-tests"
+      ],
+      "evidence": [
+        "npm test: exit 0",
+        "check.py examples/minimal-cli + examples/monorepo-mini: exit 0"
+      ],
+      "branch": "task/PL-02",
+      "worktree": null,
+      "round": 0
+    },
+    {
+      "id": "PL-03",
+      "title": "Exclusive gates and infra failures",
+      "goal": "Gates that share a resource never run at the same time; infra failures are not test failures.",
+      "status": "done",
+      "depends_on": [
+        "PL-01",
+        "PL-02"
+      ],
+      "complexity": 6,
+      "stage": "incident-fixes",
+      "scope_write": [
+        "core/locks.py",
+        "core/gate.py",
+        "core/evidence.py",
+        "tools/gate.py",
+        "core/tests/test_locks.py",
+        "core/tests/test_gate.py"
+      ],
+      "acceptance": [
+        "A1",
+        "A2",
+        "A3",
+        "A4"
+      ],
+      "gates": [
+        "npm-test",
+        "check-examples",
+        "task-tests"
+      ],
+      "evidence": [
+        "npm test: exit 0",
+        "check.py examples/minimal-cli + examples/monorepo-mini: exit 0"
+      ],
+      "branch": "task/PL-03",
+      "worktree": null,
+      "round": 0
+    },
+    {
+      "id": "PL-04",
+      "title": "Cross-harness task claims",
+      "goal": "Any session sees who works on which task; two sessions cannot claim one task.",
+      "status": "done",
+      "depends_on": [
+        "PL-01"
+      ],
+      "complexity": 5,
+      "stage": "incident-fixes",
+      "scope_write": [
+        "core/claims.py",
+        "tools/claim.py",
+        "core/tests/test_claims.py",
+        "adapters/dsh/index.mjs",
+        "adapters/claude-code/hook.py"
+      ],
+      "acceptance": [
+        "A1",
+        "A2",
+        "A3"
+      ],
+      "gates": [
+        "npm-test",
+        "check-examples",
+        "task-tests"
+      ],
+      "evidence": [
+        "npm test: exit 0",
+        "check.py examples/minimal-cli + examples/monorepo-mini: exit 0"
+      ],
+      "branch": "task/PL-04",
+      "worktree": null,
+      "round": 0
+    },
+    {
+      "id": "PL-05",
+      "title": "Worktree enforcement, foreign changes",
+      "goal": "M/L work happens in the task worktree; foreign changes are not blamed on the current task.",
+      "status": "done",
+      "depends_on": [
+        "PL-04"
+      ],
+      "complexity": 5,
+      "stage": "incident-fixes",
+      "scope_write": [
+        "core/scope.py",
+        "tools/worktree.py",
+        "tools/scope_check.py",
+        "core/tests/test_scope.py"
+      ],
+      "acceptance": [
+        "A1",
+        "A2",
+        "A3"
+      ],
+      "gates": [
+        "npm-test",
+        "check-examples",
+        "task-tests"
+      ],
+      "evidence": [
+        "npm test: exit 0",
+        "check.py examples/minimal-cli + examples/monorepo-mini: exit 0"
+      ],
+      "branch": "task/PL-05",
+      "worktree": null,
+      "round": 0
+    },
+    {
+      "id": "PL-06",
+      "title": "Monorepo layout and package files",
+      "goal": "Profile L plans and scaffolds packages, services and apps with per-package context.",
+      "status": "done",
+      "depends_on": [
+        "PL-01"
+      ],
+      "complexity": 6,
+      "stage": "scale-to-l",
+      "scope_write": [
+        "templates/monorepo-layout.md",
+        "templates/package-ARCHITECTURE.md",
+        "templates/package-AGENTS.md",
+        "templates/module-map.md",
+        "prompt/generator.md",
+        "tools/check.py"
+      ],
+      "acceptance": [
+        "A1",
+        "A2",
+        "A3"
+      ],
+      "gates": [
+        "npm-test",
+        "check-examples",
+        "task-tests"
+      ],
+      "evidence": [
+        "npm test: exit 0",
+        "check.py examples/minimal-cli + examples/monorepo-mini: exit 0"
+      ],
+      "branch": "task/PL-06",
+      "worktree": null,
+      "round": 0
+    },
+    {
+      "id": "PL-07",
+      "title": "Import boundaries between packages",
+      "goal": "The dependency rules of the package map are enforced mechanically.",
+      "status": "done",
+      "depends_on": [
+        "PL-06"
+      ],
+      "complexity": 5,
+      "stage": "scale-to-l",
+      "scope_write": [
+        "core/boundaries.py",
+        "tools/boundaries.py",
+        "core/tests/test_boundaries.py"
+      ],
+      "acceptance": [
+        "A1",
+        "A2",
+        "A3"
+      ],
+      "gates": [
+        "npm-test",
+        "check-examples",
+        "task-tests"
+      ],
+      "evidence": [
+        "npm test: exit 0",
+        "check.py examples/minimal-cli + examples/monorepo-mini: exit 0"
+      ],
+      "branch": "task/PL-07",
+      "worktree": null,
+      "round": 0
+    },
+    {
+      "id": "PL-08",
+      "title": "Stage exit gates and stop points",
+      "goal": "A stage ends only when its exit criteria are met and the owner continues.",
+      "status": "done",
+      "depends_on": [
+        "PL-01",
+        "PL-06"
+      ],
+      "complexity": 4,
+      "stage": "scale-to-l",
+      "scope_write": [
+        "core/board.py",
+        "tools/render_status.py",
+        "tools/check.py",
+        "core/tests/test_board.py"
+      ],
+      "acceptance": [
+        "A1",
+        "A2",
+        "A3"
+      ],
+      "gates": [
+        "npm-test",
+        "check-examples",
+        "task-tests"
+      ],
+      "evidence": [
+        "npm test: exit 0",
+        "check.py examples/minimal-cli + examples/monorepo-mini: exit 0"
+      ],
+      "branch": "task/PL-08",
+      "worktree": null,
+      "round": 0
+    },
+    {
+      "id": "PL-09",
+      "title": "Profile-dependent size budgets",
+      "goal": "Word budgets fit the project size instead of being overridden ad hoc.",
+      "status": "done",
+      "depends_on": [
+        "PL-01"
+      ],
+      "complexity": 2,
+      "stage": "scale-to-l",
+      "scope_write": [
+        "tools/check.py",
+        "templates/board.schema.json",
+        "prompt/generator.md"
+      ],
+      "acceptance": [
+        "A1",
+        "A2"
+      ],
+      "gates": [
+        "npm-test",
+        "check-examples",
+        "task-tests"
+      ],
+      "evidence": [
+        "npm test: exit 0",
+        "check.py examples/minimal-cli + examples/monorepo-mini: exit 0"
+      ],
+      "branch": "task/PL-09",
+      "worktree": null,
+      "round": 0
+    },
+    {
+      "id": "PL-10",
+      "title": "Release and environment templates",
+      "goal": "Projects release from a clean tag through CI; every environment has a checked configuration list.",
+      "status": "done",
+      "depends_on": [
+        "PL-06"
+      ],
+      "complexity": 5,
+      "stage": "release-contracts",
+      "scope_write": [
+        "templates/releasing.md",
+        "templates/environments.md",
+        "tools/release_check.py",
+        "core/tests/test_release_check.py"
+      ],
+      "acceptance": [
+        "A1",
+        "A2",
+        "A3"
+      ],
+      "gates": [
+        "npm-test",
+        "check-examples",
+        "task-tests"
+      ],
+      "evidence": [
+        "npm test: exit 0",
+        "check.py examples/minimal-cli + examples/monorepo-mini: exit 0"
+      ],
+      "branch": "task/PL-10",
+      "worktree": null,
+      "round": 0
+    },
+    {
+      "id": "PL-11",
+      "title": "Post-deploy smoke gate",
+      "goal": "A deployment with missing configuration is caught immediately.",
+      "status": "done",
+      "depends_on": [
+        "PL-10"
+      ],
+      "complexity": 3,
+      "stage": "release-contracts",
+      "scope_write": [
+        "tools/smoke.py",
+        "tools/check.py",
+        "tests/test_smoke.py"
+      ],
+      "acceptance": [
+        "A1",
+        "A2"
+      ],
+      "gates": [
+        "npm-test",
+        "check-examples",
+        "task-tests"
+      ],
+      "evidence": [
+        "npm test: exit 0",
+        "check.py examples/minimal-cli + examples/monorepo-mini: exit 0"
+      ],
+      "branch": "task/PL-11",
+      "worktree": null,
+      "round": 0
+    },
+    {
+      "id": "PL-12",
+      "title": "Machine-readable contracts",
+      "goal": "Shared interfaces are schemas with fixtures and versions; a change updates all dependants.",
+      "status": "done",
+      "depends_on": [
+        "PL-06"
+      ],
+      "complexity": 6,
+      "stage": "release-contracts",
+      "scope_write": [
+        "tools/contracts.py",
+        "core/tests/test_contracts.py",
+        "templates/contract.md",
+        "templates/board.schema.json"
+      ],
+      "acceptance": [
+        "A1",
+        "A2",
+        "A3"
+      ],
+      "gates": [
+        "npm-test",
+        "check-examples",
+        "task-tests"
+      ],
+      "evidence": [
+        "npm test: exit 0",
+        "check.py examples/minimal-cli + examples/monorepo-mini: exit 0"
+      ],
+      "branch": "task/PL-12",
+      "worktree": null,
+      "round": 0
+    },
+    {
+      "id": "PL-13",
+      "title": "Gate catalogue and versions.md",
+      "goal": "Polier proposes real gate commands per stack, including C++/WASM, with pinned versions.",
+      "status": "done",
+      "depends_on": [
+        "PL-06"
+      ],
+      "complexity": 5,
+      "stage": "brief-quality",
+      "scope_write": [
+        "templates/gates/",
+        "templates/versions.md",
+        "prompt/generator.md",
+        "tools/check.py"
+      ],
+      "acceptance": [
+        "A1",
+        "A2"
+      ],
+      "gates": [
+        "npm-test",
+        "check-examples",
+        "task-tests"
+      ],
+      "evidence": [
+        "npm test: exit 0",
+        "check.py examples/minimal-cli + examples/monorepo-mini: exit 0"
+      ],
+      "branch": "task/PL-13",
+      "worktree": null,
+      "round": 0
+    },
+    {
+      "id": "PL-14",
+      "title": "UI brief fields and design rules",
+      "goal": "UI tasks are specified with numbers and states, not adjectives.",
+      "status": "done",
+      "depends_on": [],
+      "complexity": 2,
+      "stage": "brief-quality",
+      "scope_write": [
+        "templates/task-brief.md",
+        "templates/design-rules.md",
+        "prompt/rubric.md",
+        "prompt/generator.md"
+      ],
+      "acceptance": [
+        "A1",
+        "A2"
+      ],
+      "gates": [
+        "npm-test",
+        "check-examples",
+        "task-tests"
+      ],
+      "evidence": [
+        "npm test: exit 0",
+        "check.py examples/minimal-cli + examples/monorepo-mini: exit 0"
+      ],
+      "branch": "task/PL-14",
+      "worktree": null,
+      "round": 0
+    },
+    {
+      "id": "PL-15",
+      "title": "Generator drift detection",
+      "goal": "A project knows when its in-project Polier copy differs from the claimed version.",
+      "status": "done",
+      "depends_on": [],
+      "complexity": 3,
+      "stage": "brief-quality",
+      "scope_write": [
+        "tools/drift.py",
+        "tools/manifest.py",
+        "tools/check.py",
+        "update.sh",
+        "install.sh",
+        "core/tests/test_drift.py"
+      ],
+      "acceptance": [
+        "A1",
+        "A2"
+      ],
+      "gates": [
+        "npm-test",
+        "check-examples",
+        "task-tests"
+      ],
+      "evidence": [
+        "npm test: exit 0",
+        "check.py examples/minimal-cli + examples/monorepo-mini: exit 0"
+      ],
+      "branch": "task/PL-15",
+      "worktree": null,
+      "round": 0
+    },
+    {
+      "id": "PL-16",
+      "title": "Guard extras",
+      "goal": "Killing foreign processes warns; guarded paths compare case-insensitively on macOS/Windows.",
+      "status": "done",
+      "depends_on": [
+        "PL-02"
+      ],
+      "complexity": 2,
+      "stage": "incident-fixes",
+      "scope_write": [
+        "core/shell.py",
+        "core/paths.py",
+        "adapters/claude-code/hook.py",
+        "adapters/dsh/lib/project.mjs"
+      ],
+      "acceptance": [
+        "A1",
+        "A2"
+      ],
+      "gates": [
+        "npm-test",
+        "check-examples",
+        "task-tests"
+      ],
+      "evidence": [
+        "npm test: exit 0",
+        "check.py examples/minimal-cli + examples/monorepo-mini: exit 0"
+      ],
+      "branch": "task/PL-16",
+      "worktree": null,
+      "round": 0
+    },
+    {
+      "id": "PL-17",
+      "title": "Release 1.0",
+      "goal": "1.0.0 ships with a migration guide, a reference L example and a version bump.",
+      "status": "review",
+      "depends_on": [
+        "PL-06",
+        "PL-07",
+        "PL-08",
+        "PL-09",
+        "PL-10",
+        "PL-11",
+        "PL-12",
+        "PL-13",
+        "PL-14",
+        "PL-15",
+        "PL-16",
+        "PL-01",
+        "PL-02",
+        "PL-03",
+        "PL-04",
+        "PL-05"
+      ],
+      "complexity": 5,
+      "stage": "ship-1-0",
+      "scope_write": [
+        "VERSION",
+        "package.json",
+        "CHANGELOG.md",
+        "README.md",
+        "guide/cheatsheet.md",
+        "examples/monorepo-mini/",
+        ".github/workflows/test.yml",
+        "tools/manifest.json"
+      ],
+      "acceptance": [
+        "A1",
+        "A2",
+        "A3"
+      ],
+      "gates": [
+        "npm-test",
+        "check-examples",
+        "task-tests"
+      ],
+      "evidence": [
+        "npm test: exit 0",
+        "check.py examples/minimal-cli + examples/monorepo-mini: exit 0"
+      ],
+      "branch": "task/PL-17",
+      "worktree": null,
+      "round": 0
+    }
+  ],
+  "open_questions": [
+    {
+      "id": "Q1",
+      "question": "Owner approval of the 1.0.0 CHANGELOG and the release commit is still open (PL-17 A3).",
+      "blocks": [
+        "PL-17"
+      ],
+      "status": "open"
+    }
+  ]
+}
