@@ -7,6 +7,11 @@ import subprocess
 from pathlib import Path
 from typing import List, Tuple
 
+# A record with one of these results is not proof that the gate passed: it
+# describes the infrastructure around the gate (PL-03), so the task must be
+# rerun alone instead of being marked failed.
+INFRA_RESULTS = frozenset({"infra", "busy", "timeout"})
+
 
 def _plain(path: str) -> str:
     return path.strip().replace("\\", "/").rstrip("/")
@@ -40,6 +45,7 @@ def verify_evidence(root, board: dict) -> Tuple[List[str], List[str]]:
             warnings.append(f"{tid}: evidence is free text; use the record paths printed by tools/gate.py")
             continue
         passed: set = set()
+        rejected: set = set()
         for entry in records:
             rel = _plain(entry)
             path = (root / rel).resolve()
@@ -63,6 +69,11 @@ def verify_evidence(root, board: dict) -> Tuple[List[str], List[str]]:
             if digest != record.get("log_sha256"):
                 errors.append(f"{tid}: log of {rel} was changed after the gate ran (checksum mismatch)")
                 continue
+            if record.get("result") in INFRA_RESULTS:
+                rejected.add(gate)
+                errors.append(
+                    f"{tid}: gate {gate} hit an infrastructure failure, rerun alone: {rel}")
+                continue
             if record.get("exit_code") != 0:
                 errors.append(f"{tid}: gate {gate} failed in {rel} (exit {record.get('exit_code')})")
                 continue
@@ -75,6 +86,6 @@ def verify_evidence(root, board: dict) -> Tuple[List[str], List[str]]:
                 if ancestor.returncode != 0:
                     warnings.append(f"{tid}: record {rel} was made on commit {commit[:10]}, which is not in HEAD's history")
         for gate in task.get("gates", []):
-            if isinstance(gate, str) and gate not in passed:
+            if isinstance(gate, str) and gate not in passed and gate not in rejected:
                 errors.append(f"{tid}: no passing gate record for '{gate}' (run it with tools/gate.py --name {gate})")
     return errors, warnings
