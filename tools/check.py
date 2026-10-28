@@ -25,8 +25,12 @@ try:  # PL-15: optional, so a package without tools/drift.py still checks
 except Exception:  # noqa: BLE001
     _drift = None
 
+from core import approvals, audit, dispatch, runs  # noqa: E402
 from core.board import board_errors, stage_report, task_stage_id  # noqa: E402
+from core.errors import PolierError  # noqa: E402
 from core.evidence import verify_evidence  # noqa: E402
+from core.policy import (POLICY, checks as policy_checks, limits as policy_limits,
+                         load_policy, policy_errors)  # noqa: E402
 
 REQUIRED = [
     "ARCHITECTURE.md",
@@ -542,6 +546,163 @@ def check_evidence(root: Path, board: dict, errors: list[str], warnings: list[st
     warnings.extend(found_warnings)
 
 
+def _is_int(value) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
+def _check_runs(root: Path, board: dict, errors: list[str]) -> None:
+    """Validate every ``runs/<ID>.json``: JSON, task vs file name, state, attempts."""
+    folder = root / "runs"
+    if not folder.is_dir():
+        return
+    known = {task.get("id") for task in board.get("tasks") or [] if isinstance(task, dict)}
+    for path in sorted(folder.glob("*.json")):
+        rel = path.relative_to(root).as_posix()
+        try:
+            record = json.loads(path.read_text(encoding="utf-8"))
+        except OSError as exc:
+            errors.append(f"{rel}: cannot be read ({exc})")
+            continue
+        except ValueError as exc:
+            errors.append(f"{rel}: invalid JSON ({exc})")
+            continue
+        if not isinstance(record, dict):
+            errors.append(f"{rel}: must be a JSON object")
+            continue
+        task = record.get("task")
+        if task != path.stem:
+            errors.append(f"{rel}: task {task!r} does not match the file name {path.stem!r}")
+        if task not in known:
+            errors.append(f"{rel}: task {task!r} is not on the board")
+        state = record.get("state")
+        if state not in runs.STATES:
+            errors.append(f"{rel}: unknown state {state!r} (known: {', '.join(runs.STATES)})")
+        attempt = record.get("attempt")
+        if not _is_int(attempt) or attempt < 0:
+            errors.append(f"{rel}: attempt must be a non-negative integer (is {attempt!r})")
+        attempts = record.get("attempts")
+        if not isinstance(attempts, list):
+            errors.append(f"{rel}: attempts must be a list")
+            continue
+        for index, entry in enumerate(attempts, 1):
+            number = entry.get("n") if isinstance(entry, dict) else None
+            if not _is_int(number) or number < 1:
+                errors.append(f"{rel}: attempts[{index - 1}] needs an integer n")
+
+
+def _check_attempt_limits(root: Path, board: dict, policy: dict, errors: list[str]) -> None:
+    """A run record may never use more attempts than the policy allows."""
+    limit = policy_limits(policy)["max_attempts_per_task"]
+    for task in board.get("tasks") or []:
+        if not isinstance(task, dict) or not isinstance(task.get("id"), str):
+            continue
+        tid = task["id"]
+        try:
+            used = runs.attempt_count(root, tid)
+        except PolierError:
+            continue
+        if used > limit:
+            errors.append(f"{tid}: {used} attempts used (max_attempts_per_task is {limit}) — "
+                          f"escalate instead of another attempt")
+
+
+def _check_running_scopes(board: dict, errors: list[str]) -> None:
+    """Two tasks may not be in progress at the same time if their write scopes overlap."""
+    running = [task for task in board.get("tasks") or []
+               if isinstance(task, dict) and task.get("status") == "in_progress"]
+    for index, left in enumerate(running):
+        for right in running[index + 1:]:
+            overlap = None
+            for first in left.get("scope_write") or []:
+                for second in right.get("scope_write") or []:
+                    if (isinstance(first, str) and isinstance(second, str)
+                            and paths_overlap(first, second)):
+                        overlap = (first, second)
+                        break
+                if overlap:
+                    break
+            if overlap:
+                errors.append(
+                    f"{left.get('id')} and {right.get('id')} are both in_progress with "
+                    f"overlapping scope_write: {overlap[0]} / {overlap[1]}")
+
+
+def _check_dispatch(root: Path, board: dict, policy: dict,
+                    errors: list[str], warnings: list[str]) -> None:
+    """Scope conflicts between parallel tasks are errors; blocked tasks are warnings."""
+    try:
+        report = dispatch.plan(root, board, policy)
+    except (PolierError, OSError) as exc:
+        warnings.append(f"dispatch: the plan could not be built ({exc})")
+        return
+    if policy_checks(policy)["disjoint_scopes"]:
+        for conflict in report.get("conflicts") or []:
+            paths = ", ".join(str(entry) for entry in conflict.get("paths") or [])
+            errors.append(f"dispatch: {conflict.get('a')} and {conflict.get('b')} share "
+                          f"{paths} in one parallel group")
+    for entry in report.get("blocked") or []:
+        warnings.append(f"dispatch: {entry.get('id')} is blocked — {entry.get('reason')}")
+
+
+def _check_orchestration_docs(root: Path, warnings: list[str]) -> None:
+    """Name the 1.1 files in the project docs; missing references are warnings only."""
+    agents = root / "AGENTS.md"
+    readme = root / "README.md"
+    try:
+        agents_text = agents.read_text(encoding="utf-8") if agents.is_file() else ""
+        readme_text = readme.read_text(encoding="utf-8") if readme.is_file() else ""
+    except OSError:
+        return
+    if agents.is_file() and "tools/state.py" not in agents_text:
+        warnings.append("AGENTS.md: tools/state.py is not mentioned — 1.1 state changes go through it")
+    orchestration = root / "docs/orchestration.md"
+    if not orchestration.is_file():
+        warnings.append("docs/orchestration.md is missing — the one-page orchestration model belongs there")
+    combined = f"{agents_text}\n{readme_text}"
+    if combined.strip() and "runs/" not in combined:
+        warnings.append("AGENTS.md/README.md: runs/ is not mentioned — run records are committed with the task")
+    if combined.strip() and "policy.json" not in combined:
+        warnings.append("AGENTS.md/README.md: policy.json is not mentioned — the limits and rules live there")
+    if orchestration.is_file() and combined.strip() and "orchestration.md" not in combined:
+        warnings.append("AGENTS.md/README.md: docs/orchestration.md is not mentioned — point at the one-page loop")
+
+
+def check_orchestration(root: Path, board: dict, errors: list[str], warnings: list[str]) -> None:
+    """1.1 checks: policy, audit, approvals, run records, scopes, dispatch and docs.
+
+    Everything past the policy warning runs only when ``policy.json`` exists, so
+    a 0.9/1.0 project keeps its 1.0 result (warnings only, exit 0).
+    """
+    if not (root / POLICY).is_file():
+        warnings.append("policy.json is missing — the 1.1 orchestration checks are off "
+                        "(a 1.0 project keeps working)")
+        return
+    try:
+        policy = load_policy(root)
+    except PolierError as exc:
+        errors.append(str(exc))
+        return
+    problems = policy_errors(policy)
+    if problems:
+        errors.extend(problems)
+        return
+
+    try:
+        report = audit.audit(root, board, policy)
+    except PolierError as exc:
+        errors.append(f"audit: {exc}")
+    else:
+        errors.extend(report.get("errors") or [])
+        warnings.extend(report.get("warnings") or [])
+
+    errors.extend(approvals.errors(root, board))
+    _check_runs(root, board, errors)
+    _check_attempt_limits(root, board, policy, errors)
+    _check_running_scopes(board, errors)
+    _check_dispatch(root, board, policy, errors, warnings)
+    _check_orchestration_docs(root, warnings)
+
+
 def main() -> int:
     root = Path(sys.argv[1] if len(sys.argv) > 1 else ".").resolve()
     errors: list[str] = []
@@ -613,6 +774,7 @@ def main() -> int:
             check_packages(root, board, errors, warnings)
             check_versions(root, board, warnings)
             check_status_fresh(root, board, errors)
+            check_orchestration(root, board, errors, warnings)
 
     if board is not None and isinstance(board.get("resources"), dict):
         gitignore = root / ".gitignore"

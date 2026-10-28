@@ -2,9 +2,9 @@
   "project": "polier",
   "profile": "M",
   "base_branch": "main",
-  "generator_version": "1.0.0",
+  "generator_version": "1.1.0",
   "schema_version": "1.0",
-  "stage": 5,
+  "stage": 6,
   "worktrees": "off",
   "stages": [
     {
@@ -67,6 +67,19 @@
         "release-contracts",
         "brief-quality"
       ],
+      "owner_decision": "continue"
+    },
+    {
+      "id": "orchestration",
+      "title": "orchestration control plane",
+      "goal": "The project is run as a controlled multi-agent pipeline: rules as code, execution state, checkpoints, approvals and a dispatch plan for the board.",
+      "exit_criteria": [
+        "policy.json, runs/, reviews/approvals/ are the new state and are checked",
+        "state changes go through state.py; a done task needs the full evidence chain",
+        "dispatch.py turns the board into waves and names blocked tasks",
+        "adapters enforce policy; 0.9/1.0 projects are unchanged without policy.json"
+      ],
+      "depends_on": [],
       "owner_decision": "continue"
     }
   ],
@@ -664,6 +677,283 @@
       "branch": "task/PL-17",
       "worktree": null,
       "round": 0
+    },
+    {
+      "id": "PL-18",
+      "title": "Policy as code",
+      "goal": "policy.json carries limits, protected paths, dependency manifests, approval actions and denied commands; one decision table tests Python and JavaScript alike.",
+      "status": "done",
+      "depends_on": [],
+      "complexity": 5,
+      "stage": "orchestration",
+      "scope_write": [
+        "core/policy.py",
+        "core/tests/policy_cases.json",
+        "core/tests/test_policy.py"
+      ],
+      "acceptance": [
+        "A1",
+        "A2",
+        "A3"
+      ],
+      "gates": [
+        "npm-test",
+        "check-examples",
+        "task-tests"
+      ],
+      "evidence": [
+        "npm test: exit 0",
+        "policy_cases.json: all path/manifest/command cases green in Python and JS"
+      ],
+      "branch": "task/PL-18",
+      "worktree": null,
+      "round": 1
+    },
+    {
+      "id": "PL-19",
+      "title": "Run records and attempts",
+      "goal": "runs/<ID>.json records attempts and events; every gate run appends its result; a task can be audited from its run record.",
+      "status": "done",
+      "depends_on": [
+        "PL-18"
+      ],
+      "complexity": 5,
+      "stage": "orchestration",
+      "scope_write": [
+        "core/runs.py",
+        "core/evidence.py",
+        "tools/gate.py",
+        "core/tests/test_runs.py"
+      ],
+      "acceptance": [
+        "A1",
+        "A2",
+        "A3"
+      ],
+      "gates": [
+        "npm-test",
+        "check-examples",
+        "task-tests"
+      ],
+      "evidence": [
+        "npm test: exit 0",
+        "tests/test_gate_runs.py: gate events recorded only with policy.json"
+      ],
+      "branch": "task/PL-19",
+      "worktree": null,
+      "round": 1
+    },
+    {
+      "id": "PL-20",
+      "title": "State machine and checkpoints",
+      "goal": "Board status changes only through tools/state.py, with deterministic preconditions (gates, review, attempts, rounds, approvals).",
+      "status": "done",
+      "depends_on": [
+        "PL-19"
+      ],
+      "complexity": 6,
+      "stage": "orchestration",
+      "scope_write": [
+        "core/state.py",
+        "tools/state.py",
+        "core/tests/test_state.py"
+      ],
+      "acceptance": [
+        "A1",
+        "A2",
+        "A3"
+      ],
+      "gates": [
+        "npm-test",
+        "check-examples",
+        "task-tests"
+      ],
+      "evidence": [
+        "npm test: exit 0",
+        "tests/test_state_cli.py: 22 cases"
+      ],
+      "branch": "task/PL-20",
+      "worktree": null,
+      "round": 1
+    },
+    {
+      "id": "PL-21",
+      "title": "Approvals with records",
+      "goal": "reviews/approvals/AP-NNN.json records requested, granted and denied high-risk actions; done and reopen transitions check them.",
+      "status": "done",
+      "depends_on": [
+        "PL-18"
+      ],
+      "complexity": 4,
+      "stage": "orchestration",
+      "scope_write": [
+        "core/approvals.py",
+        "tools/approve.py",
+        "core/tests/test_approvals.py"
+      ],
+      "acceptance": [
+        "A1",
+        "A2",
+        "A3"
+      ],
+      "gates": [
+        "npm-test",
+        "check-examples",
+        "task-tests"
+      ],
+      "evidence": [
+        "npm test: exit 0",
+        "tests/test_approve_cli.py: 19 cases"
+      ],
+      "branch": "task/PL-21",
+      "worktree": null,
+      "round": 1
+    },
+    {
+      "id": "PL-22",
+      "title": "Dispatch plan",
+      "goal": "tools/dispatch.py reports waves with disjoint scopes, limits, blocked tasks with actions, conflicts and pending approvals.",
+      "status": "done",
+      "depends_on": [
+        "PL-20",
+        "PL-21"
+      ],
+      "complexity": 5,
+      "stage": "orchestration",
+      "scope_write": [
+        "core/dispatch.py",
+        "tools/dispatch.py",
+        "core/tests/test_dispatch.py"
+      ],
+      "acceptance": [
+        "A1",
+        "A2",
+        "A3"
+      ],
+      "gates": [
+        "npm-test",
+        "check-examples",
+        "task-tests"
+      ],
+      "evidence": [
+        "npm test: exit 0",
+        "tests/test_dispatch_cli.py: 9 cases"
+      ],
+      "branch": "task/PL-22",
+      "worktree": null,
+      "round": 1
+    },
+    {
+      "id": "PL-23",
+      "title": "Audit, checks and status",
+      "goal": "check.py validates policy, runs, approvals and the done evidence chain; STATUS.md shows the dispatch plan and execution state.",
+      "status": "done",
+      "depends_on": [
+        "PL-22"
+      ],
+      "complexity": 6,
+      "stage": "orchestration",
+      "scope_write": [
+        "core/audit.py",
+        "tools/audit.py",
+        "tools/check.py",
+        "tools/render_status.py",
+        "core/board.py",
+        "core/scope.py",
+        "tests/test_check_rules.py"
+      ],
+      "acceptance": [
+        "A1",
+        "A2",
+        "A3"
+      ],
+      "gates": [
+        "npm-test",
+        "check-examples",
+        "task-tests"
+      ],
+      "evidence": [
+        "npm test: exit 0",
+        "check.py examples/minimal-cli + examples/monorepo-mini: exit 0"
+      ],
+      "branch": "task/PL-23",
+      "worktree": null,
+      "round": 1
+    },
+    {
+      "id": "PL-24",
+      "title": "Adapter enforcement",
+      "goal": "The DSH guard and the Claude Code hook enforce protected paths, dependency approvals, denied commands and lead-only commands; pl_next and pl_state expose the plan.",
+      "status": "done",
+      "depends_on": [
+        "PL-18",
+        "PL-20"
+      ],
+      "complexity": 5,
+      "stage": "orchestration",
+      "scope_write": [
+        "adapters/dsh/",
+        "adapters/claude-code/",
+        "core/tests/policy_cases.json"
+      ],
+      "acceptance": [
+        "A1",
+        "A2",
+        "A3"
+      ],
+      "gates": [
+        "npm-test",
+        "check-examples",
+        "task-tests"
+      ],
+      "evidence": [
+        "npm test: exit 0",
+        "adapters/dsh/test/policy_guard.test.mjs + Claude Code PolicyGuard class"
+      ],
+      "branch": "task/PL-24",
+      "worktree": null,
+      "round": 1
+    },
+    {
+      "id": "PL-25",
+      "title": "Process, templates and examples",
+      "goal": "The generator writes and operates the control plane; templates, guide, README and CHANGELOG describe 1.1; the L example carries policy, runs, reviews and approvals.",
+      "status": "done",
+      "depends_on": [
+        "PL-23",
+        "PL-24"
+      ],
+      "complexity": 6,
+      "stage": "orchestration",
+      "scope_write": [
+        "prompt/",
+        "templates/",
+        "guide/",
+        "README.md",
+        "CHANGELOG.md",
+        "SKILL.md",
+        "VERSION",
+        "package.json",
+        "examples/monorepo-mini/",
+        "tools/manifest.json"
+      ],
+      "acceptance": [
+        "A1",
+        "A2",
+        "A3"
+      ],
+      "gates": [
+        "npm-test",
+        "check-examples",
+        "task-tests"
+      ],
+      "evidence": [
+        "npm test: exit 0",
+        "check.py examples/monorepo-mini: exit 0 (policy, runs, reviews, approvals, orchestration doc)"
+      ],
+      "branch": "task/PL-25",
+      "worktree": null,
+      "round": 1
     }
   ],
   "open_questions": [

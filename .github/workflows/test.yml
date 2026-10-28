@@ -24,3 +24,7 @@ jobs:
         run: python3 tools/check.py examples/minimal-cli
       - name: Reference L project passes check.py
         run: python3 tools/check.py examples/monorepo-mini
+      - name: Reference L evidence chain passes audit.py
+        run: python3 tools/audit.py --root examples/monorepo-mini
+      - name: Shipped manifest is current
+        run: python3 tools/manifest.py --check

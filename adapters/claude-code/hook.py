@@ -9,6 +9,10 @@ Reads the hook event as JSON on stdin and answers in Claude Code's hook format:
 - pre-tool-use: Write, Edit, MultiEdit, NotebookEdit and the writes core/shell.py
   finds in a Bash command are checked with core.scope.check_write; a denial
   (or, with POLIER_ENFORCE=ask, a question to the human) goes to stdout as JSON.
+  With a policy.json the same call also checks the policy: a protected path, a
+  dependency manifest without a granted new_dependency approval, a denied
+  command (every role) and a lead-only command (workers and reviewers). Role
+  `lead` bypasses the path and dependency rules, never a deny-listed command.
   With POLIER_TASK the hook takes/refreshes that task's claim (PL-04) and denies
   a write when another live session holds it; a Bash command that stops
   processes gets an "ask" warning (PL-16).
@@ -41,10 +45,14 @@ from typing import Mapping, Optional
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+from core.approvals import has_grant  # noqa: E402
 from core.board import active_tasks, find_root, load_board  # noqa: E402
 from core.claims import ClaimConflict, take as claim_take  # noqa: E402
 from core.errors import PolierError  # noqa: E402
-from core.paths import inside, outside, relative  # noqa: E402
+from core.paths import inside, outside, relative, resolve  # noqa: E402
+from core.policy import (  # noqa: E402
+    approver, command_denial, enabled as policy_enabled, load_policy, manifest_match, protected_match,
+)
 from core.scope import ROLES, changed_files, check_stop, check_write, is_tracked, stop_message, write_denial  # noqa: E402
 from core.shell import process_kills, write_targets  # noqa: E402
 
@@ -75,7 +83,7 @@ def settings(env: Mapping[str, str]) -> dict:
 
 
 def session(event: dict, env: Mapping[str, str]) -> Optional[dict]:
-    """Project root, board and bound tasks; None when no board is found."""
+    """Project root, board, bound tasks and policy; None when no board is found."""
     cwd = event.get("cwd") or env.get("CLAUDE_PROJECT_DIR") or os.getcwd()
     root = find_root(cwd) or find_root(env.get("CLAUDE_PROJECT_DIR"))
     if root is None:
@@ -85,7 +93,12 @@ def session(event: dict, env: Mapping[str, str]) -> Optional[dict]:
         return None
     cfg = settings(env)
     tasks, how = active_tasks(board, root=root, cwd=cwd, pinned=cfg["task"])
-    return {"cwd": cwd, "root": root, "board": board, "tasks": tasks, "how": how, **cfg}
+    try:
+        policy = load_policy(root)
+    except Exception:  # noqa: BLE001  the hook fails open: a policy problem never blocks work
+        policy = {"enabled": False}
+    return {"cwd": cwd, "root": root, "board": board, "tasks": tasks, "how": how,
+            "policy": policy, **cfg}
 
 
 # ---------------------------------------------------------------------------
@@ -130,6 +143,75 @@ def _output(info: dict, reason: str, decision: Optional[str] = None) -> dict:
     }}
 
 
+# ---------------------------------------------------------------------------
+# policy (1.1): protected paths, dependency manifests, denied and lead-only
+# commands. Without a policy.json core.policy reports enabled: false and every
+# check here is a no-op, so a 1.0 project behaves exactly as before.
+# ---------------------------------------------------------------------------
+
+def _approval_task(info: dict) -> Optional[str]:
+    """The task an approval is requested for: POLIER_TASK, or the single bound task."""
+    if info.get("task"):
+        return info["task"]
+    tasks = info.get("tasks") or []
+    return tasks[0].get("id") if len(tasks) == 1 else None
+
+
+def _approval_hint(policy: dict, action: str, task: Optional[str]) -> str:
+    who = approver(policy)
+    target = f" --task {task}" if task else ""
+    return (f"If it is needed, ask the {who} for an approval: "
+            f"python3 tools/approve.py request --action {action}{target} "
+            f"(the {who} grants it with python3 tools/approve.py grant AP-NNN), then retry. "
+            "Do not write it another way.")
+
+
+def _policy_path_denial(info: dict, rel: str) -> Optional[str]:
+    """Protected path or unapproved dependency manifest for writing `rel`, or None."""
+    policy = info.get("policy")
+    if not policy or not policy_enabled(policy):
+        return None
+    if info["role"] in ("lead", "off"):  # a lead session bypasses the path rules
+        return None
+    pattern = protected_match(policy, rel)
+    if pattern:
+        return (f"Polier: write to {rel} blocked, {pattern} is a protected path in policy.json. "
+                "Only a lead session may write it: report the change instead of writing it another way.")
+    dependencies = policy.get("dependencies")
+    if isinstance(dependencies, dict) and dependencies.get("approval", True) is False:
+        return None
+    manifest = manifest_match(policy, rel)
+    if manifest is None:
+        return None
+    task = _approval_task(info)
+    if has_grant(info["root"], "new_dependency", task):
+        return None
+    return (f"Polier: write to {rel} blocked, {manifest} is a dependency manifest and policy.json "
+            f"requires a granted new_dependency approval. {_approval_hint(policy, 'new_dependency', task)}")
+
+
+def _policy_command_denial(info: dict, command: str) -> Optional[str]:
+    """A deny-listed command (every role) or a lead-only command (worker, reviewer), or None."""
+    policy = info.get("policy")
+    if not policy or not policy_enabled(policy):
+        return None
+    if info["role"] == "off":
+        return None
+    denial = command_denial(policy, command, info["role"])
+    if not denial:
+        return None
+    reason = denial.get("reason") or "the command matches a rule in policy.json"
+    if denial.get("rule") == "deny":
+        task = _approval_task(info)
+        target = f" --task {task}" if task else ""
+        return (f"Polier: command blocked, {reason}. This rule applies to every role, a lead included: "
+                f"do not run it another way. If the action is part of the task, stop and ask the owner "
+                f"for an approval (python3 tools/approve.py request --action release{target}) and report "
+                "it under open_questions.")
+    return (f"Polier: command blocked, {reason}. A worker or reviewer reports the needed change "
+            "instead of running it; the lead runs it from a lead session.")
+
+
 def _bash_denial(info: dict, command: str) -> Optional[str]:
     targets, _unresolved = write_targets(command, info["cwd"])
     for target in targets:
@@ -139,6 +221,9 @@ def _bash_denial(info: dict, command: str) -> Optional[str]:
         decision = check_write(target.path, info["tasks"], role=info["role"], root=info["root"],
                                board=info["board"])
         if decision.ok:
+            policy_reason = _policy_path_denial(info, rel)
+            if policy_reason is not None:
+                return f"{policy_reason} (Bash: {target.command})"
             continue
         if target.how == "delete" and not outside(rel) and not is_tracked(info["root"], rel):
             continue  # removing an untracked file undoes a write
@@ -169,13 +254,19 @@ def pre_tool_use(event: dict, env: Mapping[str, str]) -> Optional[dict]:
     if name == "Bash":
         if cfg["bash"] and isinstance(command, str) and command:
             reason = _bash_denial(info, command)
+            if reason is None:
+                reason = _policy_command_denial(info, command)
     else:
         target = args.get(FILE_TOOLS[name])
         if not isinstance(target, str) or not target:
             return None
         decision = check_write(target, info["tasks"], role=info["role"], root=info["root"],
                                cwd=info["cwd"], board=info["board"])
-        reason = None if decision.ok else write_denial(decision, info["tasks"], info["role"], target)
+        if decision.ok:
+            rel = relative(info["root"], resolve(info["cwd"], target))
+            reason = _policy_path_denial(info, rel)
+        else:
+            reason = write_denial(decision, info["tasks"], info["role"], target)
     if reason is not None:  # a real write violation wins over the advisory kill warning
         return _output(info, reason)
 

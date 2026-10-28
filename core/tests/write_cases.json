@@ -17,6 +17,8 @@
     {"name": "briefs are lead-owned", "path": "tasks/M01.md", "tasks": ["app"], "ok": false, "code": "lead-owned"},
     {"name": "evidence is always writable", "path": "reviews/evidence/M01-tests.log", "tasks": ["app"], "ok": true},
     {"name": "other reviews are not", "path": "reviews/M01.md", "tasks": ["app"], "ok": false, "code": "outside-scope"},
+    {"name": "worker may not edit run records", "path": "runs/M01.json", "tasks": ["app"], "ok": false, "code": "lead-owned"},
+    {"name": "worker writes gate evidence", "path": "reviews/evidence/x.json", "tasks": ["app"], "ok": true},
     {"name": "parent folder", "path": "../elsewhere.txt", "tasks": ["app"], "ok": false, "code": "outside-project"},
     {"name": "dot segments escaping", "path": "src/../../x", "tasks": ["app"], "ok": false, "code": "outside-project"},
     {"name": "dot segments inside", "path": "src/../README.md", "tasks": ["app"], "ok": false, "code": "outside-scope"},
@@ -33,6 +35,7 @@
     {"name": "lead writes anything", "path": "board.json", "tasks": ["app"], "role": "lead", "ok": true},
     {"name": "off writes anything", "path": "README.md", "tasks": ["app"], "role": "off", "ok": true},
     {"name": "reviewer writes reviews", "path": "reviews/M01.md", "tasks": ["app"], "role": "reviewer", "ok": true},
+    {"name": "reviewer may not write approvals", "path": "reviews/approvals/AP-001.json", "tasks": ["app"], "role": "reviewer", "ok": false, "code": "approvals"},
     {"name": "reviewer without a task", "path": "reviews/M01.md", "tasks": [], "role": "reviewer", "ok": true},
     {"name": "reviewer may not fix code", "path": "src/app.py", "tasks": ["app"], "role": "reviewer", "ok": false, "code": "reviewer"},
     {"name": "reviewer without a task, code", "path": "src/app.py", "tasks": [], "role": "reviewer", "ok": false, "code": "reviewer"}

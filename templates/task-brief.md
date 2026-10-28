@@ -10,6 +10,8 @@
 
 **Satisfies:** <D1, D2 — definition-of-done items from `docs/quality.md`, as in board.json>
 
+**Operating the task:** claim → the lead sets `in_progress` (attempt N of `max_attempts_per_task`) → run the gates → lead sets `verifying` → `review` → `done` or `rework` (a new round, limit `max_review_rounds`). Approvals and escalation: `docs/orchestration.md`.
+
 ## Scope
 
 - <feature 1>

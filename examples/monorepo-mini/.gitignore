@@ -8,6 +8,9 @@ build/
 build-wasm/
 .polier-slot
 .generator/
+board.json.*.tmp
+runs/*.lock
+reviews/approvals/*.lock
 
 # Python tooling
 __pycache__/

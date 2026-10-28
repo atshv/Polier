@@ -615,10 +615,11 @@ def stage_report(board: Optional[dict], root=None) -> List[dict]:
     """One entry per declared stage: exit state, missing gate records, owner decision.
 
     A stage is complete when every stage it depends on is complete, its
-    `owner_decision` is not "pending", and every `exit_gates` name has a
-    passing gate record. With `root` the records in reviews/evidence/ are
-    verified; without it, a done task of the stage listing evidence for the
-    gate is accepted (the guard and the JS mirror work without a file scan).
+    `owner_decision` is not "pending", every `exit_gates` name has a passing
+    gate record, and no task of the stage is still open (`tasks_open` empty).
+    With `root` the records in reviews/evidence/ are verified; without it, a
+    done task of the stage listing evidence for the gate is accepted (the guard
+    and the JS mirror work without a file scan).
     """
     board = board or {}
     stages = [s for s in board.get("stages") or [] if isinstance(s, dict)]
@@ -651,6 +652,7 @@ def stage_report(board: Optional[dict], root=None) -> List[dict]:
             "missing_gates": missing,
             "depends_on": depends_on,
             "tasks": [t.get("id") for t in members],
+            "tasks_open": [t.get("id") for t in members if t.get("status") != "done"],
             "incomplete_deps": [],
             "complete": False,
         }
@@ -662,7 +664,8 @@ def stage_report(board: Optional[dict], root=None) -> List[dict]:
         blocked = [d for d in entry["depends_on"] if not complete(d, seen | {sid})]
         entry["incomplete_deps"] = blocked
         entry["complete"] = (not entry["stopped"] and not entry["owner_pending"]
-                             and not entry["missing_gates"] and not blocked)
+                             and not entry["missing_gates"] and not blocked
+                             and not entry["tasks_open"])
         return entry["complete"]
 
     for sid in report:

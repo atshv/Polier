@@ -1,0 +1,51 @@
+{
+  "task": "F-01",
+  "state": "done",
+  "attempt": 1,
+  "attempts": [
+    {
+      "n": 1,
+      "started": "2026-10-25T00:40:00+00:00",
+      "ended": "2026-10-25T01:05:16+00:00",
+      "result": "pass",
+      "note": "review pass, layout gate green"
+    }
+  ],
+  "events": [
+    {
+      "at": "2026-10-25T00:40:00+00:00",
+      "kind": "start",
+      "data": {"actor": "lead"}
+    },
+    {
+      "at": "2026-10-25T01:05:16+00:00",
+      "kind": "gate",
+      "data": {
+        "gate": "layout",
+        "result": "pass",
+        "record": "reviews/evidence/F-01-layout-20261025T010516Z.json"
+      }
+    },
+    {
+      "at": "2026-10-25T01:06:00+00:00",
+      "kind": "state",
+      "data": {"from": "in_progress", "to": "verifying", "actor": "lead"}
+    },
+    {
+      "at": "2026-10-25T01:06:05+00:00",
+      "kind": "state",
+      "data": {"from": "verifying", "to": "review", "actor": "lead"}
+    },
+    {
+      "at": "2026-10-25T01:20:00+00:00",
+      "kind": "review",
+      "data": {"verdict": "pass", "file": "reviews/F-01.md", "round": 1}
+    },
+    {
+      "at": "2026-10-25T01:20:10+00:00",
+      "kind": "state",
+      "data": {"from": "review", "to": "done", "actor": "lead"}
+    }
+  ],
+  "updated": "2026-10-25T01:20:10+00:00"
+}

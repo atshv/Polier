@@ -1,0 +1,60 @@
+{
+  "task": "F-02",
+  "state": "done",
+  "attempt": 1,
+  "attempts": [
+    {
+      "n": 1,
+      "started": "2026-10-25T01:05:00+00:00",
+      "ended": "2026-10-25T01:05:16+00:00",
+      "result": "pass",
+      "note": "review pass, layout and contract gates green"
+    }
+  ],
+  "events": [
+    {
+      "at": "2026-10-25T01:05:00+00:00",
+      "kind": "start",
+      "data": {"actor": "lead"}
+    },
+    {
+      "at": "2026-10-25T01:05:16+00:00",
+      "kind": "gate",
+      "data": {
+        "gate": "layout",
+        "result": "pass",
+        "record": "reviews/evidence/F-02-layout-20261025T010516Z.json"
+      }
+    },
+    {
+      "at": "2026-10-25T01:05:16+00:00",
+      "kind": "gate",
+      "data": {
+        "gate": "contracts",
+        "result": "pass",
+        "record": "reviews/evidence/F-02-contracts-20261025T010516Z.json"
+      }
+    },
+    {
+      "at": "2026-10-25T01:07:00+00:00",
+      "kind": "state",
+      "data": {"from": "in_progress", "to": "verifying", "actor": "lead"}
+    },
+    {
+      "at": "2026-10-25T01:07:05+00:00",
+      "kind": "state",
+      "data": {"from": "verifying", "to": "review", "actor": "lead"}
+    },
+    {
+      "at": "2026-10-25T01:21:00+00:00",
+      "kind": "review",
+      "data": {"verdict": "pass", "file": "reviews/F-02.md", "round": 1}
+    },
+    {
+      "at": "2026-10-25T01:21:10+00:00",
+      "kind": "state",
+      "data": {"from": "review", "to": "done", "actor": "lead"}
+    }
+  ],
+  "updated": "2026-10-25T01:21:10+00:00"
+}

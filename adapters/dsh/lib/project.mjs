@@ -18,10 +18,12 @@ const XARGS_VALUE_OPTIONS = new Set(['-n', '--max-args', '-I', '--replace', '-P'
 
 /** Always writable: gate logs and records belong to the task that produced them. */
 export const ALWAYS_ALLOWED = ['reviews/evidence']
-/** Lead-owned: a worker must not edit the board, the generated status or briefs. */
-export const BOARD_FILES = ['board.json', 'STATUS.md', 'tasks']
+/** Lead-owned (1.1): the board, the generated status, the briefs and the run records. */
+export const BOARD_FILES = ['board.json', 'STATUS.md', 'tasks', 'runs']
 /** The only folder a reviewer session writes to. */
 export const REVIEWS = 'reviews'
+/** Approval records are the approver's: a reviewer writes review material, never approvals. */
+export const APPROVALS = 'reviews/approvals'
 
 /** Forward slashes, no trailing slash, `.` and `..` resolved; '' for the root. */
 export function normalized(p) {
@@ -192,8 +194,13 @@ export function decide(rel, tasks, context = {}) {
  */
 export function checkPath(rel, tasks, role = 'worker', context = {}) {
   if (role === 'reviewer') {
-    if (inside(rel, REVIEWS) && !rel.startsWith('../')) return { ok: true }
-    return { ok: false, code: 'reviewer', reason: 'is outside reviews/' }
+    if (!inside(rel, REVIEWS) || rel.startsWith('../')) {
+      return { ok: false, code: 'reviewer', reason: 'is outside reviews/' }
+    }
+    if (inside(rel, APPROVALS)) {
+      return { ok: false, code: 'approvals', reason: 'is an approval record, not review material' }
+    }
+    return { ok: true }
   }
   if (role !== 'worker' || tasks.length === 0) return { ok: true }
   return decide(rel, tasks, context)

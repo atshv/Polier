@@ -89,3 +89,50 @@ def verify_evidence(root, board: dict) -> Tuple[List[str], List[str]]:
             if isinstance(gate, str) and gate not in passed and gate not in rejected:
                 errors.append(f"{tid}: no passing gate record for '{gate}' (run it with tools/gate.py --name {gate})")
     return errors, warnings
+
+
+# ---------------------------------------------------------------------------
+# gate records as checkpoints (1.1)
+# ---------------------------------------------------------------------------
+
+def gate_records(root, task_id=None) -> List[dict]:
+    """Every readable gate record in ``<root>/reviews/evidence``, in file order.
+
+    With `task_id` only the records whose ``task`` field is that task. Broken
+    files and non-objects are skipped: a checkpoint must not fail because one
+    record is unreadable.
+    """
+    folder = Path(root) / "reviews" / "evidence"
+    if not folder.is_dir():
+        return []
+    try:
+        paths = sorted(folder.glob("*.json"))
+    except OSError:
+        return []
+    records: List[dict] = []
+    for path in paths:
+        try:
+            record = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if not isinstance(record, dict):
+            continue
+        if task_id is not None and record.get("task") != task_id:
+            continue
+        records.append(record)
+    return records
+
+
+def passing_gates(root, task_id=None) -> set:
+    """Gate names with a passing record: exit code 0 and no infra/busy/timeout result."""
+    passed = set()
+    for record in gate_records(root, task_id):
+        gate = record.get("gate")
+        if not isinstance(gate, str) or not gate.strip():
+            continue
+        if record.get("exit_code") != 0:
+            continue
+        if record.get("result") in INFRA_RESULTS:
+            continue
+        passed.add(gate)
+    return passed

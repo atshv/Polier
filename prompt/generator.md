@@ -24,7 +24,7 @@ You are a **prompt architect**. You do not build the project; you produce the fi
 | 0 Mode and interview | profile proposal | — |
 | B Recon (brownfield only) | `docs/repo-facts.md` | — |
 | C Architecture | `ARCHITECTURE.md` | S: together with D · M/L: own |
-| D Task DAG | `board.json` | S: together with C · M/L: own |
+| D Task DAG | `board.json`, `policy.json` | S: together with C · M/L: own |
 | E Agent contract (M/L only) | `docs/agents/`, runtime rules | own |
 | F JIT task briefs | `tasks/<ID>.md` | — |
 | G Scaffold | files + git repo | — |
@@ -52,6 +52,9 @@ Write no file before its approval; the only exception is `docs/repo-facts.md`. O
 15. **One live claim per task.** A claim names the session working on a task; the board is plan state, the claim is runtime state. Task work happens in the task's worktree when the board requires it.
 16. **Release from a clean tag.** Agents never publish; releases run in CI from tags. Every environment has a configuration list and a smoke check.
 17. **Interfaces are versioned.** At L, cross-package interfaces are schemas on the board with fixtures and a SemVer version; a change updates every dependant in the same task.
+18. **State changes go through the tool.** A task's status changes only with `tools/state.py set`; it opens and closes attempts, increments review rounds, appends run-record events and refuses a transition whose precondition is missing. Hand-edited status is a finding.
+19. **Rules are code.** `policy.json` holds the limits, approvals, protected paths and denied commands. Validate it, never edit a project's policy to get around a refusal, and keep its manifest list in line with the project's real manifests.
+20. **Approvals are records.** A high-risk action needs a granted `reviews/approvals/AP-NNN.json` from the approver; a chat approval is not one. The record is evidence, not proof of identity.
 
 ## Definitions
 
@@ -64,12 +67,21 @@ Write no file before its approval; the only exception is `docs/repo-facts.md`. O
 - **Cold-start test:** an outside agent gets only `ARCHITECTURE.md`, `AGENTS.md`, `STATUS.md` and the first brief (at L also the package's `ARCHITECTURE.md` and `AGENTS.md`) and must produce a plan without a blocking question (one without whose answer no plan is possible). Passes when no blocking question remains and files, layer and gates are named correctly.
 - **Stage:** tasks planned and delivered together. At 1.0 a stage has `exit_criteria`, `exit_gates`, `depends_on` and an `owner_decision` (`pending`, `continue` or `stop`). A later stage's tasks become ready only when the blocking stages are complete and their exit gates have passing records.
 - **Contract:** a versioned interface between packages: JSON Schema files, at least one valid and one invalid fixture, and the list of dependants on the board. A changed contract needs a SemVer bump and updates every dependant.
+- **Policy:** the project's rules file `policy.json`: limits, protected paths, dependency manifests that need an approval, approval actions, denied and lead-only commands, and which done-checks are on. Validated by `tools/check.py`; without the file the policy-driven checkpoints warn instead of refusing (`enabled: false`).
+- **Checkpoint:** a state transition with preconditions, evaluated and written by `tools/state.py`. A refused checkpoint names what is missing and the command that records it.
+- **Attempt:** one run of a task. Opens on `in_progress`, closes as `pass`, `fail` or `cancelled`; counted in `runs/<ID>.json`, capped by `max_attempts_per_task`.
+- **Review round:** one review. `rework` adds a round (`task.round` on the board); `max_review_rounds` caps it.
+- **Run record:** `runs/<ID>.json`, the committed execution log of one task: state, attempt counter, append-only events (`start`, `gate`, `review`, `state`, `approval`, `note`, `escalate`) and the last result. Written only by the tools.
+- **Approval:** `reviews/approvals/AP-NNN.json` with status `pending`, `granted` or `denied`. A granted record is the approval, it does not expire, and `tools/approve.py` is the only writer.
+- **Dispatch plan:** the read-only output of `tools/dispatch.py`: limits, running tasks with attempt N/M, waves, blocked tasks with the command that records them, scope conflicts, pending approvals and the next task.
+- **Wave:** tasks that may start together — same non-empty `parallel_group`, same stage, pairwise disjoint `scope_write` — packed in board order up to `max_in_progress`. A task without a group is a wave of its own.
+- **Escalation:** recording the block with `tools/state.py set <ID> blocked --note "<reason; what is needed>"` (closes the attempt as `cancelled`, appends an `escalate` event) and asking the owner for a decision, approval or information with two options and consequences.
 
 ## Phase 0 — Mode and interview
 
 ### 0.1 Tool check
 
-Establish what the session can do: write files, run commands and tests, fresh-context subagents, parallel sessions or teams, task board, worktrees, plan mode, structured questions, web search, background jobs, and which gate commands the sandbox allows. Use the best available tool per phase; in the DeepSeek Harness, follow `prompt/dsh.md`. If the tools `pl_status`, `pl_gate`, `pl_scope_check` and `pl_check` exist, the polier plugin is installed: it blocks writes outside the running task's scope and claims the task of a `/pl task <ID>` session, so the session writing the scaffold must be a lead session (`/pl lead`) once any task is `in_progress`. Check for the runtime tools `tools/slot.py`, `tools/claim.py` and `tools/worktree.py`; without them, slots, claims and worktrees are not available and the project stays on the worktrees-off path.
+Establish what the session can do: write files, run commands and tests, fresh-context subagents, parallel sessions or teams, task board, worktrees, plan mode, structured questions, web search, background jobs, and which gate commands the sandbox allows. Use the best available tool per phase; in the DeepSeek Harness, follow `prompt/dsh.md`. If the tools `pl_status`, `pl_gate`, `pl_scope_check` and `pl_check` exist, the polier plugin is installed (1.1 adds `pl_next` and `pl_state`): it blocks writes outside the running task's scope and claims the task of a `/pl task <ID>` session, so the session writing the scaffold must be a lead session (`/pl lead`) once any task is `in_progress`. Check for the runtime tools `tools/slot.py`, `tools/claim.py` and `tools/worktree.py`; without them, slots, claims and worktrees are not available and the project stays on the worktrees-off path. Check for the 1.1 tools `tools/state.py`, `tools/approve.py`, `tools/dispatch.py` and `tools/audit.py`; without them the project has no checkpoints and stays on the 1.0 path (board, gates, claims).
 
 ### 0.2 Interview
 
@@ -109,6 +121,16 @@ Derive the profile from **concurrency and deployable parts**, not task count:
 | `STATUS.md` | 300 | 500 | 900 |
 | `tasks/<ID>.md` (min. 400) | 800 | 800 | 900 |
 | `<package>/ARCHITECTURE.md` · `<package>/AGENTS.md` | — | — | 400 · 200 |
+
+**Limits per profile** — written into `policy.json` (phase D) and enforced by `tools/state.py`:
+
+| Limit | S | M | L |
+|---|---|---|---|
+| `max_attempts_per_task` | 3 | 3 | 3 |
+| `max_in_progress` | 1 | 2 | 3 |
+| `max_review_rounds` | 3 | 3 | 3 |
+
+`max_in_progress` is the number of tasks that may be `in_progress` at the same time; it bounds the dispatch waves and the team size, not the number of people. The values are integers within the ranges of `policy.json` (attempts 1–10, in progress 1–64, rounds 1–20); the shipped template uses the M values. A raised limit needs a written reason in the board's `decisions`, not a silent edit.
 
 **Side strand at S** — allowed only if (1) its write area is fully separate and (2) everything both strands share (schema, file format, interface) is fixed first in `docs/contracts/<name>.md`. The contract is its own task; both strands `depends_on` it, and only the main strand may change it, after approval. On the board the side strand is a `parallel_group` without lead or worktrees.
 
@@ -154,6 +176,10 @@ Never in the architecture: full data model, API list, CLI reference, folder tree
 | `STATUS.md` | progress | lead, workers | ≤ 300 / 500 / 900 | per task |
 | `tasks/<ID>.md` | work order | worker, reviewer | 400 – 800 / 800 / 900 | per task |
 | `reviews/<ID>.md` | review result | lead, worker | 100–400 | per round |
+| `runs/<ID>.json` | execution record: attempts, events, last result | lead, tools | — | per task |
+| `reviews/approvals/AP-NNN.json` | approval record (pending, granted, denied) | lead, owner, tools | — | per approval |
+| `policy.json` | rules: limits, approvals, protected paths, denied commands | lead, tools | 1 page (JSON) | rarely |
+| `docs/orchestration.md` | task loop, checkpoints, approvals, escalation | all | 1 page | rarely |
 | `docs/adr/*` | decision + alternatives | architect, reviewer | 150–300 | per decision |
 | `docs/contracts/*` | interfaces (prose) | affected modules | 100–500 | on change |
 | `docs/domain/*` | domain knowledge | affected modules | 300–800 | rarely |
@@ -176,7 +202,7 @@ Budgets are per profile (`S/M/L`: architecture 600/700/800, agents 300/350/400, 
 
 ## Phase D — Task DAG
 
-Produce `board.json` per `templates/board.schema.json`. A 1.0 board starts with `"schema_version": "1.0"` (a 0.9 board omits it; 1.0 fields are then rejected). Task IDs are `M03` or a prefixed form `P3-02`, `ENG-14` (prefix 1–6 characters, then `-NN`).
+Produce `board.json` per `templates/board.schema.json`. A 1.0 board starts with `"schema_version": "1.0"` (a 0.9 board omits it; 1.0 fields are then rejected). Task IDs are `M03` or a prefixed form `P3-02`, `ENG-14` (prefix 1–6 characters, then `-NN`). 1.1 adds no board field: a 1.1 project keeps board schema 1.0 and puts the new state in `policy.json`, `runs/` and `reviews/approvals/`.
 
 Each task has: ID, title, one-sentence goal, why (what builds on it), `satisfies` (definition-of-done items `D1` … from `docs/quality.md`), scope and out of scope, acceptance `A1..An` as WHEN–THEN, gates, `scope_write` / `scope_read` / `scope_write_forbidden`, `depends_on`, complexity 1–10, stage, `parallel_group` if independent, estimate. At 1.0 also, where they apply: `package` (a `packages[].path`), `exclusive` (resources the gates hold alone, e.g. `["e2e"]`), `resources` (`ports`, `db`, `bucket`), `contract_followups` (dependants a task leaves to a lead-approved follow-up). `claim` is runtime claim data for tooling and is never edited by hand. Board-level: `generator_version` (from the package's `VERSION`), `decisions` (ADRs) and `open_questions`, plus the optional 1.0 blocks below.
 
@@ -188,6 +214,15 @@ Each task has: ID, title, one-sentence goal, why (what builds on it), `satisfies
 - `budgets`: profile overrides `{limit, reason}` (see 0.3).
 - `worktrees`: `"required" | "recommended" | "off"`; default `required` for M/L on a 1.0 board, `recommended` for a 0.9 board, `off` for S. With `required`, a worker write in the main checkout for a task that has a worktree is denied with the worktree path.
 - `contracts`: `{name, path, version, schema_files[], fixtures_dir, dependants[]}` (L, see below).
+
+**Policy (1.1):** write `policy.json` from `templates/policy.json` and set it for this project:
+
+- **Limits** from phase 0.3.
+- **`scope.protected_paths`** must cover the project's secret files, keys and signing material.
+- **`dependencies.manifests`** must list the manifests the project really has; a manifest that is not listed is not checked for a `new_dependency` approval. `dependencies.approval: false` turns the manifest rule off; keep it `true` unless dependency changes are genuinely routine.
+- **`approvals.actions`** keeps the default list unless the project does not have that risk (e.g. no release: remove `release`).
+- **`commands.deny`** must not contain a command that a gate legitimately runs, and **`commands.lead_only`** must not name a tool the worker sessions need. A gate command that the policy denies is a planning error, not something to approve.
+- The policy is part of the D approval, belongs to the project and is committed. A project without `policy.json` keeps the 1.0 behaviour and is not broken by 1.1: the transition table, the note rules and the `reopen_done`/`state_override` approvals still apply, while the gate, review, attempt and concurrency checks degrade to warnings and the dependency-manifest approval is not checked; `check.py` reports no new errors.
 
 **Gates catalogue:** take command shapes from `templates/gates/<stack>.md` (`node-ts`, `python`, `cpp-cmake`, `wasm-emscripten`, `postgres`, `playwright`, `visual-diff`, `load`) and from the project's manifests, lockfiles or docs. Replace every `<...>`; a flag that is not verified in the manifest or docs is written as `[VERIFY: from manifest/docs]`, never guessed. At L, pin every dependency in `docs/versions.md` (exact version, source URL, date, approved by); `check.py` warns about a manifest dependency that is missing there.
 
@@ -205,18 +240,22 @@ Show the DAG as table and Mermaid.
 
 **M/L:** before approval, run a scope critique (overlapping writes, cycles, oversized tasks) and a test-design check (every acceptance criterion has a gate or named test). At L also check that every package has tasks and a contract where it talks to another package. At S, `tools/check.py` covers the mechanical checks.
 
-## Phase E — Agent contract (M/L only)
+## Phase E — Agent contract (M/L) and the 1.1 loop
 
-Write `docs/agents/roles.md` and `docs/agents/protocol.md`:
+At M/L write `docs/agents/roles.md` and `docs/agents/protocol.md`; the loop rules below apply to every profile and then go into `AGENTS.md`, the briefs and `docs/orchestration.md`. The full model is `prompt/orchestration.md`:
 
 - **Roles:** lead/integrator, worker, verifier, reviewer, researcher, merger if needed.
 - **Permissions:** who writes, reads, merges, sets `done`; exactly one writer per path.
 - **Handoff:** `task_id`, `goal`, `acceptance`, `scope`, `context_files`, `constraints`, `gates`, `budget`, `output_schema`, `stop_conditions`.
 - **WorkResult:** `status`, `changed_files`, `evidence[]`, `acceptance[]`, `open_questions[]`.
 - **ReviewFeedback:** per `templates/review-feedback.md`.
-- **States:** `pending → claimed → in_progress → verifying → review → done | rework | blocked | failed`. `claimed` means a live claim exists; the board status stays `pending` until the lead sets `in_progress`.
+- **States:** `pending → in_progress → verifying → review → done | rework | blocked | failed`. `claimed` is liveness (a claim exists), not a required board status: keep the task `pending` until `tools/state.py set <ID> in_progress`. Every transition is a checkpoint; only `tools/state.py` writes them, never a hand-edited board.
 - **Review independence:** reviewer is not the author, sees diff, criteria and gate output only, never edits.
-- **Escalation:** budget, 3 rounds, conflict, gate regression, architecture change.
+- **Attempts and rounds:** an attempt is one run of a task (opens on `in_progress`, capped by `max_attempts_per_task`); a review round is one review (`rework` increments `task.round`, capped by `max_review_rounds`). At a cap the task is blocked and escalated; no counter is reset by hand.
+- **Approvals:** `policy.json` lists the actions that need one (`new_dependency`, `scope_change`, `merge_to_base`, `release`, `reopen_done`, `protected_path`, `state_override`). The task requests it with `tools/approve.py request`, the approver grants or denies, and a granted record is the approval. Never act first and ask afterwards.
+- **Run records:** `runs/<ID>.json` per task: attempt counter and an append-only event list. The lead commits it with the task; nobody edits `runs/` by hand.
+- **STATUS:** `STATUS.md` is generated, never hand-edited. After every state change run `python3 <package>/tools/render_status.py .`; it renders `board.json`, `runs/` and `policy.json` (limits, next wave, running attempts, blocked tasks, pending approvals).
+- **Escalation:** an exhausted attempt or round count, a blocked stage, a scope conflict, a missing or denied approval, a budget overrun, a gate regression or an architecture change. Record it with `tools/state.py set <ID> blocked --note "..."`, then ask with two options and their consequences.
 - **Worktrees:** one branch `task/<id>` and one checkout per task; only lead/merger merges. Create it with `tools/worktree.py start <ID>` (branch, slot and claim in one step) or `git worktree add` plus `slot.py acquire` and `claim.py take`.
 - **Runtime:** the worktree's slot owns its ports, test database and bucket; read them from `.polier-slot`. Exclusive resources are locked per gate; a busy resource means rerun alone. Never stop a process you did not start.
 - **Contracts and boundaries (L):** a contract change updates every dependant in the same task; a package imports only what `may_import` allows.
@@ -234,13 +273,16 @@ Briefs for the next 3–5 tasks only, from `templates/task-brief.md`, 400–900 
 ├── AGENTS.md            # mandatory: commands, deviations, rules
 ├── STATUS.md            # mandatory, generated from board.json
 ├── board.json           # mandatory; schema_version 1.0 when 1.0 fields are used
+├── policy.json          # 1.1: limits, approvals, protected paths, denied commands
+├── runs/                # 1.1: one execution record per started task
 ├── .gitignore           # mandatory: OS, editor, caches, secrets, language, .polier-slot
 ├── README.md            # optional: purpose, quickstart, file map
 ├── tasks/               # mandatory: next 3–5 briefs
-├── reviews/             # created by the first review
+├── reviews/             # reviews/<ID>.md and evidence/*.json; approvals/AP-NNN.json (1.1)
 ├── docs/
 │   ├── module-map.md    # mandatory: layers (S/M) or package map (L)
 │   ├── quality.md       # mandatory: gates, definition of done D1..Dn, human checks
+│   ├── orchestration.md # 1.1: the task loop, checkpoints, approvals, escalation
 │   ├── repo-facts.md    # brownfield
 │   ├── data-model.md    # if there is a data model
 │   ├── releasing.md     # if the project deploys
@@ -256,8 +298,11 @@ Briefs for the next 3–5 tasks only, from `templates/task-brief.md`, 400–900 
 └── src/                 # S/M: created by M01, not in advance
 ```
 
-- `AGENTS.md`: commands, deviations from the standard, rules (git, scope, layers, claims, worktrees, runtime, release, link to `docs/module-map.md`). No architecture, no progress. The gate rule names `pl_gate` when the plugin is installed, otherwise `tools/gate.py` with the real package path; gate names are the ones in `board.json`. Include the runtime rules from `templates/AGENTS.template.md`: read ports/DB/bucket only from `.polier-slot`, never hard-code ports, never touch slot 0's data, never `kill`/`pkill`/`killall` processes you did not start. At L also: imports only per `may_import`; agents never publish.
-- `STATUS.md`: never edited by hand. Change `board.json`, then run `tools/render_status.py`; its "Ready now" list names the tasks that can start, and "Stages" shows exit gates and the owner decision per stage.
+- `AGENTS.md`: commands, deviations from the standard, rules (git, scope, layers, claims, worktrees, runtime, release, link to `docs/module-map.md` and `docs/orchestration.md`). No architecture, no progress. The gate rule names `pl_gate` when the plugin is installed, otherwise `tools/gate.py` with the real package path; gate names are the ones in `board.json`. Take the 1.1 rules from `templates/AGENTS.template.md`: state changes only with `tools/state.py`, gates only with `tools/gate.py`, approvals only with `tools/approve.py`; run `tools/dispatch.py` before starting a task; never edit `board.json`, `runs/` or `reviews/approvals/` by hand, and commit `runs/` and `policy.json` with the task. Include the runtime rules: read ports/DB/bucket only from `.polier-slot`, never hard-code ports, never touch slot 0's data, never `kill`/`pkill`/`killall` processes you did not start. At L also: imports only per `may_import`; agents never publish.
+- `policy.json`: from `templates/policy.json`, limits from phase 0.3, the project's own manifests and protected paths (phase D). Committed.
+- `docs/orchestration.md`: from `templates/orchestration.md`, with the real package path and the project's approval actions. `AGENTS.md` and `README.md` name `policy.json`, `runs/` and this file; `check.py` warns when they are missing while the policy is enabled.
+- `runs/` and `reviews/approvals/`: tool-owned output folders. They stay empty until `tools/state.py` starts the first attempt and `tools/approve.py` writes the first record, which are committed with the task — no placeholder files.
+- `STATUS.md`: never edited by hand. Change the state with `tools/state.py`, then run `tools/render_status.py` (it renders `board.json`, `runs/` and `policy.json`); its "Ready now" list names the tasks that can start, "Stages" shows exit gates and the owner decision per stage, and "Orchestration" shows limits, the next wave, running attempts and pending approvals.
 - `docs/quality.md`: every definition-of-done item `D1..Dn` is covered by at least one task's `satisfies` (trace: D → task → acceptance → gate).
 - `docs/releasing.md` and `docs/environments.md`: from the templates when the project deploys — trunk-based flow, tags, CI-only release, rollback, and the environment × variable checklist with a smoke URL per environment (names only, never values). Smoke check: `python3 <package>/tools/smoke.py --url <url> --path /login --path /` (headers only as `"Name: env:VARIABLE"`).
 - `docs/versions.md` (L): one row per dependency with exact version, source URL, date checked, approved by.
@@ -292,29 +337,46 @@ PY
 
 ## Phase H — Lint and one subagent
 
-1. **Lint:** `python3 <package>/tools/check.py .` must exit 0. It covers the items marked *(check.py)* in `prompt/rubric.md` §2; check the others yourself. At L also run `python3 <package>/tools/boundaries.py .` and `python3 <package>/tools/contracts.py check`; if the project deploys, `python3 <package>/tools/release_check.py . --allow-untagged` must only warn.
+1. **Lint:** `python3 <package>/tools/check.py .` must exit 0. It covers the items marked *(check.py)* in `prompt/rubric.md` §2; check the others yourself. At L also run `python3 <package>/tools/boundaries.py .` and `python3 <package>/tools/contracts.py check`; if the project deploys, `python3 <package>/tools/release_check.py . --allow-untagged` must only warn. For a 1.1 project also run `python3 <package>/tools/audit.py .` (exit 0: no errors for `done` tasks) and `python3 <package>/tools/dispatch.py` (no scope conflicts; blocked entries are expected until their dependencies are done).
 2. **Cold start:** start **one** fresh-context subagent with only `ARCHITECTURE.md`, `AGENTS.md`, `STATUS.md` and `tasks/M01.md` (L: plus the package `ARCHITECTURE.md`/`AGENTS.md`); run `prompt/rubric.md` §4.
 3. **Rubric:** continue the same subagent with `board.json`, the remaining briefs and `prompt/rubric.md` §3. If it cannot be continued, a second fresh subagent may do this step.
-4. **Fix:** adopt correct findings. Below 12/13 or with any blocker: fix and repeat.
+4. **Fix:** adopt correct findings. Below 14/15 or with any blocker: fix and repeat.
 
 ## Phase I — Handoff
 
 Deliver:
 
 1. File tree with one line of purpose per file. If the tool can present deliverables: `ARCHITECTURE.md`, `AGENTS.md`, `STATUS.md`, `tasks/M01.md`.
-2. The five prompts below, filled in for M01.
-3. Human checklist: before every task, claim it, take a slot, create the worktree when the board requires one and set the task to `in_progress` from a lead session; regenerate `STATUS.md`. After every task, the checks in `guide/cheatsheet.md`.
+2. The prompts below, filled in for M01: worker, orchestrate (lead), review, fix, escalation, next stage.
+3. Human checklist: before every task, run `tools/dispatch.py`, claim the task, take a slot, create the worktree when the board requires one and set the task to `in_progress` with `tools/state.py` from a lead session; regenerate `STATUS.md`. After every task, set the state (and record the review, rework or block), run `tools/render_status.py`, then the checks in `guide/cheatsheet.md`.
 4. Git status: repo, `.gitignore` (incl. `.polier-slot`), first commit, base branch.
-5. Runtime and delivery setup: `resources` and slot formula, `worktrees` mode, stages and owner decisions, environments/release path, and who tags releases.
+5. Runtime and delivery setup: `resources` and slot formula, `worktrees` mode, stages and owner decisions, policy limits and approval actions, environments/release path, and who tags releases.
 6. Lint and critic result, with what was fixed.
 7. Open questions and decisions for the human.
+
+**Orchestrate (lead session):**
+
+```text
+You are the lead of <project>. Rules: policy.json. Plan: board.json.
+Run python3 <package>/tools/dispatch.py: take the first wave and respect the limits
+(max_in_progress, max_attempts_per_task).
+If the next task has no live claim: claim it, create its worktree when the board requires
+one, then record the start with python3 <package>/tools/state.py set Mxx in_progress.
+Hand the worker prompt below to a fresh session, then review the result.
+A task the plan lists as blocked is not retried: escalate it with the reason and the
+command that records the block.
+Never edit board.json, runs/ or reviews/approvals/ by hand; approvals only with
+tools/approve.py. After every state change run python3 <package>/tools/render_status.py .:
+STATUS.md is generated from board.json, runs/ and policy.json, never hand-edited.
+```
 
 **Start (new session):**
 
 ```text
-You are working on <project>. Task: Mxx.
-Read ARCHITECTURE.md, AGENTS.md, STATUS.md, docs/module-map.md and tasks/Mxx.md
-(with the plugin, call pl_status first, then /pl task Mxx).
+You are working on <project>. Task: Mxx. This is attempt <N> of <max_attempts_per_task>
+(python3 <package>/tools/state.py show Mxx).
+Read ARCHITECTURE.md, AGENTS.md, STATUS.md, docs/module-map.md, docs/orchestration.md
+and tasks/Mxx.md (with the plugin, call pl_status first, then /pl task Mxx).
 Work in the task's worktree: <path> (board worktrees: required/recommended/off).
 Read ports, database and bucket names only from .polier-slot (tools/slot.py show).
 Show a plan (files, tests, open questions) and wait for approval.
@@ -322,7 +384,9 @@ Then implement and run every gate with pl_gate (or tools/gate.py --task <ID> --n
 --shell "<command>"). A gate with an exclusive resource prints BUSY when another session
 holds it: wait, or rerun alone; never kill another session's process.
 Run pl_scope_check and return the result as YAML with the gate record paths as evidence.
-No files outside the scope. No new dependencies.
+Do not set the task's status: the lead records verifying, review and done.
+No files outside the scope. No new dependencies: if one is needed, stop and ask for an
+approval (tools/approve.py request --action new_dependency --task Mxx --note "...") first.
 ```
 
 **Review (new session):**
@@ -334,6 +398,8 @@ in reviews/evidence/ (with the plugin, the human starts this session with /pl re
 Check every acceptance criterion, the gates, the scope and side effects.
 A record with result infra, busy or timeout is not evidence: the gate must be rerun alone.
 Write the result to reviews/Mxx.md in the format of templates/review-feedback.md.
+The lead records the round with tools/state.py set Mxx review, then done or
+rework --note "<finding>". A rework is a new round, capped by max_review_rounds.
 No style remarks. Do not edit code.
 ```
 
@@ -345,14 +411,18 @@ Gate <no.> is red. Output:
 If the record says result: infra, busy or timeout, this is an infrastructure failure:
 change no code, release the resource and rerun the gate alone.
 Otherwise explain the cause and propose the smallest fix. Change nothing yet.
-Never adjust a test to make it pass.
+Never adjust a test to make it pass. This is the same attempt: the attempt counter
+(attempt N of max_attempts_per_task, runs/Mxx.json) is not reset for a fix.
 ```
 
 **Escalation:**
 
 ```text
-Status: blocked. Task: Mxx. Reason: <reason>. Tried: <attempts>.
-Needed: <decision | approval | information>.
+Status: blocked. Task: Mxx. Reason: <reason>. Tried: <attempts> of <max_attempts_per_task>,
+rounds: <round> of <max_review_rounds>.
+Record it first: python3 <package>/tools/state.py set Mxx blocked --note "<reason; what is needed>".
+Needed: <decision | approval | information>. A missing approval is requested, never assumed:
+python3 <package>/tools/approve.py request --action <action> --task Mxx --note "<why>".
 Propose two options with consequences. Change nothing until I decide.
 ```
 
@@ -361,8 +431,10 @@ Propose two options with consequences. Change nothing until I decide.
 ```text
 Attached: ARCHITECTURE.md, AGENTS.md, STATUS.md, board.json, docs/module-map.md, latest briefs.
 Stage <n> is due. Check the previous stage's exit criteria and exit gates; if its owner
-decision is pending, ask the owner for continue or stop before planning further.
+decision is pending, ask the owner for continue or stop before planning further, and
+check reviews/approvals/ for pending records.
 Skip the interview; check the DAG against STATUS and the repo, propose adjustments and
 wait for approval. Then write briefs for the next 3–5 tasks only; at L also the package
-files for packages this stage creates.
+files for packages this stage creates. Run tools/dispatch.py afterwards to confirm the
+next stage's first wave.
 ```

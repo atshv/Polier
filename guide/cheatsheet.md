@@ -8,10 +8,10 @@ The human's operating manual. The generator drafts and writes; you approve, star
 |---|---|---|
 | 0 Interview | tool check, ≤ 10 questions per round, profile proposal | confirm the profile, the runtime resources and the release path |
 | B Recon | repo facts (brownfield) | confirm or correct |
-| C + D | architecture, artifact map, task DAG, package map (L), stages | approve (S: together; M/L: separately) |
+| C + D | architecture, artifact map, task DAG, package map (L), stages, `policy.json` | approve (S: together; M/L: separately) |
 | E | roles and protocol, worktrees, claims, runtime rules (M/L) | approve |
-| F + G | 3–5 briefs, scaffold, git repo, `.polier-slot` rule | check file tree, git, structure |
-| H | `check.py`, cold start, rubric; L: `boundaries.py`, `contracts.py` | decide on findings |
+| F + G | 3–5 briefs, scaffold, git repo, `.polier-slot` rule, `policy.json`, `docs/orchestration.md`, `AGENTS.md` rules | check file tree, git, structure, policy limits |
+| H | `check.py`, cold start, rubric; `audit.py`, `dispatch.py`; L: `boundaries.py`, `contracts.py` | decide on findings |
 | I | prompts, checklist | start M01 |
 
 ## After the scaffold
@@ -21,13 +21,32 @@ The human's operating manual. The generator drafts and writes; you approve, star
 - **AGENTS.md:** commands, git and commit rule, scope and layer rule, runtime rule (ports/DB only from `.polier-slot`, no `kill`/`pkill`); no architecture, no progress.
 - **Board:** `schema_version: "1.0"` only if 1.0 fields are used; stages have `exit_gates` and an `owner_decision`; tasks that share e2e, load or a database list the resource in `exclusive`.
 - **Generator copy:** if the package sits inside the project (`.generator/`), it is gitignored and ships `tools/manifest.json`, so `check.py` reports drift.
+- **Policy:** `policy.json` exists, `version: 1`, limits match the profile (S 3/1/3, M 3/2/3, L 3/3/3 for attempts/in progress/rounds), the manifest list matches the project; `docs/orchestration.md` exists and `AGENTS.md` names `policy.json`, `runs/` and the state commands.
+
+## The task loop (1.1)
+
+The lead runs the transitions; the worker runs the gates and reports, the reviewer writes the review.
+
+- [ ] `python3 <package>/tools/dispatch.py`: first wave, blocked tasks, scope conflicts, pending approvals.
+- [ ] Claim the task and, when the board requires one, create its worktree.
+- [ ] `python3 <package>/tools/state.py set <ID> in_progress`: opens attempt N of `max_attempts_per_task`; refuses when the limit is used up, too many tasks run at once, or the stage is stopped or waiting.
+- [ ] Gates: `pl_gate` or `tools/gate.py` for every gate in `board.json`; each run appends a `gate` event to `runs/<ID>.json`.
+- [ ] `python3 <package>/tools/state.py set <ID> verifying`: needs the open attempt.
+- [ ] `python3 <package>/tools/state.py set <ID> review`: needs a passing record for every gate.
+- [ ] Reviewer writes `reviews/<ID>.md`; then `state.py set <ID> done --note "..."`, or `state.py set <ID> rework --note "<finding>"`.
+- [ ] Attempts: never reset by hand; at the cap `state.py` refuses and names the escalate command — set `blocked` with a note, then escalate.
+- [ ] Rounds: `rework` counts one; at `max_review_rounds`, escalate instead of another round.
+- [ ] Approvals: `tools/approve.py request --action <action> --task <ID> --note "<why>"`, then the owner `grant`s or `deny`s. A granted record comes before the action, not after; `list --status pending` shows open ones.
+- [ ] `runs/<ID>.json` is committed with the task and never hand-edited.
+- [ ] `python3 <package>/tools/audit.py .` exits 0; `tools/dispatch.py` shows no conflicts.
+- [ ] After every transition: `python3 <package>/tools/render_status.py .`. `STATUS.md` is generated from `board.json`, `runs/` and `policy.json`, never hand-edited.
 
 ## Before every task
 
-- [ ] Pick the next task from "Ready now" in `STATUS.md`; at M/L no later-stage task before the blocking stage's exit gates and owner decision are done.
+- [ ] Pick the next task from "Ready now" in `STATUS.md` or the first wave of `tools/dispatch.py`; at M/L no later-stage task before the blocking stage's exit gates and owner decision are done. A task the plan lists as blocked is not retried.
 - [ ] In a lead session (`/pl lead` with the DSH plugin): create the claim and, when the board requires a worktree, the worktree — `python3 <package>/tools/worktree.py start <ID>` (branch + slot + claim). Without the helper: `git worktree add`, then `tools/slot.py acquire`, then `tools/claim.py take <ID> --harness cli --session <name>`.
 - [ ] Check the slot: `tools/slot.py show` — ports, `db_name`, `bucket`. Slot 0 is the owner's checkout; never touch its data.
-- [ ] Set the task to `in_progress` in `board.json`, run `render_status.py` (`/pl render`).
+- [ ] Set the task to `in_progress` with `tools/state.py set <ID> in_progress` — never by editing `board.json` — then run `render_status.py` (`/pl render`).
 - [ ] Start the worker in that worktree without `/pl lead`. With several tasks in progress or in a worktree: `/pl task <ID>` in that session (it takes/refreshes the claim).
 - [ ] Check with `/pl status` that the session shows the right task and scope; `pl_status` shows every live claim of the repo.
 
@@ -36,19 +55,19 @@ The human's operating manual. The generator drafts and writes; you approve, star
 - [ ] Gate records exist (`reviews/evidence/*.json` from `pl_gate` or `gate.py`), not just "done". A record with `result: infra | busy | timeout` is not evidence — rerun the gate alone; never count a BUSY run as a failed test.
 - [ ] Every acceptance criterion evidenced.
 - [ ] Diff stays within the scope; no tests changed without approval. Changes from another live claim show up as "foreign changes (task X, harness Y)" — they are not this task's violations.
-- [ ] Independent review in a new session (`/pl reviewer` with the plugin), no open blockers (`reviews/Mxx.md`).
+- [ ] Independent review in a new session (`/pl reviewer` with the plugin), no open blockers (`reviews/Mxx.md`); set `review` before it and `done`/`rework` after it with `tools/state.py`.
 - [ ] No placeholders, TODOs or `[UNVERIFIED]`.
-- [ ] As lead: merge `task/<ID>`, run the gates again on the base branch, release the claim and the slot and remove the worktree (`python3 <package>/tools/worktree.py finish <ID>` — refuses a dirty checkout), record paths into the task's `evidence`, status `done`, `handoff` written, `STATUS.md` regenerated, `check.py` (`pl_check`) green; commit `<ID>: <title>` including `reviews/evidence/`.
+- [ ] As lead: merge `task/<ID>`, run the gates again on the base branch, release the claim and the slot and remove the worktree (`python3 <package>/tools/worktree.py finish <ID>` — refuses a dirty checkout), record paths into the task's `evidence`, `state.py set <ID> done`, `handoff` written, `STATUS.md` regenerated, `check.py` (`pl_check`) and `tools/audit.py` green; commit `<ID>: <title>` including `reviews/evidence/` and `runs/<ID>.json`.
 - [ ] Next task starts from its brief.
 
 ## Stage end
 
-- [ ] Every task in the stage is `done` with evidence.
+- [ ] Every task in the stage is `done` with evidence; `tools/audit.py` reports no errors for it.
 - [ ] Every stage `exit_gates` name has at least one passing record. `render_status.py` shows the missing ones.
 - [ ] `exit_criteria` are checked by a human or reviewer, not by a gate.
 - [ ] The owner decision is on the board: `owner_decision: "continue"` (or `"stop"`). While it is `pending`, the next stage is not ready and `check.py` errors on any of its tasks that is `in_progress`.
 - [ ] For a `stop`: write down what stopped it, leave the tasks pending, commit the board.
-- [ ] Then write the next stage's briefs (3–5) and, at L, the package files for packages the stage creates.
+- [ ] Then write the next stage's briefs (3–5) and, at L, the package files for packages the stage creates; run `tools/dispatch.py` to confirm the first wave.
 
 ## Release checklist
 
@@ -74,7 +93,14 @@ The human's operating manual. The generator drafts and writes; you approve, star
 | Generator scores itself | require critic and cold start |
 | Two tasks write the same files | split scopes or run sequentially |
 | Two sessions on one task | the second claim fails and names the holder; pick another task |
-| Agent sets its own task to `done` | only the lead sets `done`, after gates and merge |
+| Agent sets its own task to `done` | only the lead sets `done` with `tools/state.py`, after gates and review |
+| Status edited into `board.json` by hand | the run record and the audit disagree; run `tools/state.py set` instead and restore the board |
+| Attempt limit reached | `blocked` plus an escalation; the counter is the record, do not reset it |
+| Review round limit reached | escalate with the open findings instead of another `rework` |
+| Dependency added without a record | `tools/approve.py request` then `grant`; the guard and `audit.py` read the record, not the chat |
+| `runs/` or `reviews/approvals/` edited by hand | restore from git; the state tool is the only writer |
+| A gate command is denied by the policy | the policy's `commands.deny` must not list it; fix the policy in a reviewed change, no approval overrides a deny |
+| `policy.json` fails the check | `version: 1`, known keys only, limits in range; without it the transition table and note rules still hold, the rest warns |
 | Write blocked by Polier | expected outside the scope; if the change is right, extend `scope_write` as lead or split the task |
 | Write denied with "work in …" | the task has a worktree and this session is in the main checkout; work there |
 | Guard never blocks anything | task not `in_progress`, session in lead mode, or plugin not loaded (`/pl status`) |
@@ -102,7 +128,8 @@ Update only between stages, when the current stage is `done` and committed — n
 3. Reinstall or update once so the copy ships `tools/manifest.json`; then `python3 <package>/tools/drift.py .` reports "local edits or outdated copy" instead of silence.
 4. Run `check.py` on the project and apply the migration steps until it is green. A 0.9 project under 1.0 prints migration warnings only; a 1.0 field without `schema_version` is an error.
 5. At M/L set `worktrees` (default `required` on a 1.0 board; a 0.9 board stays `recommended`), at L add `schema_version`, `packages`, `stages`, `resources` and `contracts`; budgets only with a `reason`.
-6. Set `generator_version` in `board.json`, run `render_status.py`, commit `chore: update generator to <version>`.
+6. Optional 1.1 adoption: copy `policy.json` and `docs/orchestration.md` from the templates, add the state/gate/approval rules to `AGENTS.md`, and commit `runs/` from the next task on. Without `policy.json` the project is not broken: the transition table, note rules and `reopen_done`/`state_override` approvals still hold, the rest of the 1.1 checks warn. Once the file exists, every state change goes through `tools/state.py`.
+7. Set `generator_version` in `board.json`, run `render_status.py`, commit `chore: update generator to <version>`.
 
 If migration fails, restore the old package; the project is untouched outside that commit.
 

@@ -27,6 +27,7 @@ Details: `ARCHITECTURE.md`. Progress: `STATUS.md`. Structure: `docs/module-map.m
 - Read `ARCHITECTURE.md`, `AGENTS.md`, `STATUS.md`, `docs/module-map.md`, the package files and your brief first. Unclear: `open_questions`; do not guess.
 - Stay inside your scope: a package task writes inside its package, contract paths are the only exception. Check `git status` before finishing.
 - Run every gate with `python3 .generator/tools/gate.py --task <ID> --name <gate> -- <command>`, gate names from `board.json`. Commit `reviews/evidence/` with the task.
+- State changes and approvals only with `.generator/tools/state.py` and `approve.py`; never edit `board.json`, `runs/` or `reviews/approvals/` by hand. `dispatch.py` before a task.
 - One commit per task (`<ID>: <title>`); no push, no PR without approval.
 - Versions only from `docs/versions.md` or a manifest; no invented packages or flags.
 - Secrets never in the repo: web bundles are public.

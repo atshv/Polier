@@ -22,10 +22,14 @@ from .paths import inside, is_main_checkout, normalized, outside, relative, reso
 
 # Always writable: gate logs and records belong to the task that produced them.
 ALWAYS_ALLOWED = ("reviews/evidence",)
-# Lead-owned files: a worker must not edit the board, the generated status or briefs.
-BOARD_FILES = ("board.json", "STATUS.md", "tasks")
+# Lead-owned files: a worker must not edit the board, the generated status, the
+# briefs or the run records (both are written by the tools).
+BOARD_FILES = ("board.json", "STATUS.md", "tasks", "runs")
 # The only folder a reviewer session writes to.
 REVIEWS = "reviews"
+# Approval records are the approver's: a reviewer writes review material, never
+# the approval ledger (tools/approve.py owns it).
+APPROVALS = "reviews/approvals"
 # Session roles: worker (default) is limited to the task scope, reviewer to reviews/,
 # lead and off are not limited.
 ROLES = ("worker", "reviewer", "lead", "off")
@@ -125,6 +129,8 @@ def check_write(path: str, tasks: Union[dict, Iterable[dict], None], role: str =
     rel = relative(root, resolve(cwd or root, path)) if root is not None else normalized(path)
     if role == "reviewer":
         if inside(rel, REVIEWS) and not rel.startswith("../"):
+            if inside(rel, APPROVALS):
+                return Decision(False, "approvals", "is the approval ledger", rel)
             return Decision(True, path=rel)
         return Decision(False, "reviewer", "is outside reviews/", rel)
     if role != "worker" or not tasks:
@@ -137,6 +143,10 @@ def write_denial(decision: Decision, tasks: Union[dict, Iterable[dict], None], r
     """The message an agent gets for a denied write."""
     shown = decision.path or target
     if role == "reviewer":
+        if decision.code == "approvals":
+            return (f"Polier: write to {shown} blocked, the path {decision.reason} "
+                    "(reviews/approvals is the approver's, not review material). "
+                    "Report the needed decision in the review instead.")
         return (f"Polier: write to {shown} blocked, a reviewer session writes only under reviews/. "
                 "Report the problem in the review instead of fixing it.")
     if isinstance(tasks, dict):

@@ -1,4 +1,5 @@
-"""Rules of tools/check.py: stage gates (PL-08), budgets (PL-09), packages (PL-06), versions (PL-13)."""
+"""Rules of tools/check.py: stage gates (PL-08), budgets (PL-09), packages (PL-06), versions (PL-13)
+and the 1.1 orchestration checks (policy, audit, approvals, run records, scopes, dispatch, docs)."""
 from __future__ import annotations
 
 import json
@@ -197,6 +198,184 @@ class Versions(unittest.TestCase):
         warnings: list[str] = []
         check.check_versions(temp_root(), {"profile": "M"}, warnings)
         self.assertEqual(warnings, [])
+
+
+class OrchestrationChecks(unittest.TestCase):
+    """1.1: policy, audit, approvals, run records, scopes, dispatch and docs."""
+
+    def project(self, policy=None, *, agents=True, readme=True, orchestration=True,
+                agents_text=None, readme_text=None) -> Path:
+        root = temp_root()
+        (root / "policy.json").write_text(
+            json.dumps({"version": 1} if policy is None else policy), encoding="utf-8")
+        if agents:
+            (root / "AGENTS.md").write_text(
+                agents_text or "State changes with tools/state.py; never edit runs/. "
+                               "policy.json is committed.\n", encoding="utf-8")
+        if readme:
+            (root / "README.md").write_text(
+                readme_text or "Limits live in policy.json; runs/ holds the records.\n",
+                encoding="utf-8")
+        if orchestration:
+            (root / "docs").mkdir()
+            (root / "docs/orchestration.md").write_text("# Orchestration\n", encoding="utf-8")
+        return root
+
+    def run_checks(self, root: Path, board_data: dict) -> tuple[list, list]:
+        errors: list[str] = []
+        warnings: list[str] = []
+        check.check_orchestration(root, board_data, errors, warnings)
+        return errors, warnings
+
+    def board(self, *tasks: dict, **extra) -> dict:
+        data = {"project": "t", "profile": "S", "base_branch": "main", "tasks": list(tasks)}
+        data.update(extra)
+        return data
+
+    def write_json(self, root: Path, rel: str, data) -> None:
+        path = root / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(data), encoding="utf-8")
+
+    # -- policy ------------------------------------------------------------
+
+    def test_a_project_without_a_policy_only_warns(self):
+        errors, warnings = self.run_checks(temp_root(), self.board(task()))
+        self.assertEqual(errors, [])
+        self.assertTrue(any("1.1 features" in warning or "orchestration checks are off" in warning
+                            for warning in warnings), warnings)
+
+    def test_a_corrupt_policy_is_an_error(self):
+        root = temp_root()
+        (root / "policy.json").write_text("{not json", encoding="utf-8")
+        errors, _warnings = self.run_checks(root, self.board(task()))
+        self.assertEqual(len(errors), 1, errors)
+        self.assertIn("not valid JSON", errors[0])
+
+    def test_policy_errors_are_errors(self):
+        root = self.project({"version": 1, "limits": {"max_attempts_per_task": 99},
+                             "bogus": True})
+        errors, _warnings = self.run_checks(root, self.board(task()))
+        self.assertTrue(any("max_attempts_per_task" in error for error in errors), errors)
+        self.assertTrue(any("unknown key 'bogus'" in error for error in errors), errors)
+
+    # -- audit, approvals, run records -------------------------------------
+
+    def test_a_done_task_without_the_chain_is_an_audit_error(self):
+        root = self.project()
+        board_data = self.board(task("M01", status="done"))
+        errors, _warnings = self.run_checks(root, board_data)
+        self.assertTrue(any("no run record runs/M01.json" in error for error in errors), errors)
+        self.assertTrue(any("passing gate record for tests" in error for error in errors), errors)
+        self.assertTrue(any("review file reviews/M01.md is missing" in error for error in errors),
+                        errors)
+
+    def test_pending_approvals_are_accepted(self):
+        root = self.project()
+        self.write_json(root, "reviews/approvals/AP-001.json", {
+            "id": "AP-001", "action": "new_dependency", "task": "M01", "status": "pending",
+            "requested_by": "worker", "requested_at": "2026-10-28T11:00:00+00:00",
+            "approved_by": None, "approved_at": None, "note": "adds httpx",
+        })
+        errors, _warnings = self.run_checks(root, self.board(task()))
+        self.assertEqual(errors, [])
+
+    def test_broken_approval_records_are_errors(self):
+        root = self.project()
+        self.write_json(root, "reviews/approvals/AP-001.json", {
+            "id": "AP-001", "action": "make_coffee", "task": "NOPE", "status": "granted",
+            "requested_by": "worker", "requested_at": "2026-10-28T11:00:00+00:00",
+        })
+        errors, _warnings = self.run_checks(root, self.board(task()))
+        self.assertTrue(any("unknown action" in error for error in errors), errors)
+        self.assertTrue(any("unknown task 'NOPE'" in error for error in errors), errors)
+
+    def test_run_records_are_validated(self):
+        root = self.project()
+        self.write_json(root, "runs/M01.json", {
+            "task": "M02", "state": "lost", "attempt": -1,
+            "attempts": [{"n": "one"}],
+        })
+        self.write_json(root, "runs/M99.json", {
+            "task": "M99", "state": "idle", "attempt": 0, "attempts": [],
+        })
+        errors, _warnings = self.run_checks(root, self.board(task()))
+        joined = "\n".join(errors)
+        self.assertIn("runs/M01.json: task 'M02' does not match the file name 'M01'", joined)
+        self.assertIn("unknown state 'lost'", joined)
+        self.assertIn("attempt must be a non-negative integer", joined)
+        self.assertIn("attempts[0] needs an integer n", joined)
+        self.assertIn("runs/M99.json: task 'M99' is not on the board", joined)
+
+    # -- limits and scopes -------------------------------------------------
+
+    def test_two_in_progress_tasks_may_not_overlap_scopes(self):
+        root = self.project()
+        board_data = self.board(
+            task("M01", status="in_progress", scope_write=["src/"]),
+            task("M02", status="in_progress", scope_write=["src/db/"]),
+        )
+        errors, _warnings = self.run_checks(root, board_data)
+        self.assertTrue(any("both in_progress with overlapping scope_write" in error
+                            for error in errors), errors)
+
+    def test_attempts_above_the_limit_are_errors(self):
+        root = self.project({"version": 1, "limits": {"max_attempts_per_task": 2}})
+        self.write_json(root, "runs/M01.json", {
+            "task": "M01", "state": "failed", "attempt": 3,
+            "attempts": [{"n": 1, "result": "fail"}, {"n": 2, "result": "fail"},
+                         {"n": 3, "result": "fail"}],
+        })
+        errors, _warnings = self.run_checks(root, self.board(task()))
+        self.assertTrue(any("3 attempts used" in error and "max_attempts_per_task is 2" in error
+                            for error in errors), errors)
+
+    # -- dispatch ----------------------------------------------------------
+
+    def dispatch_board(self) -> dict:
+        return self.board(
+            task("T-01", status="pending", parallel_group="wave", scope_write=["src/"]),
+            task("T-02", status="pending", parallel_group="wave", scope_write=["src/db/"]),
+            task("T-03", status="pending", depends_on=["T-01"]),
+        )
+
+    def test_dispatch_conflicts_are_errors_and_blocked_tasks_are_warnings(self):
+        root = self.project()
+        (root / "tasks").mkdir()
+        for tid in ("T-01", "T-02", "T-03"):
+            (root / "tasks" / f"{tid}.md").write_text(f"# {tid} — x\n", encoding="utf-8")
+        errors, warnings = self.run_checks(root, self.dispatch_board())
+        self.assertTrue(any("dispatch: T-01 and T-02 share" in error for error in errors), errors)
+        self.assertTrue(any("dispatch: T-03 is blocked" in warning for warning in warnings),
+                        warnings)
+
+    def test_disjoint_scopes_off_turns_the_conflict_into_no_error(self):
+        root = self.project({"version": 1, "checks": {"disjoint_scopes": False}})
+        (root / "tasks").mkdir()
+        for tid in ("T-01", "T-02", "T-03"):
+            (root / "tasks" / f"{tid}.md").write_text(f"# {tid} — x\n", encoding="utf-8")
+        errors, _warnings = self.run_checks(root, self.dispatch_board())
+        self.assertFalse(any("dispatch:" in error for error in errors), errors)
+
+    # -- docs --------------------------------------------------------------
+
+    def test_missing_doc_references_are_warnings(self):
+        root = self.project(agents_text="no tool names here\n", readme_text="nothing\n",
+                            orchestration=False)
+        errors, warnings = self.run_checks(root, self.board(task()))
+        self.assertEqual(errors, [])
+        joined = "\n".join(warnings)
+        self.assertIn("tools/state.py is not mentioned", joined)
+        self.assertIn("docs/orchestration.md is missing", joined)
+        self.assertIn("runs/ is not mentioned", joined)
+        self.assertIn("policy.json is not mentioned", joined)
+
+    def test_an_unnamed_orchestration_page_warns(self):
+        root = self.project(agents_text="no tool names here\n", readme_text="nothing\n")
+        errors, warnings = self.run_checks(root, self.board(task()))
+        self.assertEqual(errors, [])
+        self.assertTrue(any("docs/orchestration.md is not mentioned" in warning
+                            for warning in warnings), warnings)
 
 
 if __name__ == "__main__":
