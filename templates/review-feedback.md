@@ -27,3 +27,4 @@ findings:
 - The reviewer may not edit code.
 - The reviewer sees the diff, acceptance criteria, gate output and architecture, not the author's reasoning.
 - `verdict: pass` only when all blockers are gone and the gates are green.
+- A `rework` verdict is a new review round: the lead records it with `tools/state.py set <ID> rework --note "..."`, `max_review_rounds` caps the count, and `done` needs `verdict: pass`.

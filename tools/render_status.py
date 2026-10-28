@@ -57,6 +57,8 @@ def _render_stages(board: dict, tasks: list, root=None) -> list:
             state = "exit gates missing: " + ", ".join(stage["missing_gates"])
         elif stage["incomplete_deps"]:
             state = "blocked by stage " + ", ".join(stage["incomplete_deps"])
+        elif stage.get("tasks_open"):
+            state = "tasks open"
         else:
             state = "complete"
         lines.append(f"- State: {state}")
@@ -69,6 +71,8 @@ def _render_stages(board: dict, tasks: list, root=None) -> list:
             lines.append("- Exit criteria: " + "; ".join(stage["exit_criteria"]))
         if stage["tasks"]:
             lines.append("- Tasks: " + ", ".join(str(t) for t in stage["tasks"]))
+        if stage.get("tasks_open"):
+            lines.append("- Tasks open: " + ", ".join(str(t) for t in stage["tasks_open"]))
         lines.append("")
     return lines
 
@@ -132,6 +136,94 @@ def _render_runtime(board: dict) -> list:
 
 
 
+def _short_blocked_reason(reason) -> str:
+    """One of the dispatch reasons, shortened for the one-line STATUS budget."""
+    text = reason.strip() if isinstance(reason, str) else ""
+    if text.startswith("attempts "):
+        return "attempts exhausted"
+    if "stage stopped" in text:
+        return "stopped stage"
+    if text.startswith("stage waits"):
+        return "stage waits"
+    if text.startswith("waits for"):
+        return "open dependency"
+    if "brief" in text and "missing" in text:
+        return "missing brief"
+    if text.startswith("claimed by"):
+        return "claimed by another session"
+    return text
+
+
+def _render_orchestration(board: dict, root, with_claims: bool) -> list:
+    """The 1.1 execution state in at most 10 lines: limits, next wave, running, blocked, approvals.
+
+    Rendered only when the project uses the 1.1 stores (a policy or run
+    records). The running-task claim is shown inside the claims markers, so the
+    freshness check stays stable while sessions come and go.
+    """
+    if root is None:
+        return []
+    folder = Path(root)
+    if not (folder / "policy.json").is_file() and not (folder / "runs").is_dir():
+        return []
+    try:
+        from core.dispatch import plan
+        report = plan(folder, board)
+    except Exception:  # noqa: BLE001  a broken plan must not stop the render
+        return []
+
+    limits = report.get("limits") or {}
+    lines = ["## Orchestration", ""]
+    lines.append(f"- Limits: {limits.get('max_attempts_per_task', '?')} attempts/task, "
+                 f"{limits.get('max_in_progress', '?')} in progress")
+
+    next_ids = [str(task) for task in report.get("next") or []]
+    if next_ids:
+        lines.append("- Next wave: " + ", ".join(f"`{tid}` ({'tasks/' + tid + '.md'})"
+                                                 for tid in next_ids))
+    else:
+        lines.append("- Next wave: none — nothing is ready")
+
+    running = report.get("running") or []
+    if running:
+        parts = []
+        for entry in running:
+            text = (f"`{entry.get('id')}` attempt {entry.get('attempt', 0)}"
+                    f"/{entry.get('max_attempts') or '?'}")
+            claim = entry.get("claim")
+            if isinstance(claim, dict) and with_claims:
+                harness = claim.get("harness") or "unknown harness"
+                text += f"{CLAIMS_BEGIN} — claimed by {harness}{CLAIMS_END}"
+            parts.append(text)
+        lines.append("- Running: " + "; ".join(parts))
+    else:
+        lines.append("- Running: none")
+
+    blocked = report.get("blocked") or []
+    if blocked:
+        groups: dict = {}
+        for entry in blocked:
+            groups.setdefault(_short_blocked_reason(entry.get("reason")), []).append(
+                str(entry.get("id")))
+        lines.append("- Blocked: " + "; ".join(
+            f"{', '.join(ids)} ({reason})" for reason, ids in groups.items()))
+    else:
+        lines.append("- Blocked: none")
+
+    pending = report.get("approvals_pending") or []
+    if pending:
+        parts = []
+        for record in pending:
+            target = f" for {record.get('task')}" if record.get("task") else ""
+            parts.append(f"`{record.get('id')}` {record.get('action')}{target}")
+        lines.append("- Approvals pending: " + "; ".join(parts))
+    else:
+        lines.append("- Approvals pending: none")
+
+    lines.append("")
+    return lines
+
+
 def strip_claims(text: str) -> str:
     """`text` without the live-claims block, for the STATUS.md freshness check."""
     without = re.sub(re.escape(CLAIMS_BEGIN) + r".*?" + re.escape(CLAIMS_END), "", text, flags=re.S)
@@ -178,6 +270,9 @@ def render(board: dict, root=None, with_claims: bool = True) -> str:
     else:
         lines.append("- none")
     lines.append("")
+
+    # 1.1 execution state: limits, next wave, running, blocked, pending approvals.
+    lines += _render_orchestration(board, root, with_claims)
 
     groups = [
         ("Done", {"done"}),

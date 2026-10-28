@@ -109,3 +109,34 @@ class ScopeCheck(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class OneOneScopeCodes(unittest.TestCase):
+    """1.1 codes shared with the DSH guard (core/tests/write_cases.json): runs/ is
+    lead-owned and a reviewer may not write the approval ledger."""
+
+    def run_check(self, root, *args):
+        return run_tool("scope_check.py", str(root), *args)
+
+    def test_run_records_are_lead_owned(self):
+        root = make_project([task()])
+        (root / "runs").mkdir()
+        (root / "runs" / "M01.json").write_text("{}\n", encoding="utf-8")
+        result = self.run_check(root)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("runs/M01.json: lead-owned", result.stdout)
+        self.assertEqual(self.run_check(root, "--allow-board").returncode, 0)
+
+    def test_reviewer_may_not_write_the_approval_ledger(self):
+        from core.scope import check_write
+        decision = check_write("reviews/approvals/AP-001.json", [task()], role="reviewer")
+        self.assertEqual((decision.ok, decision.code), (False, "approvals"))
+        self.assertIn("approval ledger", decision.reason)
+
+    def test_reviewer_still_writes_review_material(self):
+        from core.scope import check_write
+        self.assertTrue(check_write("reviews/M01.md", [task()], role="reviewer").ok)
+
+    def test_worker_still_writes_gate_evidence(self):
+        from core.scope import check_write
+        self.assertTrue(check_write("reviews/evidence/x.json", [task()]).ok)

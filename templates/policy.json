@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "limits": {
+    "max_attempts_per_task": 3,
+    "max_in_progress": 2,
+    "max_review_rounds": 3
+  },
+  "scope": {
+    "protected_paths": [".env", ".env.*", "secrets/**", "**/*.pem", "**/*.key", "**/id_rsa*"]
+  },
+  "dependencies": {
+    "approval": true,
+    "manifests": ["package.json", "pyproject.toml", "Cargo.toml", "go.mod", "Package.swift", "requirements.txt"]
+  },
+  "approvals": {
+    "actions": ["new_dependency", "scope_change", "merge_to_base", "release", "reopen_done", "protected_path"],
+    "approver": "owner"
+  },
+  "commands": {
+    "deny": ["git push*", "npm publish*", "pnpm publish*", "yarn publish*", "docker push*", "gh release*", "kubectl apply*", "kubectl delete*", "terraform apply*", "rm -rf /*"],
+    "lead_only": ["*tools/state.py set*", "*tools/approve.py grant*", "*tools/approve.py deny*", "*tools/worktree.py finish*"],
+    "warn": ["*kill*", "*pkill*", "killall*"]
+  },
+  "checks": {
+    "review_before_done": true,
+    "handoff_before_done": true,
+    "run_record": true,
+    "disjoint_scopes": true
+  }
+}

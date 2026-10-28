@@ -26,6 +26,7 @@ from typing import List, Tuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from core import runs  # noqa: E402
 from core.board import load_board, resources  # noqa: E402
 from core.errors import PolierError  # noqa: E402
 from core.gate import run_gate, summary, valid_name  # noqa: E402
@@ -98,6 +99,17 @@ def main() -> int:
     except PolierError as exc:
         print(f"gate.py: {exc}", file=sys.stderr)
         return 1
+
+    # 1.1 run record: append a gate event after every written record (pass, fail,
+    # timeout, infra or busy). A failure here must never change the gate result.
+    if runs.enabled(root):
+        try:
+            record = result["record_path"].relative_to(result["root"]).as_posix()
+            runs.record_gate(result["root"], args.task, args.name,
+                             result.get("result"), record)
+        except Exception:  # noqa: BLE001 - a gate must not fail because of its run record
+            pass
+
     for line in summary(result, tail=args.tail, max_errors=args.max_errors):
         print(line)
     return result["exit_code"]
