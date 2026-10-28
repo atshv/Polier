@@ -1,6 +1,6 @@
 # Status
 
-**Project:** polier · **Profile:** M · **Stage:** 5 of 5 (5 defined)
+**Project:** polier · **Profile:** M · **Stage:** 6 of 6 (6 defined)
 
 > Generated from `board.json`. Do not edit by hand.
 
@@ -36,10 +36,18 @@
 
 ### Stage 5 — `ship-1-0` ship 1.0
 
-- State: complete
+- State: tasks open
 - Owner decision: `continue`
 - Exit criteria: VERSION, CHANGELOG and both examples green in CI
 - Tasks: PL-17
+- Tasks open: PL-17
+
+### Stage 6 — `orchestration` orchestration control plane
+
+- State: complete
+- Owner decision: `continue`
+- Exit criteria: policy.json, runs/, reviews/approvals/ are the new state and are checked; state changes go through state.py; a done task needs the full evidence chain; dispatch.py turns the board into waves and names blocked tasks; adapters enforce policy; 0.9/1.0 projects are unchanged without policy.json
+- Tasks: PL-18, PL-19, PL-20, PL-21, PL-22, PL-23, PL-24, PL-25
 
 ## Ready now
 
@@ -63,6 +71,14 @@
 - [x] `PL-14` UI brief fields and design rules — status: `done` — owner: —
 - [x] `PL-15` Generator drift detection — status: `done` — owner: —
 - [x] `PL-16` Guard extras — status: `done` — owner: —
+- [x] `PL-18` Policy as code — status: `done` — owner: —
+- [x] `PL-19` Run records and attempts — status: `done` — owner: —
+- [x] `PL-20` State machine and checkpoints — status: `done` — owner: —
+- [x] `PL-21` Approvals with records — status: `done` — owner: —
+- [x] `PL-22` Dispatch plan — status: `done` — owner: —
+- [x] `PL-23` Audit, checks and status — status: `done` — owner: —
+- [x] `PL-24` Adapter enforcement — status: `done` — owner: —
+- [x] `PL-25` Process, templates and examples — status: `done` — owner: —
 
 ## In progress
 

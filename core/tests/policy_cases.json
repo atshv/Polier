@@ -1,0 +1,69 @@
+{
+  "about": "Shared decision table for core/policy.py and adapters/dsh/lib/policy.mjs. Both implementations must satisfy every case.",
+  "policy": {
+    "version": 1,
+    "limits": {"max_attempts_per_task": 3, "max_in_progress": 2, "max_review_rounds": 3},
+    "scope": {
+      "protected_paths": [".env", ".env.*", "secrets/**", "**/*.pem", "**/*.key", "**/id_rsa*"]
+    },
+    "dependencies": {
+      "approval": true,
+      "manifests": ["package.json", "pyproject.toml", "Cargo.toml", "go.mod", "Package.swift", "requirements.txt"]
+    },
+    "approvals": {
+      "actions": ["new_dependency", "scope_change", "merge_to_base", "release", "reopen_done", "protected_path"],
+      "approver": "owner"
+    },
+    "commands": {
+      "deny": ["git push*", "npm publish*", "pnpm publish*", "yarn publish*", "docker push*", "gh release*", "kubectl apply*", "kubectl delete*", "terraform apply*", "rm -rf /*"],
+      "lead_only": ["*tools/state.py set*", "*tools/approve.py grant*", "*tools/approve.py deny*", "*tools/worktree.py finish*"],
+      "warn": ["*kill*", "*pkill*", "killall*"]
+    },
+    "checks": {
+      "review_before_done": true,
+      "handoff_before_done": true,
+      "run_record": true,
+      "disjoint_scopes": true
+    }
+  },
+  "path_cases": [
+    {"name": "dotenv at root", "pattern": ".env", "rel": ".env", "ok": true},
+    {"name": "dotenv in a subfolder", "pattern": ".env", "rel": "apps/web/.env", "ok": true},
+    {"name": "dotenv prefix only", "pattern": ".env", "rel": ".envrc", "ok": false},
+    {"name": "dotenv variant", "pattern": ".env.*", "rel": ".env.local", "ok": true},
+    {"name": "dotenv variant nested", "pattern": ".env.*", "rel": "services/api/.env.production", "ok": true},
+    {"name": "dotenv variant not matching", "pattern": ".env.*", "rel": ".env", "ok": false},
+    {"name": "secrets folder", "pattern": "secrets/**", "rel": "secrets/key.json", "ok": true},
+    {"name": "secrets nested", "pattern": "secrets/**", "rel": "secrets/prod/vault.yml", "ok": true},
+    {"name": "secrets lookalike", "pattern": "secrets/**", "rel": "secretsx/key.json", "ok": false},
+    {"name": "secrets outside", "pattern": "secrets/**", "rel": "src/secrets/key.json", "ok": false},
+    {"name": "pem at root", "pattern": "**/*.pem", "rel": "server.pem", "ok": true},
+    {"name": "pem nested", "pattern": "**/*.pem", "rel": "certs/ca/server.pem", "ok": true},
+    {"name": "pem lookalike", "pattern": "**/*.pem", "rel": "certs/server.pemx", "ok": false},
+    {"name": "id_rsa prefix", "pattern": "**/id_rsa*", "rel": "home/.ssh/id_rsa", "ok": true},
+    {"name": "id_rsa pub", "pattern": "**/id_rsa*", "rel": "id_rsa.pub", "ok": true},
+    {"name": "no match", "pattern": "secrets/**", "rel": "src/app.py", "ok": false}
+  ],
+  "manifest_cases": [
+    {"name": "root manifest", "pattern": "package.json", "rel": "package.json", "ok": true},
+    {"name": "nested manifest", "pattern": "package.json", "rel": "apps/web/package.json", "ok": true},
+    {"name": "lock file is not the manifest", "pattern": "package.json", "rel": "package-lock.json", "ok": false},
+    {"name": "python manifest", "pattern": "pyproject.toml", "rel": "packages/engine/pyproject.toml", "ok": true}
+  ],
+  "command_cases": [
+    {"name": "push is denied", "list": "deny", "pattern": "git push*", "command": "git push origin main", "role": "worker", "denial": "deny"},
+    {"name": "status is allowed", "list": "deny", "pattern": "git push*", "command": "git status", "role": "worker", "denial": null},
+    {"name": "publish is denied", "list": "deny", "pattern": "npm publish*", "command": "npm publish --access public", "role": "worker", "denial": "deny"},
+    {"name": "publish text in double quotes is data", "list": "deny", "pattern": "npm publish*", "command": "echo \"npm publish\"", "role": "worker", "denial": null},
+    {"name": "publish text in singles quotes is data", "list": "deny", "pattern": "npm publish*", "command": "rg 'npm publish' docs", "role": "worker", "denial": null},
+    {"name": "wrapper is stripped", "list": "deny", "pattern": "git push*", "command": "sudo env FOO=1 git push origin main", "role": "worker", "denial": "deny"},
+    {"name": "second segment is checked", "list": "deny", "pattern": "npm publish*", "command": "cd /tmp && npm publish", "role": "worker", "denial": "deny"},
+    {"name": "nested shell is checked", "list": "deny", "pattern": "git push*", "command": "bash -c 'git push origin main'", "role": "worker", "denial": "deny"},
+    {"name": "heredoc body is data", "list": "deny", "pattern": "git push*", "command": "cat <<EOF\ngit push origin main\nEOF", "role": "worker", "denial": null},
+    {"name": "state set is lead-only", "list": "lead_only", "pattern": "*tools/state.py set*", "command": "python3 tools/state.py set M03 in_progress", "role": "worker", "denial": "lead_only"},
+    {"name": "state show is allowed for a worker", "list": "lead_only", "pattern": "*tools/state.py set*", "command": "python3 tools/state.py show", "role": "worker", "denial": null},
+    {"name": "state set is allowed for the lead", "list": "lead_only", "pattern": "*tools/state.py set*", "command": "python3 tools/state.py set M03 in_progress", "role": "lead", "denial": null},
+    {"name": "grant is lead-only for a reviewer", "list": "lead_only", "pattern": "*tools/approve.py grant*", "command": "python3 tools/approve.py grant AP-001", "role": "reviewer", "denial": "lead_only"},
+    {"name": "deny commands also stop the lead", "list": "deny", "pattern": "git push*", "command": "git push --force", "role": "lead", "denial": "deny"}
+  ]
+}

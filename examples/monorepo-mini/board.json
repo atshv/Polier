@@ -3,7 +3,7 @@
   "project": "canvas-mini",
   "profile": "L",
   "base_branch": "main",
-  "generator_version": "1.0.0",
+  "generator_version": "1.1.0",
   "stage": 1,
   "stages": [
     {

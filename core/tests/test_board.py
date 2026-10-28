@@ -8,7 +8,8 @@ import unittest
 from pathlib import Path
 
 from core.board import (
-    board_errors, package_paths, resources, schema_version, stage_ids, task_id_pattern,
+    board_errors, package_paths, ready_tasks, resources, schema_version, stage_ids,
+    stage_report, task_id_pattern,
 )
 
 TOOLS = Path(__file__).resolve().parents[2] / "tools"
@@ -179,6 +180,50 @@ class Schema10(unittest.TestCase):
             self.assertFalse(pattern.match(bad), bad)
 
 
+def stage_board(status_a: str = "done", status_b: str = "pending") -> dict:
+    """One declared stage with two tasks; no exit gates, so only the tasks decide."""
+    return {
+        "project": "t", "profile": "M", "base_branch": "main",
+        "generator_version": "1.1.0", "schema_version": "1.0", "stage": 1,
+        "stages": [{"id": "s1", "title": "Stage 1", "goal": "go",
+                    "exit_criteria": [], "exit_gates": [],
+                    "owner_decision": "continue", "depends_on": []}],
+        "tasks": [
+            _task("T-01", status=status_a, stage="s1", scope_write=["src/a.py"]),
+            _task("T-02", status=status_b, stage="s1", scope_write=["src/b.py"]),
+        ],
+    }
+
+
+class StageTasksOpen(unittest.TestCase):
+    """1.1: a stage is complete only when none of its tasks is still open."""
+
+    def test_tasks_open_lists_the_ids_that_are_not_done(self):
+        report = {entry["id"]: entry for entry in stage_report(stage_board())}
+        self.assertEqual(report["s1"]["tasks_open"], ["T-02"])
+        self.assertFalse(report["s1"]["complete"])
+
+    def test_all_tasks_done_completes_the_stage(self):
+        report = {entry["id"]: entry for entry in stage_report(
+            stage_board("done", "done"))}
+        self.assertEqual(report["s1"]["tasks_open"], [])
+        self.assertTrue(report["s1"]["complete"])
+
+    def test_ready_tasks_behaviour_is_unchanged(self):
+        # T-02 is pending and has no dependencies: it stays ready even though
+        # the stage has an open task (work in progress) and is not complete.
+        board = stage_board("in_progress", "pending")
+        report = {entry["id"]: entry for entry in stage_report(board)}
+        self.assertEqual(report["s1"]["tasks_open"], ["T-01", "T-02"])
+        self.assertFalse(report["s1"]["complete"])
+        self.assertEqual([entry["id"] for entry in ready_tasks(board)], ["T-02"])
+
+    def test_done_dependency_keeps_a_later_task_ready_in_an_open_stage(self):
+        board = stage_board("done", "pending")
+        board["tasks"][1]["depends_on"] = ["T-01"]
+        self.assertEqual([entry["id"] for entry in ready_tasks(board)], ["T-02"])
+
+
 class CheckCli(unittest.TestCase):
     """tools/check.py uses the same validation: exit 1 names the problem."""
 
@@ -222,6 +267,13 @@ class Render(unittest.TestCase):
         self.assertIn("4100 + 50·N", text)
         self.assertIn("`P3-02`", text)
 
+    def test_tasks_open_is_shown_only_when_non_empty(self):
+        text = self._render(stage_board("in_progress", "pending"))
+        self.assertIn("- Tasks open: T-01, T-02", text)
+        complete = self._render(stage_board("done", "done"))
+        self.assertIn("### Stage 1 — `s1` Stage 1", complete)
+        self.assertNotIn("Tasks open:", complete)
+
     def test_live_claims_are_shown_and_ignored_by_the_freshness_check(self):
         from core.board import load_board
         from core.claims import take
@@ -240,6 +292,51 @@ class Render(unittest.TestCase):
         self.assertEqual(module.strip_claims(text).strip(),
                          module.render(board, root, with_claims=False).strip())
         self.assertNotIn("polier:claims", module.strip_claims(text))
+
+    def test_orchestration_section_needs_a_policy_or_runs(self):
+        from core.board import load_board
+        from core.tests.fixtures import project, task as fixture_task, write_policy
+        root = project([fixture_task("M01", status="pending")])
+        board = load_board(root)
+        self.assertNotIn("## Orchestration", self._render(board, root))
+        write_policy(root)
+        text = self._render(board, root)
+        self.assertIn("## Orchestration", text)
+        self.assertIn("- Limits: 3 attempts/task, 2 in progress", text)
+        self.assertIn("- Next wave: none", text)
+        self.assertIn("- Running: none", text)
+        self.assertIn("- Approvals pending: none", text)
+
+    def test_orchestration_shows_running_attempts_and_live_claims(self):
+        from core.board import load_board
+        from core.claims import take
+        from core.runs import start_attempt
+        from core.tests.fixtures import project, task as fixture_task, write_policy
+        root = project([fixture_task("M01", status="in_progress"),
+                        fixture_task("M02", status="pending")])
+        write_policy(root)
+        (root / "tasks").mkdir()
+        (root / "tasks" / "M02.md").write_text("# M02 — next\n", encoding="utf-8")
+        start_attempt(root, "M01")
+        take(root, "M01", harness="dsh", session="s1")
+        board = load_board(root)
+
+        spec = importlib.util.spec_from_file_location(
+            "pl_render_orchestration", TOOLS / "render_status.py")
+        module = importlib.util.module_from_spec(spec)
+        assert spec.loader is not None
+        spec.loader.exec_module(module)
+        text = module.render(board, root)
+        self.assertIn("- Running: `M01` attempt 1/3", text)
+        self.assertIn("claimed by dsh", text)
+        self.assertIn("- Next wave: `M02` (tasks/M02.md)", text)
+
+        section = text[text.index("## Orchestration"):]
+        section = section[:section.index("\n## ")].strip().splitlines()
+        self.assertLessEqual(len(section), 10, section)
+        # The claim lives inside the claims markers, so the freshness check is stable.
+        self.assertEqual(module.strip_claims(text).strip(),
+                         module.render(board, root, with_claims=False).strip())
 
     def test_classic_board_rendering_is_unchanged(self):
         text = self._render(board_09())

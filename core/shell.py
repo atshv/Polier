@@ -342,3 +342,89 @@ def process_kills(command: str, _depth: int = 0) -> List[str]:
             if program in KILLERS and program not in found:
                 found.append(program)
     return found
+
+
+# ---------------------------------------------------------------------------
+# command segments a policy rule is matched against (1.1)
+# ---------------------------------------------------------------------------
+
+# Wrapper programs whose options consume the next word: `sudo -u root git push`
+# must still be read as `git push`. Adding a value here never changes the
+# write-target or process-kill analysis above.
+WRAPPER_VALUE_OPTIONS = {
+    "sudo": ("-u", "--user", "-g", "--group", "-h", "--host", "-p", "--prompt",
+             "-C", "--close-from", "-T", "--command-timeout", "-U", "--other-user",
+             "-D", "--chdir", "-r", "--role", "-t", "--type"),
+    "doas": ("-u", "-C"),
+    "env": ("-u", "--unset", "-C", "--chdir", "-S", "--split-string"),
+    "nice": ("-n", "--adjustment"),
+    "ionice": ("-c", "--class", "-n", "--classdata", "-p", "--pid", "-P", "--pgid",
+               "-u", "--uid"),
+    "stdbuf": ("-i", "--input", "-o", "--output", "-e", "--error"),
+}
+
+
+def _strip_prefix(args: List[str]) -> List[str]:
+    """`args` without leading assignments and wrapper programs (`sudo`, `env`, ...)."""
+    args = list(args)
+    while args:
+        if ASSIGNMENT.match(args[0]):
+            args = args[1:]
+            continue
+        name = os.path.basename(args[0])
+        if name not in WRAPPERS:
+            return args
+        args = args[1:]
+        values = WRAPPER_VALUE_OPTIONS.get(name, ())
+        while args:
+            if ASSIGNMENT.match(args[0]):
+                args = args[1:]
+            elif args[0] == "--":
+                args = args[1:]
+                break
+            elif args[0].startswith("-"):
+                args = args[2:] if args[0] in values and len(args) > 1 else args[1:]
+            else:
+                break
+    return args
+
+
+def command_segments(command: str, _depth: int = 0) -> List[str]:
+    """The simple commands of `command` as plain text, one entry per segment.
+
+    Quotes and heredoc bodies are dropped by the tokenizer, assignments and
+    wrappers (`sudo`, `env`, `nohup`, ...) are stripped, and `bash -c`/`sh -c`
+    or `eval` arguments are expanded recursively. Each entry is the remaining
+    words joined with single spaces, the form policy rules are matched against:
+    `["cd /tmp", "npm publish"]` for ``cd /tmp && npm publish``.
+
+    Text inside quotes stays part of its token (``echo "npm publish"`` gives
+    ``echo npm publish``), so a rule anchored at the start of a command does
+    not match it. A line that cannot be tokenized (open quote) is returned as
+    one text entry instead of being ignored.
+    """
+    text = "" if command is None else str(command)
+    if not text.strip():
+        return []
+    try:
+        words = tokens(text)
+    except ValueError:
+        return [" ".join(text.split())]
+    out: List[str] = []
+    for segment in _segments(words):
+        if segment in (["("], [")"]):
+            continue
+        args = _strip_prefix(segment)
+        if not args:
+            continue
+        name = os.path.basename(args[0])
+        if _depth < MAX_DEPTH and name in SHELLS and "-c" in args[1:]:
+            index = args.index("-c")
+            if index + 1 < len(args):
+                out += command_segments(args[index + 1], _depth + 1)
+            continue
+        if _depth < MAX_DEPTH and name == "eval":
+            out += command_segments(" ".join(args[1:]), _depth + 1)
+            continue
+        out.append(" ".join(args))
+    return out

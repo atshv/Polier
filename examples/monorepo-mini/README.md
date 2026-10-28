@@ -29,15 +29,28 @@ cd apps/web && npm ci && npm run dev
 | `services/sync/` | HTTP/WebSocket sync service, contract validation |
 | `apps/web/` | Next.js app shell, sync client, Playwright e2e |
 | `contracts/state/` | Document-state schema and fixtures |
-| `docs/` | module map, quality, versions, environments, releasing, design rules, ADRs |
+| `docs/` | module map, orchestration, quality, versions, environments, releasing, design rules, ADRs |
+| `policy.json` | limits (attempts, tasks in progress, review rounds), protected paths, approvals, denied commands |
+| `runs/` | one execution record per task: attempts and gate/review/state events |
+| `reviews/approvals/` | human decisions on high-risk actions (`AP-NNN.json`) |
 | `tools/` | project gates: `layout_check.py`, `contract_check.py` |
 | `tasks/` | task briefs (just in time) |
 | `reviews/evidence/` | gate records and logs |
+
+## Orchestration
+
+`board.json` is the plan, `runs/` is what happened, `policy.json` is the rules.
+A task moves through `in_progress → verifying → review → done` only with
+`tools/state.py`; `tools/dispatch.py` names the next wave, `tools/audit.py`
+checks the evidence chain of a done task. The one-page model is
+[docs/orchestration.md](docs/orchestration.md); the limits are in `policy.json`.
+`AP-001` is a pending `new_dependency` approval for `API-01`.
 
 ## Documentation
 
 - [Architecture](ARCHITECTURE.md)
 - [Agent rules](AGENTS.md)
+- [Orchestration](docs/orchestration.md)
 - [Status](STATUS.md)
 - [Module structure](docs/module-map.md)
 - [Quality and gates](docs/quality.md)
