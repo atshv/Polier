@@ -49,6 +49,28 @@ Which tasks bind a session: `POLIER_TASK`, else the `in_progress` task whose
 `worktree` contains the session directory, else every `in_progress` task. No
 board, no running task or a lead session: the hooks stay out of the way.
 
+## Policy
+
+With a `policy.json` at the project root the hooks enforce it before the scope
+rules finish deciding, for file tools and for `Bash`:
+
+- **Protected paths** (`.env`, secrets, keys) are refused to every session
+  except a lead one; a granted approval does not lift this.
+- **Dependency manifests** (`package.json`, `pyproject.toml`, …) need a
+  granted `new_dependency` approval for one of the session's tasks; the
+  refusal prints the `tools/approve.py request` command.
+- **Denied commands** (`git push`, publish and deploy commands) are refused for
+  every role, a lead included. **Lead-only commands** (`tools/state.py set`,
+  `tools/approve.py grant`, `tools/worktree.py finish`) are refused for
+  `POLIER_ROLE=worker` and `reviewer`; run them from a `POLIER_ROLE=lead`
+  session.
+- Matching is static: quotes, heredocs, assignments and wrappers (`sudo`,
+  `env`, …) are stripped first, and a nested `sh -c` is checked. A command
+  assembled by an interpreter or a script is not.
+- Without `policy.json` the hooks behave exactly as in 1.0. A broken
+  `policy.json` fails open in the hook and is an error in
+  `python3 tools/check.py .`.
+
 ## Claims
 
 With `POLIER_TASK` set, every `PreToolUse` takes or refreshes the claim in

@@ -2,6 +2,56 @@
 
 Each release lists what a running project must do to adopt it. Update between stages, never during a task (see `guide/cheatsheet.md`). The current version is in `VERSION`; projects record theirs in `board.json` → `generator_version`.
 
+## 1.1.0
+
+**Orchestration on top of the plan.** 1.0 planned a project and guarded the writes, but it could not say what had been tried, when a review happened or whether a risky action was approved. The board was the only record, so a status could simply be typed in; attempts, review rounds and emergency stops lived in chat. 1.1 separates plan state from execution state and puts a checkpoint before every transition. A project without `policy.json` keeps the 1.0 behaviour: the new checks warn instead of failing.
+
+**Policy as code (`policy.json`).**
+- New `templates/policy.json` and `core/policy.py`: limits (`max_attempts_per_task`, `max_in_progress`, `max_review_rounds`, with ranges 1–10, 1–64, 1–20), `scope.protected_paths`, `dependencies` (approval switch + manifest list), `approvals` (actions + approver), `commands` (deny, lead_only, warn) and `checks` (review/handoff/run-record/disjoint-scopes).
+- Loading deep-merges the defaults; unknown keys, a wrong `version` or out-of-range limits are errors. An absent file means `enabled: false`, which is what keeps 0.9 and 1.0 projects unchanged.
+- Path matching is `**`-aware and basename matching applies at any depth; command matching strips quotes, heredocs, assignments and wrappers, joins the shell segments and matches the pattern against them.
+- `tools/check.py` validates the policy; a policy that denies a command a gate needs is a planning error, not an approval.
+
+**Checkpoints (`tools/state.py`, `core/state.py`).**
+- `tools/state.py show | set | check`: the only writer of a task's status. `show` prints the board status against the run record, gates, review, approvals and attempts; `check` evaluates a transition without writing; `set` refuses with each blocker and an action hint.
+- Transition table with hard preconditions: `in_progress` needs a free attempt, a free `in_progress` slot and an unblocked stage; `verifying` an open attempt; `review` a passing record for every gate in the task; `done` the review verdict, handoff, run record and a dependency approval when a manifest is touched; `rework` a note and a free round; `blocked`/`failed` a note; `done → rework` a granted `reopen_done` approval; `--force` a granted `state_override` approval and leaves a warning event.
+- Side effects: atomic board write, run-record attempts and events, round increment on `rework`, no other files.
+
+**Run records (`runs/<ID>.json`, `core/runs.py`).**
+- One file per task: `state` (`idle | running | done | failed | blocked`), `attempt` counter, `attempts` (`pass | fail | cancelled`) and an append-only `events` list (`start`, `gate`, `review`, `state`, `approval`, `note`, `escalate`; last 500 kept). Written atomically under `<file>.lock`; a missing or broken file reads as a skeleton.
+- `tools/gate.py` appends a `gate` event when the policy is enabled; a failure there never changes the gate result. `runs/` is committed with the task.
+
+**Approvals (`reviews/approvals/AP-NNN.json`, `core/approvals.py`).**
+- New `tools/approve.py request | grant | deny | list | check`: IDs `AP-` plus three or more digits, allocated under a lock. A granted record is the approval and does not expire; grant and deny append an `approval` event to the task's run record. `check --action ... --task ...` exits 0 only for a granted match.
+- Actions: `new_dependency`, `scope_change`, `merge_to_base`, `release`, `reopen_done`, `protected_path`, `state_override` — the list lives in `policy.json`. The guard consumes the dependency approval; a protected path is lead-only, so no approval lets a worker write one.
+
+**Dispatch (`tools/dispatch.py`, `core/dispatch.py`).**
+- The board becomes an execution plan: `limits`, `running` with attempt N/M, `waves` of tasks with the same non-empty `parallel_group`, same stage and pairwise disjoint `scope_write` (packed up to `max_in_progress`), `blocked` tasks with the command that records the block, `conflicts`, `approvals_pending` and `next`.
+- A task without a group is a wave of its own; an attempt-exhausted task, a task without a brief, a task claimed by another session and a task waiting for a dependency or a stopped stage are listed as blocked, each with the command that records the block. With `checks.disjoint_scopes: false` both overlapping tasks stay in the wave and the conflict is still listed.
+
+**Audit (`tools/audit.py`, `core/audit.py`).**
+- Per task: board status, attempts used/limit, gates, review file and verdict, approvals per action, handoff, run record, findings. For a `done` task every check the policy turns on is an error; for other statuses the findings are warnings, and without `policy.json` everything stays a warning. Exit 1 iff any error.
+
+**Checks and status.**
+- `tools/check.py`: validates `policy.json`, `reviews/approvals/` and `runs/`, flags two `in_progress` tasks with overlapping scopes and attempts above the limit, reports dispatch conflicts as errors and blocked tasks as warnings, and warns when `policy.json`, `docs/orchestration.md` or `runs/` are not named in `AGENTS.md`/`README.md`.
+- `tools/render_status.py`: new "Orchestration" section (limits, next wave, running attempts, blocked tasks with reasons, pending approvals), at most 10 lines.
+- `core/board.py`: the stage report gains `tasks_open`; a stage is complete only when no task in it is open.
+- `core/scope.py`: `runs/` is lead-owned and a reviewer may not write `reviews/approvals/`.
+
+**Guard and plugin.**
+- The DSH guard and the Claude Code `PreToolUse` hook apply the policy after the role and scope rules: a protected path is refused to every session except a lead, a dependency manifest needs a granted `new_dependency` approval, denied commands are refused for every role, lead-only commands for worker and reviewer sessions. Lead sessions bypass the path and dependency checks; nobody bypasses a deny rule.
+- New `pl_next` (dispatch plan as JSON) and `pl_state` (`show`/`set` through `tools/state.py`); `/pl next` and `/pl policy`. New `adapters/dsh/lib/policy.mjs`, tested against `core/tests/policy_cases.json` together with `core/policy.py`.
+
+**Docs and templates.**
+- New `prompt/orchestration.md`: the shipped model — plan, execution and liveness state, the task loop, the stage loop, checkpoints, attempts versus rounds, approvals, escalation, how board patterns map and what is not covered.
+- New `templates/policy.json` and `templates/orchestration.md` (generated as `docs/orchestration.md`); `templates/AGENTS.template.md` gains the state/gate/approval/run rules, `templates/task-brief.md` an "Operating the task" line, `templates/review-feedback.md` the round rule.
+- `prompt/generator.md`: limits per profile in phase 0.3, `policy.json` in phase D, the loop, approvals and escalation in phase E, the new files in the G scaffold, `audit.py` and `dispatch.py` in phase H, the orchestrate prompt and state/approval commands in phase I, plus definitions and artifact-map rows.
+- `prompt/rubric.md`: criteria 14 (execution state) and 15 (policy and approvals), the 1.1 lint items, critic and cold-start updates. `prompt/dsh.md`, `SKILL.md`, `guide/cheatsheet.md` and `README.md` describe the loop and the new tools.
+
+**Compatibility.** Additive, and a project without `policy.json` is not broken by 1.1. Both 0.9 and 1.0 boards are unchanged, `board.json` keeps its schema (1.1 adds no board field), and `check.py`/`audit.py` warn instead of failing; the guard adds no policy denials. A project that runs `tools/state.py` without a policy still gets the transition table, the note rules and the approvals that guard a reopened done task or a forced change; the gate, review, attempt and concurrency checks become warnings, and the dependency-manifest approval is not checked. `examples/minimal-cli` stays the 0.9 compatibility reference; `examples/monorepo-mini` is the 1.1 reference. Existing tools, plugin tools, `/pl` commands and board fields are unchanged. The core gains `core/policy.py`, `core/runs.py`, `core/approvals.py`, `core/state.py`, `core/dispatch.py` and `core/audit.py`; `tools/` gains `state.py`, `approve.py`, `dispatch.py` and `audit.py`.
+
+**Migration:** 0.9 and 1.0 projects need nothing. To adopt 1.1: copy `policy.json` from `templates/policy.json` and set the limits for the profile (S 3/1/3, M 3/2/3, L 3/3/3 for attempts/in progress/rounds), the project's manifests and its protected paths; copy `docs/orchestration.md` from the template; add the state, gate, approval and runs rules from `templates/AGENTS.template.md` to `AGENTS.md`; name `policy.json`, `runs/` and `docs/orchestration.md` in `AGENTS.md` and `README.md`; commit `runs/` from the next task on. From then on set statuses only with `tools/state.py set` and approve high-risk actions with `tools/approve.py`. Plugin users: `git pull` in the clone, run `dsh plugin --profile <name> add ./polier` again and restart. Claude Code users: replace the package copy; the hook applies the same policy checks. Skill-only users: `./update.sh`. Until `policy.json` exists, `check.py` stays green with the 1.0 result and the project keeps working; `examples/minimal-cli` is the 0.9 compatibility reference, `examples/monorepo-mini` the 1.1 reference.
+
 ## 1.0.0
 
 **Parallel projects and monorepos.** 0.9 planned and guarded one project with one active writer well. Running a real project with two harnesses in parallel and planning a monorepo exposed gaps that file-scope guarding cannot catch: shared ports and test databases, gate runs that fail because another session holds a port, snapshots that look like flaky tests, releases from a working folder, missing environment variables, and no common record of who works on what.

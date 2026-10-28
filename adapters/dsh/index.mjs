@@ -2,21 +2,28 @@
 //
 // What it adds to every session:
 // - a write guard: a worker session may only write inside the scope of its
-//   running task (board.json → scope_write / scope_write_forbidden);
+//   running task (board.json → scope_write / scope_write_forbidden); with a
+//   policy.json the guard also checks protected paths and dependency manifests;
+// - a command guard: a Bash command on the policy deny list never runs, a
+//   lead-only command is refused for workers and reviewers;
 // - a stop check: before a turn ends, the git diff is compared with the scope
 //   (catches writes through bash), and the agent is told to fix violations;
-// - tools: pl_status, pl_gate, pl_scope_check, pl_check;
-// - the human command /pl (lead, worker, off, task, status, render);
+// - tools: pl_status, pl_gate, pl_scope_check, pl_check, pl_next, pl_state;
+// - the human command /pl (lead, worker, off, task, status, next, policy, render);
 // - the Polier skill, with its files resolved inside this package.
 //
 // No build step and no static imports of harness packages: every service is
 // looked up at call time, so a missing optional service degrades instead of
 // breaking the harness boot.
 
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import {
+  approver, commandDenial, dependencyApproval, enabled as policyEnabled, hasGrant, limits, loadPolicy,
+  manifestMatch, pendingApprovals, POLICY, protectedMatch,
+} from './lib/policy.mjs'
 import { activeTasks, checkPath, findRoot, loadBoard, processKills, readyTasks, relative } from './lib/project.mjs'
 import { agentCwd, run } from './lib/run.mjs'
 
@@ -185,6 +192,88 @@ function targetOf(exec, guarded) {
   return typeof value === 'string' && value ? value : undefined
 }
 
+// ---------------------------------------------------------------------------
+// policy guard (1.1): protected paths, dependency manifests, denied commands.
+// The rules live in policy.json and are read through lib/policy.mjs. Without a
+// policy.json nothing here runs: a 1.0 project keeps its old behaviour.
+// ---------------------------------------------------------------------------
+
+/** How to get the approval a policy denial needs. */
+function approvalHint(action, task, who = 'owner') {
+  const target = task ? ` --task ${task}` : ''
+  return [
+    `If it is needed, ask the ${who} for an approval:`,
+    `python3 tools/approve.py request --action ${action}${target} (the ${who} grants it with`,
+    'python3 tools/approve.py grant AP-NNN), then retry. Do not write it another way.',
+  ].join(' ')
+}
+
+/** The task an approval is requested for: the single bound task, if there is one. */
+function approvalTask(info) {
+  return info.tasks.length === 1 ? info.tasks[0].id : undefined
+}
+
+/** True when an approval for `action` is granted for one of the session's tasks (or project-wide). */
+function hasAnyGrant(info, action) {
+  const ids = info.tasks.map((task) => task.id).filter(Boolean)
+  if (ids.length === 0) return Boolean(hasGrant(info.root, action, null))
+  return ids.some((id) => Boolean(hasGrant(info.root, action, id)))
+}
+
+/**
+ * The policy denial of writing `rel`, or undefined. A lead session bypasses the
+ * path and dependency rules; protected paths and manifests still apply to a
+ * reviewer (who writes only reviews/, so in practice they do not match there).
+ */
+function policyPathDenial(info, rel, shown) {
+  const policy = loadPolicy(info.root)
+  if (!policyEnabled(policy)) return undefined
+  if (info.state.role === 'lead' || info.state.role === 'off') return undefined
+  const who = approver(policy)
+  const protectedPattern = protectedMatch(policy, rel)
+  if (protectedPattern) {
+    return [
+      `Polier: write to ${shown} blocked, ${protectedPattern} is a protected path in policy.json.`,
+      'Only a lead session may write it: stop and report the change under open_questions instead of writing it another way.',
+    ].join(' ')
+  }
+  if (!dependencyApproval(policy)) return undefined
+  const manifest = manifestMatch(policy, rel)
+  if (manifest && !hasAnyGrant(info, 'new_dependency')) {
+    return [
+      `Polier: write to ${shown} blocked, ${manifest} is a dependency manifest and policy.json requires a granted new_dependency approval.`,
+      approvalHint('new_dependency', approvalTask(info), who),
+    ].join(' ')
+  }
+  return undefined
+}
+
+/** Bash-like tools whose command text the policy can deny. */
+const COMMAND_TOOLS = new Set(['bash'])
+
+/**
+ * The policy denial of a Bash command, or undefined. Deny-list commands are
+ * blocked for every role; lead-only commands for workers and reviewers only.
+ */
+function policyCommandDenial(config, info, command) {
+  if (config.enforce === 'off' || info.state.role === 'off') return undefined
+  const policy = loadPolicy(info.root)
+  if (!policyEnabled(policy)) return undefined
+  const denial = commandDenial(policy, command, info.state.role)
+  if (!denial) return undefined
+  if (denial.rule === 'deny') {
+    return [
+      `Polier: command blocked, ${denial.reason}.`,
+      'This rule applies to every role, a lead included: do not run it another way.',
+      `If the action is part of the task, stop and ask the owner for an approval (python3 tools/approve.py request --action release${approvalTask(info) ? ` --task ${approvalTask(info)}` : ''}) and report it under open_questions.`,
+    ].join(' ')
+  }
+  return [
+    `Polier: command blocked, ${denial.reason}.`,
+    'A worker or reviewer reports the needed change instead of running it; the lead runs it from a /pl lead session.',
+  ].join(' ')
+}
+
 /**
  * The guard decision for one tool call.
  * @returns {string|undefined} a denial reason, or undefined to allow
@@ -201,7 +290,7 @@ export function checkWrite(ctx, config, exec) {
   const rel = relative(info.root, abs)
   const verdict = checkPath(rel, info.tasks, info.state.role,
     { board: info.board, root: info.root, cwd: info.cwd })
-  if (verdict.ok) return undefined
+  if (verdict.ok) return policyPathDenial(info, rel, rel || target)
   if (info.state.role === 'reviewer') {
     return `Polier: write to ${rel || target} blocked, a reviewer session writes only under reviews/. Report the problem in the review instead of fixing it.`
   }
@@ -277,14 +366,26 @@ export async function onTurnStopping(ctx, config, payload) {
 // ---------------------------------------------------------------------------
 
 /**
- * Before every tool call: refresh the session's claim heartbeat (at most once
- * per minute) and warn once per turn when a bash command stops processes.
- * Never changes the call itself; a warning is a message, not a denial.
+ * Before every tool call: deny a command on the policy deny list (any role) or
+ * a lead-only command of a worker/reviewer session, refresh the session's claim
+ * heartbeat (at most once per minute) and warn once per turn when a bash
+ * command stops processes. The kill warning never changes the call itself.
  */
 export async function onToolPreExecute(ctx, config, exec, next) {
   try {
     const agent = exec.agent
     if (agent) {
+      // Policy commands first: a denied command never runs, whatever else is true.
+      if (COMMAND_TOOLS.has(exec.name)) {
+        const args = exec.arguments && typeof exec.arguments === 'object' ? exec.arguments : {}
+        if (typeof args.command === 'string' && args.command.trim()) {
+          const info = context(ctx, agent)
+          if (info) {
+            const reason = policyCommandDenial(config, info, args.command)
+            if (reason) return { kind: 'deny', reason }
+          }
+        }
+      }
       const state = stateOf(agent)
       if (state.claims.length > 0 && Date.now() - (state.lastBeat ?? 0) >= HEARTBEAT_MS) {
         state.lastBeat = Date.now()
@@ -356,6 +457,24 @@ function needProject(ctx, agent, project) {
   const board = loadBoard(root)
   if (!board) throw new Error(`board.json in ${root} is missing or invalid`)
   return { root, board }
+}
+
+/** Parse a tool's stdout as JSON (pretty-printed or one line), or undefined. */
+function lastJson(stdout) {
+  const text = String(stdout ?? '').trim()
+  if (!text) return undefined
+  for (const candidate of [text, text.split('\n').pop()]) {
+    try {
+      const value = JSON.parse(candidate)
+      if (value !== null && value !== undefined) return value
+    } catch { /* try the next candidate */ }
+  }
+  return undefined
+}
+
+/** A friendly error for an optional package tool that is not installed. */
+function toolMissing(name, file) {
+  return new Error(`${name} needs tools/${file}, which this Polier package does not ship`)
 }
 
 const PROJECT_PARAM = {
@@ -486,12 +605,119 @@ export function tools(ctx, config) {
     },
   })
 
-  return [status, gate, scope, check]
+  const next = jsonTool({
+    name: 'pl_next',
+    description: 'Show the dispatch plan of the project: the running tasks with attempts, the next wave of tasks that can run in parallel, the blocked tasks with the command that unblocks them, scope conflicts and pending approvals. Run it before starting a task.',
+    parameters: {
+      type: 'object',
+      properties: {
+        limit: { type: 'integer', description: 'Maximum number of tasks per wave. Default: the plan default.' },
+        project: PROJECT_PARAM,
+      },
+    },
+    isConcurrencySafe: () => true,
+    async execute(args, exec) {
+      const { root } = needProject(ctx, exec.agent, args.project)
+      const script = path.join(TOOLS, 'dispatch.py')
+      if (!existsSync(script)) throw toolMissing('pl_next', 'dispatch.py')
+      const argv = [config.python, script, '--json', '--root', root]
+      if (Number.isInteger(args.limit) && args.limit > 0) argv.push('--limit', String(args.limit))
+      const result = await run(ctx, exec.agent, argv, { cwd: root, timeoutMs: 60_000, signal: exec.signal })
+      const plan = lastJson(result.stdout)
+      if (plan === undefined) {
+        return { ok: false, exit_code: result.code, error: (result.stderr || result.stdout).trim().slice(-4000) || `exit ${result.code}` }
+      }
+      return { root, ...plan }
+    },
+  })
+
+  const state = jsonTool({
+    name: 'pl_state',
+    description: 'Show the execution state of the board or of one task (board status against the run record, gates, review, approvals and attempts), or, from a lead session, move a task through one checkpoint with tools/state.py. A refusal prints the blockers and the command that unblocks them.',
+    parameters: {
+      type: 'object',
+      properties: {
+        action: { type: 'string', enum: ['show', 'set'], description: 'show (default when status is not given) or set.' },
+        task: { type: 'string', description: 'Task ID, e.g. M03. For show without it: the whole board.' },
+        status: { type: 'string', description: 'New status for set: pending, claimed, in_progress, verifying, review, done, rework, blocked or failed.' },
+        note: { type: 'string', description: 'Reason for set; required for rework, blocked and failed.' },
+        force: { type: 'boolean', description: 'Override a checkpoint; needs a granted state_override approval.' },
+        project: PROJECT_PARAM,
+      },
+    },
+    async execute(args, exec) {
+      const { root } = needProject(ctx, exec.agent, args.project)
+      const script = path.join(TOOLS, 'state.py')
+      if (!existsSync(script)) throw toolMissing('pl_state', 'state.py')
+      const action = args.action === 'show' || args.action === 'set' ? args.action : (args.status ? 'set' : 'show')
+      const taskId = typeof args.task === 'string' && args.task.trim() ? args.task.trim().toUpperCase() : undefined
+      if (action === 'set') {
+        const role = stateOf(exec.agent).role
+        if (role !== 'lead') {
+          throw new Error('Polier: only a lead session changes task state (tools/state.py set is lead-only in policy.json). Use /pl lead first, or report the checkpoint to the lead.')
+        }
+        if (!taskId) throw new Error('pl_state set needs the task ID')
+        if (typeof args.status !== 'string' || !args.status.trim()) throw new Error('pl_state set needs the new status')
+        const argv = [config.python, script, 'set', taskId, args.status.trim(), '--actor', 'lead', '--root', root]
+        if (typeof args.note === 'string' && args.note.trim()) argv.push('--note', args.note.trim())
+        if (args.force === true) argv.push('--force')
+        const result = await run(ctx, exec.agent, argv, { cwd: root, timeoutMs: 120_000, signal: exec.signal })
+        return {
+          ok: result.code === 0,
+          action: 'set',
+          task: taskId,
+          status: args.status.trim(),
+          exit_code: result.code,
+          output: (result.stdout + result.stderr).trim().slice(-6000),
+        }
+      }
+      const argv = [config.python, script, 'show']
+      if (taskId) argv.push(taskId)
+      argv.push('--json', '--root', root)
+      const result = await run(ctx, exec.agent, argv, { cwd: root, timeoutMs: 60_000, signal: exec.signal })
+      const value = lastJson(result.stdout)
+      if (value === undefined) {
+        return { ok: false, exit_code: result.code, error: (result.stderr || result.stdout).trim().slice(-4000) || `exit ${result.code}` }
+      }
+      return value
+    },
+  })
+
+  return [status, gate, scope, check, next, state]
 }
 
 // ---------------------------------------------------------------------------
 // human command /pl
 // ---------------------------------------------------------------------------
+
+/** The `/pl policy` report: the active rules, the limits and the pending approvals. */
+function policyReport(root) {
+  const policy = loadPolicy(root)
+  if (!policyEnabled(policy)) {
+    const errors = Array.isArray(policy.errors) ? policy.errors : []
+    return [
+      `Policy: disabled (no policy.json in ${root}).`,
+      'The 1.0 scope rules are in force. Add policy.json (the shape is in templates/policy.json) to enable limits, protected paths, dependency approvals and denied commands.',
+      ...errors.map((error) => `- ${error}`),
+    ].join('\n')
+  }
+  const counts = limits(policy)
+  const pending = pendingApprovals(root)
+  const lines = [
+    `Policy: enabled (${path.join(root, POLICY)})`,
+    `Limits: attempts ${counts.max_attempts_per_task}, in progress ${counts.max_in_progress}, review rounds ${counts.max_review_rounds}`,
+    `Protected paths: ${(policy.scope?.protected_paths ?? []).join(', ') || 'none'}`,
+    `Dependency manifests: ${(policy.dependencies?.manifests ?? []).join(', ') || 'none'} (approval ${dependencyApproval(policy) ? 'required' : 'off'})`,
+    `Approvals: ${approver(policy)} grants ${(policy.approvals?.actions ?? []).join(', ')}`,
+    `Denied commands: ${(policy.commands?.deny ?? []).join(', ') || 'none'}`,
+    `Lead-only commands: ${(policy.commands?.lead_only ?? []).join(', ') || 'none'}`,
+    `Pending approvals: ${pending.length}${pending.length ? ` (${pending.map((item) => item.id).join(', ')})` : ''}`,
+  ]
+  const errors = Array.isArray(policy.errors) && policy.errors.length
+    ? ['Policy errors:', ...policy.errors.map((error) => `- ${error}`)]
+    : []
+  return [...lines, ...errors].join('\n')
+}
 
 const HELP = [
   '/pl status        role, running task and scope of this session',
@@ -500,6 +726,8 @@ const HELP = [
   '/pl reviewer      this session writes only under reviews/ (independent review)',
   '/pl task <ID>     bind this session to one task (several tasks in progress)',
   '/pl task          remove the binding',
+  '/pl next          the dispatch plan: running tasks, next wave, blocked tasks (tools/dispatch.py)',
+  '/pl policy        the active policy.json rules and the pending approvals',
   '/pl render        regenerate STATUS.md from board.json (lead only)',
 ].join('\n')
 
@@ -507,7 +735,7 @@ export function command(ctx, config) {
   return {
     name: 'pl',
     description: 'Polier: switch this session between lead, worker and reviewer, bind it to a task, show status.',
-    input: { hint: 'status | lead | worker | reviewer | task <ID> | render' },
+    input: { hint: 'status | lead | worker | reviewer | task <ID> | next | policy | render' },
     async handler({ agent, rawInput, signal }) {
       const [verb = 'status', arg] = String(rawInput ?? '').trim().split(/\s+/).filter(Boolean)
       const state = stateOf(agent)
@@ -562,6 +790,20 @@ export function command(ctx, config) {
           }
           state.pinned = id
           return { kind: 'success', text: `This session now works on ${id}.` }
+        }
+        case 'next': {
+          if (!info) return { kind: 'error', text: 'No board.json in this folder or above.' }
+          const script = path.join(TOOLS, 'dispatch.py')
+          if (!existsSync(script)) return { kind: 'error', text: 'pl next needs tools/dispatch.py, which this Polier package does not ship.' }
+          const result = await run(ctx, agent, [config.python, script, '--root', info.root],
+            { cwd: info.root, timeoutMs: 60_000, signal })
+          return result.code === 0
+            ? { kind: 'success', text: result.stdout.trim() }
+            : { kind: 'error', text: (result.stderr || result.stdout).trim() || `exit ${result.code}` }
+        }
+        case 'policy': {
+          if (!info) return { kind: 'error', text: 'No board.json in this folder or above.' }
+          return { kind: 'success', text: policyReport(info.root) }
         }
         case 'render': {
           if (state.role !== 'lead') return { kind: 'error', text: 'Only a lead session renders STATUS.md. Use /pl lead first.' }

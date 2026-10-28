@@ -21,12 +21,14 @@ Score each criterion **0 or 1**. **B** marks a blocker: it prevents approval reg
 | 11 | Size budgets | All artifacts within budget (per profile); package `ARCHITECTURE.md` ≤ 400 and package `AGENTS.md` ≤ 200 words at L; no duplicated content. | – |
 | 12 | Nothing invented | Libraries, APIs, versions and paths are sourced or marked `[UNVERIFIED]`; at L every manifest dependency is pinned in `docs/versions.md`. | – |
 | 13 | UI tasks have numbers | A task that touches UI paths has the UI specification section with target values in px/ms/tokens, all applicable states and screenshot evidence. | **B** if the task touches UI |
+| 14 | Execution state is recorded | Every status change went through `tools/state.py`; `runs/<ID>.json` exists for each started task and agrees with the board; attempts and rounds are within the `policy.json` limits. | – |
+| 15 | Policy and approvals | `policy.json` is valid and matches the profile; a high-risk action has a granted approval record before it happened; the dispatch plan has no scope conflicts and `tools/audit.py` is green for `done` tasks. | – |
 
-**Pass:** ≥ 12/13 and no blocker. Otherwise fix and re-check; after two rounds the human decides.
+**Pass:** ≥ 14/15 and no blocker. Otherwise fix and re-check; after two rounds the human decides.
 
 ## 2. Lint
 
-*(check.py)* marks what `tools/check.py` verifies; *(contracts.py)* and *(boundaries.py)* mark the L tools; the rest needs a reviewer. A 0.9 project that runs 1.0 prints migration warnings only — they are findings here.
+*(check.py)* marks what `tools/check.py` verifies; *(contracts.py)*, *(boundaries.py)*, *(audit.py)* and *(dispatch.py)* mark the L and 1.1 tools; the rest needs a reviewer. A 0.9 project that runs 1.0 prints migration warnings only — they are findings here. A project without `policy.json` keeps 1.0 behaviour and is not broken by 1.1: the transition table, note rules and `reopen_done`/`state_override` approvals still apply, the rest of the 1.1 items warn at most.
 
 - [ ] Mandatory files present, including `.gitignore` *(check.py)*; `.polier-slot` and a project-local generator copy are ignored (reviewer).
 - [ ] `board.json` has the right schema for its version: 1.0 fields only with `"schema_version": "1.0"`, 0.9 boards unchanged *(check.py)*.
@@ -42,8 +44,17 @@ Score each criterion **0 or 1**. **B** marks a blocker: it prevents approval reg
 - [ ] UI briefs have target values in px/ms/tokens, every applicable state and screenshot evidence; words like "nicer", "cleaner", "faster" without a number are a finding.
 - [ ] Every `AD-n` and `ADR-nnnn` reference exists *(check.py)*.
 - [ ] Every definition-of-done item `D1..Dn` is covered by a task *(check.py)*.
-- [ ] `STATUS.md` matches `board.json` *(check.py)*; per stage it shows state, exit gates and the owner decision.
+- [ ] `STATUS.md` matches a fresh render of `board.json`, `runs/` and `policy.json` and is not hand-edited *(check.py)*; per stage it shows state, exit gates and the owner decision, and the Orchestration section shows limits, the next wave, running attempts and pending approvals.
 - [ ] Every `done` task has a passing `tools/gate.py` record for each of its gates, with an unchanged log; `infra`, `busy` and `timeout` records are rejected *(check.py; free-text evidence only warns)*.
+- [ ] `policy.json` exists when the project is on 1.1, parses, has `version: 1`, known keys only, limits in range (attempts 1–10, in progress 1–64, rounds 1–20) and the limits of the profile *(check.py)*; without the file: warnings only, no 1.1 errors.
+- [ ] Every status change was made with `tools/state.py`: the board status agrees with `runs/<ID>.json` and no transition skipped a checkpoint *(audit.py, check.py)*.
+- [ ] `runs/<ID>.json` exists for every started task, parses, names its own task, has integer attempts and a known state, and stays within `max_attempts_per_task` *(check.py)*.
+- [ ] No task is above `max_review_rounds` (`task.round`); an exhausted task is `blocked` with a reason, not retried *(check.py, audit.py)*.
+- [ ] `reviews/approvals/AP-NNN.json` records are valid (ID, action, status); a required approval — new dependency, merge, release, reopen, or a protected path when the project lists it — was granted before the action *(check.py, audit.py)*; `tools/approve.py check --action ... --task ...` exits 0.
+- [ ] No two `in_progress` tasks have overlapping `scope_write`; `tools/dispatch.py` reports no scope conflicts, and every blocked task names its reason and the command that records it *(check.py, dispatch.py)*.
+- [ ] `tools/audit.py .` is green: for every `done` task gates, review verdict, handoff, run record and approvals agree *(audit.py)*.
+- [ ] `policy.json`, `runs/` and `docs/orchestration.md` are named in `AGENTS.md` and `README.md` when the policy is enabled *(check.py, warning)*.
+- [ ] No command that a gate runs is in `commands.deny`, and no worker workflow needs a `commands.lead_only` command *(reviewer)*.
 - [ ] `docs/environments.md`: each environment has a smoke URL *(check.py, warning)*; variable names only, no values.
 - [ ] `docs/versions.md`: every manifest dependency is pinned with source URL and date *(check.py, L, warnings)*.
 - [ ] Contracts (L): every board contract has a schema, at least one valid and one invalid fixture, a SemVer version and its dependants *(contracts.py)*; a changed schema has the required bump *(contracts.py)*.
@@ -68,7 +79,7 @@ Read only: ARCHITECTURE.md, AGENTS.md, STATUS.md, board.json, tasks/*.md,
 docs/quality.md, docs/module-map.md (if present), docs/versions.md, docs/environments.md,
 package ARCHITECTURE.md/AGENTS.md files (profile L only).
 
-Score the 13 criteria of prompt/rubric.md. Look especially for:
+Score the 15 criteria of prompt/rubric.md. Look especially for:
 1. architecture over its profile budget or details that belong elsewhere
 2. acceptance criteria without gate or test
 3. tasks without scope, with cycles or overlapping write paths
@@ -83,6 +94,9 @@ Score the 13 criteria of prompt/rubric.md. Look especially for:
 11. UI tasks with adjectives instead of target values in px/ms/tokens
 12. stages without exit gates, no owner decision, or later-stage work already running
 13. exclusive resources not declared on tasks whose gates share ports or a database
+14. status changes without a run record, attempts above the limit, or a `done` task without a review round
+15. a missing `policy.json` or `docs/orchestration.md` when the project uses the 1.1 loop, approvals missing for a dependency or protected path
+16. scope conflicts in the dispatch plan, or a policy that denies a command a gate needs
 
 Output: table | # | criterion | 0/1 | blocker | finding | file | fix |,
 then total, blockers, top three improvements.
@@ -104,11 +118,12 @@ Answer without asking back:
 6. Which additional file you would need.
 7. Which layer or package the change belongs to.
 8. Which gate would prove the change, and whether it needs an exclusive resource.
+9. Which command sets the task to `in_progress`, and which approval would a new dependency or a protected path need?
 
 Be brief. Invent nothing.
 ```
 
-**Pass:** no blocking question; correct files, layer/package and gates; no new decision needed. Each question back is a finding: close real gaps in the brief (or, if every module needs it, in the architecture) and re-test.
+**Pass:** no blocking question; correct files, layer/package, gates and next checkpoint; no new decision needed. Each question back is a finding: close real gaps in the brief (or, if every module needs it, in the architecture) and re-test.
 
 ## 5. Anti-gaming
 

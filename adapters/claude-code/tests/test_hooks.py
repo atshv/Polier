@@ -366,3 +366,105 @@ class ForeignStop(unittest.TestCase):
         self.assertEqual(out["decision"], "block")
         self.assertIn("README.md: outside scope", out["reason"])
         self.assertIn("foreign changes (task M02, harness dsh)", out["reason"])
+
+
+class PolicyGuard(unittest.TestCase):
+    """1.1 policy.json: protected paths, manifests with approvals, commands.
+
+    The policy is the shared decision table of core/tests/policy_cases.json, so
+    the hook and the DSH plugin are tested against the same rules.
+    """
+
+    POLICY = json.loads((PACKAGE / "core" / "tests" / "policy_cases.json").read_text())["policy"]
+
+    def setUp(self):
+        self.root = project([task(scope_write=["src/app.py", "tests/", ".env", "package.json"])])
+        (self.root / "policy.json").write_text(json.dumps(self.POLICY, indent=2))
+        (self.root / ".env").write_text("SECRET=1\n")
+        (self.root / "package.json").write_text('{"name": "t"}\n')
+
+    def grant(self, action: str = "new_dependency", task_id: str = "M01", status: str = "granted",
+              approval_id: str = "AP-001", at: str = "2026-10-28T12:00:00+00:00") -> None:
+        folder = self.root / "reviews" / "approvals"
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / f"{approval_id}.json").write_text(json.dumps({
+            "id": approval_id, "action": action, "task": task_id, "status": status,
+            "requested_by": "worker", "requested_at": "2026-10-28T11:00:00+00:00",
+            "approved_by": "owner" if status == "granted" else None,
+            "approved_at": at if status == "granted" else None, "note": None,
+        }))
+
+    def test_protected_path_is_denied_for_a_worker(self):
+        out = write(self.root, ".env")
+        self.assertEqual(decision(out), "deny")
+        self.assertIn("protected path in policy.json", reason(out))
+        self.assertIn("Only a lead session may write it", reason(out))
+        self.assertIsNone(write(self.root, "src/app.py"))
+
+    def test_a_lead_bypasses_the_path_and_dependency_rules(self):
+        self.assertIsNone(write(self.root, ".env", POLIER_ROLE="lead"))
+        self.assertIsNone(write(self.root, "package.json", POLIER_ROLE="lead"))
+        self.assertIsNone(write(self.root, ".env", POLIER_ROLE="off"))
+
+    def test_dependency_manifest_needs_a_granted_approval(self):
+        out = write(self.root, "package.json")
+        self.assertEqual(decision(out), "deny")
+        self.assertIn("dependency manifest", reason(out))
+        self.assertIn("tools/approve.py request --action new_dependency --task M01", reason(out))
+
+        self.grant(status="pending")
+        self.assertEqual(decision(write(self.root, "package.json")), "deny")
+
+        self.grant(status="granted")
+        self.assertIsNone(write(self.root, "package.json"))
+
+    def test_an_approval_for_another_task_does_not_count(self):
+        self.grant(task_id="M09")
+        self.assertEqual(decision(write(self.root, "package.json")), "deny")
+
+    def test_protected_path_and_manifest_through_bash(self):
+        out = bash(self.root, "echo x > .env")
+        self.assertEqual(decision(out), "deny")
+        self.assertIn("protected path in policy.json", reason(out))
+        self.assertIn("(Bash: >)", reason(out))
+        # The scope allows package.json, so only the manifest rule can deny it.
+        self.assertIn("dependency manifest", reason(bash(self.root, "echo '{}' > package.json")))
+        self.grant()
+        self.assertIsNone(bash(self.root, "echo '{}' > package.json"))
+
+    def test_deny_commands_are_denied_for_every_role(self):
+        for role in ("worker", "reviewer", "lead"):
+            with self.subTest(role):
+                out = bash(self.root, "git push origin main", POLIER_ROLE=role)
+                self.assertEqual(decision(out), "deny")
+                self.assertIn("command blocked", reason(out))
+                self.assertIn("This rule applies to every role, a lead included", reason(out))
+        # Text inside quotes is data, not a command.
+        self.assertIsNone(bash(self.root, "git status"))
+        self.assertIsNone(bash(self.root, "echo 'git push origin main'"))
+        self.assertIsNone(bash(self.root, "rg 'npm publish' docs"))
+
+    def test_lead_only_commands_are_refused_to_worker_and_reviewer(self):
+        command = "python3 tools/state.py set M03 in_progress"
+        for role in ("worker", "reviewer"):
+            with self.subTest(role):
+                out = bash(self.root, command, POLIER_ROLE=role)
+                self.assertEqual(decision(out), "deny")
+                self.assertIn("command blocked", reason(out))
+                self.assertIn("A worker or reviewer reports the needed change", reason(out))
+        self.assertIsNone(bash(self.root, command, POLIER_ROLE="lead"))
+        self.assertIsNone(bash(self.root, "python3 tools/state.py show"))
+
+    def test_without_policy_json_nothing_changes(self):
+        plain = project([task(scope_write=["src/app.py", "tests/", ".env", "package.json"])])
+        (plain / ".env").write_text("SECRET=1\n")
+        (plain / "package.json").write_text('{"name": "t"}\n')
+        self.assertIsNone(write(plain, ".env"))
+        self.assertIsNone(write(plain, "package.json"))
+        self.assertIsNone(bash(plain, "git push origin main"))
+        self.assertIsNone(bash(plain, "python3 tools/state.py set M03 in_progress"))
+
+    def test_enforce_off_and_role_off_turn_the_policy_checks_off(self):
+        self.assertIsNone(bash(self.root, "git push origin main", POLIER_ENFORCE="off"))
+        self.assertIsNone(bash(self.root, "git push origin main", POLIER_ROLE="off"))
+        self.assertIsNone(write(self.root, ".env", POLIER_ENFORCE="off"))
