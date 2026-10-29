@@ -274,6 +274,8 @@ Briefs for the next 3–5 tasks only, from `templates/task-brief.md`, 400–900 
 ├── STATUS.md            # mandatory, generated from board.json
 ├── board.json           # mandatory; schema_version 1.0 when 1.0 fields are used
 ├── policy.json          # 1.1: limits, approvals, protected paths, denied commands
+├── dashboard.json       # optional 2.1: dashboard feature flags, labels, defaults
+├── views/               # optional 2.1: saved task views
 ├── runs/                # 1.1: one execution record per started task
 ├── .gitignore           # mandatory: OS, editor, caches, secrets, language, .polier-slot, STATUS.html
 ├── README.md            # optional: purpose, quickstart, file map

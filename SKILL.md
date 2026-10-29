@@ -34,6 +34,10 @@ python3 <skill-folder>/tools/approve.py list --root <project>
 # optional 2.0 dashboard (local, no dependencies) and MCP host bridge
 python3 <skill-folder>/tools/serve.py <project> --port 8765
 python3 <skill-folder>/tools/mcp.py --root <project>
+# 2.1 project cockpit: settings, labels, saved views, plan edits
+python3 <skill-folder>/tools/settings.py show --root <project>
+python3 <skill-folder>/tools/views.py list --root <project>
+python3 <skill-folder>/tools/plan.py create --help
 # profile L only
 python3 <skill-folder>/tools/boundaries.py <project>
 python3 <skill-folder>/tools/contracts.py check --root <project>

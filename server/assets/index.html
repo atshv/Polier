@@ -49,6 +49,13 @@
       <button class="btn btn-ghost" id="btn-audit" type="button" title="Run the project audit job (POST /api/jobs/audit)">
         <span class="btn-glyph" aria-hidden="true">◎</span><span>Audit</span>
       </button>
+      <button class="btn btn-icon bell" id="btn-inbox" type="button" aria-label="Open your inbox" title="Inbox" hidden>
+        <svg viewBox="0 0 16 16" width="15" height="15" focusable="false" aria-hidden="true">
+          <path d="M8 2.1c-2.1 0-3.4 1.5-3.4 3.6v2.2L3.4 9.9h9.2l-1.2-1.8V5.7c0-2.1-1.3-3.6-3.4-3.6Z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"></path>
+          <path d="M6.5 11.5a1.6 1.6 0 0 0 3 0" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"></path>
+        </svg>
+        <span class="bell-count" id="bell-count" hidden>0</span>
+      </button>
       <button class="btn btn-icon" id="btn-theme" type="button" aria-label="Toggle light and dark theme" title="Toggle theme">
         <span id="theme-glyph" aria-hidden="true">◐</span>
       </button>

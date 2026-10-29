@@ -13,6 +13,7 @@ const THEME_KEY = 'polier.theme';
 const MORE_MARK = '…';
 
 const VIEWS = [
+  { key: 'yourwork', label: 'Your Work', feature: 'inbox' },
   { key: 'board', label: 'Board' },
   { key: 'table', label: 'Table' },
   { key: 'graph', label: 'Graph' },
@@ -20,7 +21,8 @@ const VIEWS = [
   { key: 'approvals', label: 'Approvals' },
   { key: 'activity', label: 'Activity' },
   { key: 'sessions', label: 'Sessions' },
-  { key: 'plan', label: 'Plan' }
+  { key: 'plan', label: 'Plan' },
+  { key: 'settings', label: 'Settings' }
 ];
 
 const STATUS = {
@@ -601,6 +603,584 @@ function toggleTheme() {
   applyTheme(next);
 }
 /* =========================================================================
+   2.1 — Project Cockpit: settings, labels, views, filters, inbox, worklog
+   ========================================================================= */
+
+const PREF_VIEW = 'polier.view';
+const PREF_DENSITY = 'polier.density';
+const FEATURE_NOTES = {
+  inbox: 'Your Work, the Inbox panel and the header bell.',
+  worklog: 'The Worklog drawer tab and effort columns.',
+  views: 'The filter builder, saved views, grouping, sorting and density.',
+  labels: 'Task labels on cards, rows, the drawer and in Settings.',
+  timeline: 'A horizontal time view of stages and tasks.',
+  cycles: 'Recurring review/work cycles across the board.',
+  modules: 'A module map derived from the package graph.',
+  pages: 'A documentation reader for the project pages.',
+  intake: 'An intake form that turns requests into tasks.',
+  analytics: 'Throughput and effort charts over time.',
+  assistant: 'A chat surface for the project assistant.'
+};
+const FEATURE_LABELS = {
+  inbox: 'Your Work and Inbox',
+  worklog: 'Worklog',
+  views: 'Filter builder and views',
+  labels: 'Task labels',
+  timeline: 'Timeline',
+  cycles: 'Cycles',
+  modules: 'Modules',
+  pages: 'Pages',
+  intake: 'Intake',
+  analytics: 'Analytics',
+  assistant: 'Assistant'
+};
+
+const FIELD_LABELS = {
+  id: 'ID', title: 'Title', status: 'Status', stage: 'Stage', stage_title: 'Stage title',
+  package: 'Package', owner: 'Owner', label: 'Label', complexity: 'Complexity',
+  estimate_hours: 'Estimate', tokens: 'Tokens', attempt: 'Attempts',
+  gates_missing: 'Missing gates', ready: 'Ready', running: 'Running', claimed: 'Claimed',
+  blocked: 'Blocked', review_verdict: 'Review verdict', budget: 'Budget'
+};
+const OPERATOR_LABELS = {
+  is: 'is', is_not: 'is not', contains: 'contains', not_contains: 'does not contain',
+  empty: 'is empty', not_empty: 'is not empty', any_of: 'is one of', none_of: 'is none of',
+  eq: '=', neq: '≠', gt: '>', gte: '≥', lt: '<', lte: '≤'
+};
+const NO_VALUE_OPERATORS = ['empty', 'not_empty'];
+const PALETTE_FALLBACK = ['neutral', 'blue', 'green', 'amber', 'orange', 'red', 'violet', 'teal'];
+const GROUP_FALLBACK = ['type', 'risk', 'origin', 'area', 'theme', 'custom'];
+
+function prefGet(key, fallback) {
+  try {
+    const value = localStorage.getItem(key);
+    return value === null ? fallback : value;
+  } catch (err) {
+    return fallback;
+  }
+}
+
+function prefSet(key, value) {
+  try { localStorage.setItem(key, String(value)); } catch (err) { /* private mode */ }
+}
+
+/* ---------- feature flags and settings ---------- */
+
+function feature(name) {
+  const settings = state.settings;
+  if (settings && settings.features && typeof settings.features[name] === 'boolean') return settings.features[name];
+  const snapshotSettings = state.snapshot && state.snapshot.settings;
+  if (snapshotSettings && snapshotSettings.features && typeof snapshotSettings.features[name] === 'boolean') {
+    return snapshotSettings.features[name];
+  }
+  return true;
+}
+
+function projectSettings() {
+  return state.settings || (state.snapshot && state.snapshot.settings) || {};
+}
+
+function settingsLabels() {
+  const labels = projectSettings().labels;
+  return Array.isArray(labels) ? labels : [];
+}
+
+function settingsPalette() {
+  const palette = projectSettings().palette;
+  return Array.isArray(palette) && palette.length ? palette : PALETTE_FALLBACK;
+}
+
+function settingsGroups() {
+  const groups = projectSettings().groups;
+  return Array.isArray(groups) && groups.length ? groups : GROUP_FALLBACK;
+}
+
+function settingsMe() {
+  const settings = projectSettings();
+  return settings.me || 'owner';
+}
+
+function featureDefaults() {
+  const settings = state.settings;
+  if (settings && settings.feature_defaults) return settings.feature_defaults;
+  return { inbox: true, worklog: true, views: true, labels: true, timeline: false, cycles: false,
+    modules: false, pages: false, intake: false, analytics: false, assistant: false };
+}
+
+function labelById(labelId) {
+  return settingsLabels().find((label) => label.id === labelId) || null;
+}
+
+function labelChip(label, options) {
+  if (!label) return null;
+  const opts = options || {};
+  const color = settingsPalette().indexOf(label.color) !== -1 ? label.color : 'neutral';
+  return h('span', {
+    class: 'label-chip lc-' + color + (opts.class ? ' ' + opts.class : ''),
+    title: (label.title || label.id) + (label.group ? ' · ' + label.group : '')
+  }, h('span', { class: 'dot' }), label.title || label.id);
+}
+
+function labelChips(labelIds, max) {
+  const labels = (Array.isArray(labelIds) ? labelIds : []).map(labelById).filter(Boolean);
+  const row = h('span', { class: 'label-row' });
+  const shown = max ? labels.slice(0, max) : labels;
+  for (const label of shown) row.appendChild(labelChip(label));
+  if (max && labels.length > max) {
+    row.appendChild(h('span', { class: 'label-chip lc-neutral', text: '+' + (labels.length - max) }));
+  }
+  return row;
+}
+
+function labelTitle(labelId) {
+  const label = labelById(labelId);
+  return label ? (label.title || labelId) : labelId;
+}
+
+function taskLabelIds(task) {
+  return task && Array.isArray(task.labels) ? task.labels : [];
+}
+
+function paletteClass(color) {
+  return 'lc-' + (settingsPalette().indexOf(color) !== -1 ? color : 'neutral');
+}
+
+function slugify(text) {
+  return String(text || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
+}
+
+function fmtHours(value) {
+  const number = Number(value);
+  if (!isFinite(number)) return '—';
+  const rounded = Math.round(number * 10) / 10;
+  return (Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1)) + 'h';
+}
+
+/* ---------- task effort (project worklog) ---------- */
+
+function worklogRowFor(taskId) {
+  const worklog = state.worklog;
+  if (!worklog || !Array.isArray(worklog.tasks)) return null;
+  return worklog.tasks.find((row) => row.id === taskId) || null;
+}
+
+function estimateOf(task) {
+  return typeof task.estimate_hours === 'number' ? task.estimate_hours : null;
+}
+
+function actualOf(task) {
+  const row = worklogRowFor(task.id);
+  return row ? Number(row.actual_hours) || 0 : null;
+}
+
+function effortText(task) {
+  const estimate = estimateOf(task);
+  const actual = actualOf(task);
+  const parts = [];
+  if (estimate !== null) parts.push('est ' + fmtHours(estimate));
+  if (actual !== null) parts.push('act ' + fmtHours(actual));
+  return parts.join(' · ');
+}
+
+/* ---------- filters: the client mirror of core/filters.py ---------- */
+
+function filterKind(field) {
+  const api = state.filterFields;
+  if (api && api.fields && api.fields[field]) return api.fields[field];
+  return 'text';
+}
+
+function filterOperators(field) {
+  const api = state.filterFields;
+  const kind = filterKind(field);
+  if (api && api.operators && Array.isArray(api.operators[kind])) return api.operators[kind];
+  if (kind === 'bool' || kind === 'budget') return ['is'];
+  if (kind === 'status') return ['is', 'is_not', 'any_of', 'none_of'];
+  if (kind === 'label') return ['any_of', 'none_of', 'empty', 'not_empty'];
+  if (kind === 'number') return ['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'empty', 'not_empty'];
+  return ['is', 'is_not', 'contains', 'not_contains', 'empty', 'not_empty'];
+}
+
+function filterGroupByOptions() {
+  const api = state.filterFields;
+  return api && Array.isArray(api.group_by) ? api.group_by.filter(Boolean) : ['status', 'stage', 'package', 'owner', 'label'];
+}
+
+function filterSortableFields() {
+  const api = state.filterFields;
+  return api && Array.isArray(api.sortable) ? api.sortable
+    : ['id', 'title', 'status', 'stage', 'package', 'owner', 'complexity', 'tokens', 'attempt'];
+}
+
+function statusOrder() {
+  const api = state.filterFields;
+  return api && Array.isArray(api.status_order) ? api.status_order : Object.keys(STATUS);
+}
+
+function budgetState(task) {
+  const budget = task.budget || {};
+  if (budget.over) return 'over';
+  if (budget.warn) return 'warn';
+  return 'ok';
+}
+
+function taskFieldValue(task, field) {
+  switch (field) {
+    case 'label': return taskLabelIds(task);
+    case 'ready': return Boolean(task.ready);
+    case 'running': return Boolean(task.running);
+    case 'claimed': return Boolean(task.claim);
+    case 'blocked': return task.status === 'blocked' || Boolean(task.blocked_reason);
+    case 'budget': return budgetState(task);
+    case 'review_verdict': return (task.review && task.review.verdict) || '';
+    case 'estimate_hours':
+      return typeof task.estimate_hours === 'number' ? task.estimate_hours : null;
+    case 'complexity':
+      return typeof task.complexity === 'number' ? task.complexity : null;
+    case 'tokens': return typeof task.tokens === 'number' ? task.tokens : 0;
+    case 'attempt': return typeof task.attempt === 'number' ? task.attempt : 0;
+    case 'gates_missing':
+      if (typeof task.gates_missing === 'number') return task.gates_missing;
+      return Array.isArray(task.gates_missing) ? task.gates_missing.length : 0;
+    default:
+      return typeof task[field] === 'string' ? task[field] : '';
+  }
+}
+
+function matchCondition(task, condition) {
+  const field = condition.field;
+  const op = condition.op;
+  const expected = condition.value;
+  const value = taskFieldValue(task, field);
+  const kind = filterKind(field);
+  if (op === 'empty') return value === null || value === '' || (Array.isArray(value) && !value.length);
+  if (op === 'not_empty') return !(value === null || value === '' || (Array.isArray(value) && !value.length));
+  if (kind === 'label') {
+    const labels = Array.isArray(value) ? value : [];
+    const wanted = Array.isArray(expected) ? expected : [];
+    if (op === 'any_of') return wanted.some((item) => labels.indexOf(item) !== -1);
+    if (op === 'none_of') return !wanted.some((item) => labels.indexOf(item) !== -1);
+    return false;
+  }
+  if (kind === 'bool') return Boolean(value) === Boolean(expected);
+  if (kind === 'number') {
+    if (value === null || value === undefined) return false;
+    const actual = Number(value);
+    const target = Number(expected);
+    if (!isFinite(actual) || !isFinite(target)) return false;
+    if (op === 'eq') return actual === target;
+    if (op === 'neq') return actual !== target;
+    if (op === 'gt') return actual > target;
+    if (op === 'gte') return actual >= target;
+    if (op === 'lt') return actual < target;
+    if (op === 'lte') return actual <= target;
+    return false;
+  }
+  if (op === 'any_of' || op === 'none_of') {
+    const wanted = (Array.isArray(expected) ? expected : []).map((item) => String(item).toLowerCase());
+    const actual = String(value || '').toLowerCase();
+    return op === 'any_of' ? wanted.indexOf(actual) !== -1 : wanted.indexOf(actual) === -1;
+  }
+  const actualText = String(value === null || value === undefined ? '' : value).toLowerCase();
+  const wantedText = String(expected === null || expected === undefined ? '' : expected).toLowerCase();
+  if (op === 'is') return actualText === wantedText;
+  if (op === 'is_not') return actualText !== wantedText;
+  if (op === 'contains') return actualText.indexOf(wantedText) !== -1;
+  if (op === 'not_contains') return actualText.indexOf(wantedText) === -1;
+  return false;
+}
+
+function matchAllConditions(task, conditions) {
+  return (conditions || []).every((condition) => matchCondition(task, condition));
+}
+
+function sortKeyOf(value) {
+  if (typeof value === 'number' && isFinite(value)) return [1, value, ''];
+  if (value === null || value === undefined || value === '') return [1, 0, ''];
+  return [0, 0, String(value).toLowerCase()];
+}
+
+function compareKeys(a, b) {
+  for (let index = 0; index < 3; index += 1) {
+    if (a[index] < b[index]) return -1;
+    if (a[index] > b[index]) return 1;
+  }
+  return 0;
+}
+
+function sortTaskList(tasks, field, direction) {
+  const sortField = field || 'id';
+  const reverse = direction === 'desc';
+  const decorated = tasks.map((task, index) => ({ task: task, index: index, key: sortKeyOf(taskFieldValue(task, sortField)) }));
+  decorated.sort((left, right) => {
+    const compared = compareKeys(left.key, right.key);
+    if (compared) return reverse ? -compared : compared;
+    return left.index - right.index;
+  });
+  return decorated.map((entry) => entry.task);
+}
+
+function groupTaskList(tasks, field) {
+  if (!field) return [{ key: 'all', label: 'All', tasks: tasks }];
+  const buckets = new Map();
+  const push = (key, task) => {
+    if (!buckets.has(key)) buckets.set(key, []);
+    buckets.get(key).push(task);
+  };
+  for (const task of tasks) {
+    if (field === 'label') {
+      const labels = taskLabelIds(task);
+      if (!labels.length) push('(none)', task);
+      else for (const label of labels) push(label, task);
+    } else {
+      const value = taskFieldValue(task, field);
+      push(String(value === null || value === undefined || value === '' ? '(none)' : value), task);
+    }
+  }
+  let order;
+  if (field === 'status') {
+    order = statusOrder().filter((status) => buckets.has(status));
+    for (const key of buckets.keys()) if (order.indexOf(key) === -1) order.push(key);
+  } else {
+    order = Array.from(buckets.keys());
+  }
+  return order.map((key) => ({
+    key: key,
+    label: key === '(none)' ? 'No ' + field : (field === 'label' ? (labelTitle(key) || key) : key),
+    tasks: buckets.get(key)
+  }));
+}
+
+function conditionValueText(condition) {
+  const kind = filterKind(condition.field);
+  const value = condition.value;
+  if (NO_VALUE_OPERATORS.indexOf(condition.op) !== -1) return '';
+  if (kind === 'status' && Array.isArray(value)) return value.map((status) => stMeta(status).label).join(', ');
+  if (kind === 'label') return (Array.isArray(value) ? value : []).map(labelTitle).join(', ');
+  if (kind === 'bool') return value ? 'true' : 'false';
+  if (kind === 'number') return String(value);
+  if (kind === 'budget') return String(value);
+  return String(value === null || value === undefined ? '' : value);
+}
+
+function conditionText(condition) {
+  const field = FIELD_LABELS[condition.field] || condition.field;
+  const op = OPERATOR_LABELS[condition.op] || condition.op;
+  const value = conditionValueText(condition);
+  return field + ' ' + op + (value ? ' ' + value : '');
+}
+
+function defaultFilterValue(field, op) {
+  if (NO_VALUE_OPERATORS.indexOf(op) !== -1) return undefined;
+  const kind = filterKind(field);
+  if (kind === 'status') return (op === 'any_of' || op === 'none_of') ? [] : 'pending';
+  if (kind === 'label') return [];
+  if (kind === 'bool') return true;
+  if (kind === 'number') return '';
+  if (kind === 'budget') return 'over';
+  return '';
+}
+
+function defaultFilterDraft() {
+  return { field: 'status', op: 'any_of', value: defaultFilterValue('status', 'any_of') };
+}
+
+function filterValueLabel(field) {
+  const kind = filterKind(field);
+  if (kind === 'status') return 'statuses';
+  if (kind === 'label') return 'labels';
+  return 'value';
+}
+
+/* ---------- localStorage-backed view/density preferences ---------- */
+
+function currentView() {
+  return (state.views.all || []).find((view) => view.id === state.activeViewId) || null;
+}
+
+function markCustomView() {
+  if (!state.activeViewId) return;
+  state.activeViewId = '';
+  prefSet(PREF_VIEW, '');
+}
+
+function applyView(viewId) {
+  const view = (state.views.all || []).find((item) => item.id === viewId);
+  if (!view) {
+    state.activeViewId = '';
+    prefSet(PREF_VIEW, '');
+    renderView();
+    return;
+  }
+  state.activeViewId = view.id;
+  prefSet(PREF_VIEW, view.id);
+  state.structuredFilters = JSON.parse(JSON.stringify(view.filters || []));
+  state.groupBy = view.group_by || 'status';
+  state.sort = view.sort
+    ? { field: view.sort.field || 'id', dir: view.sort.dir === 'desc' ? 'desc' : 'asc' }
+    : { field: 'id', dir: 'asc' };
+  state.filterEditorOpen = false;
+  state.filterError = null;
+  const kind = view.kind === 'table' ? 'table' : 'board';
+  if ((state.route.view === 'board' || state.route.view === 'table') && state.route.view !== kind) navigate(kind);
+  else renderView();
+}
+
+function applySavedViewPreferences() {
+  const savedId = prefGet(PREF_VIEW, '');
+  if (!savedId) return;
+  const view = (state.views.all || []).find((item) => item.id === savedId);
+  if (!view) {
+    state.activeViewId = '';
+    prefSet(PREF_VIEW, '');
+    return;
+  }
+  state.activeViewId = view.id;
+  state.structuredFilters = JSON.parse(JSON.stringify(view.filters || []));
+  state.groupBy = view.group_by || 'status';
+  state.sort = view.sort
+    ? { field: view.sort.field || 'id', dir: view.sort.dir === 'desc' ? 'desc' : 'asc' }
+    : { field: 'id', dir: 'asc' };
+}
+
+function restorePreferences() {
+  state.density = prefGet(PREF_DENSITY, 'comfortable') === 'compact' ? 'compact' : 'comfortable';
+}
+
+function toggleDensity() {
+  state.density = state.density === 'compact' ? 'comfortable' : 'compact';
+  prefSet(PREF_DENSITY, state.density);
+  renderView();
+}
+
+/* ---------- loaders for the 2.1 endpoints ---------- */
+
+function syncFeatureRouting() {
+  if (state.route.view === 'yourwork' && !feature('inbox')) navigate('board');
+}
+
+async function loadSettings() {
+  try {
+    state.settings = await api('/api/settings');
+    state.settingsLoaded = true;
+    state.settingsError = null;
+    syncFeatureRouting();
+  } catch (err) {
+    state.settingsError = err;
+  }
+  return state.settings;
+}
+
+async function loadFilterFields() {
+  try {
+    state.filterFields = await api('/api/filters/fields');
+  } catch (err) {
+    state.filterFields = null;
+  }
+}
+
+async function loadViews() {
+  try {
+    state.views = await api('/api/views');
+    state.viewsLoaded = true;
+    state.viewsError = null;
+  } catch (err) {
+    state.viewsError = err;
+    state.views = { builtin: [], saved: [], all: [] };
+  }
+}
+
+async function loadYourWork() {
+  try {
+    state.yourWork = await api('/api/me');
+    state.yourWorkLoaded = true;
+    state.yourWorkError = null;
+  } catch (err) {
+    state.yourWorkError = err;
+  }
+}
+
+async function loadInbox(options) {
+  const opts = options || {};
+  try {
+    const data = await api('/api/inbox' + (opts.unread ? '?unread=1' : ''));
+    state.inbox = data;
+    state.inboxItems = Array.isArray(data.items) ? data.items : [];
+    state.inboxCounts = data.counts || { total: 0, unread: 0, high: 0 };
+    state.inboxLoaded = true;
+    state.inboxError = null;
+  } catch (err) {
+    state.inboxError = err;
+  }
+}
+
+async function loadInboxCounts() {
+  if (!feature('inbox')) return;
+  try {
+    const data = await api('/api/inbox?unread=1');
+    state.inboxCounts = data.counts || { total: 0, unread: 0, high: 0 };
+  } catch (err) {
+    /* the bell simply keeps its last count */
+  }
+  renderBell();
+  renderTabs();
+}
+
+async function loadWorklog() {
+  if (!feature('worklog')) return;
+  try {
+    state.worklog = await api('/api/worklog');
+    state.worklogLoaded = true;
+    state.worklogError = null;
+  } catch (err) {
+    state.worklogError = err;
+  }
+}
+
+/* ---------- inbox actions ---------- */
+
+async function markInboxRead(ids, read) {
+  const list = Array.isArray(ids) ? ids : [ids];
+  if (!list.length) return;
+  try {
+    await api('/api/inbox/read', { method: 'POST', body: { ids: list, read: read !== false } });
+    await Promise.all([loadInbox(), loadInboxCounts()]);
+    if (state.route.view === 'yourwork') renderView();
+  } catch (err) {
+    toast('Inbox: ' + describeError(err), 'error');
+  }
+}
+
+async function markAllInboxRead() {
+  if (!feature('inbox')) return;
+  try {
+    const data = await api('/api/inbox');
+    const unread = (data.items || []).filter((item) => !item.read).map((item) => item.id);
+    if (!unread.length) {
+      toast('Inbox is already read', 'ok', 2200);
+      return;
+    }
+    await markInboxRead(unread, true);
+    toast('Inbox marked read', 'ok', 2200);
+  } catch (err) {
+    toast('Inbox: ' + describeError(err), 'error');
+  }
+}
+
+function openInboxItem(item) {
+  if (!item) return;
+  if (!item.read && canWrite()) {
+    api('/api/inbox/read', { method: 'POST', body: { ids: [item.id] } })
+      .then(() => Promise.all([loadInbox(), loadInboxCounts()]))
+      .then(() => { if (state.route.view === 'yourwork') renderView(); })
+      .catch(() => { /* opening the target still works */ });
+  }
+  if (item.action === 'Open approvals') navigate('approvals');
+  else if (item.action === 'Open sessions') navigate('sessions');
+  else if (item.task) openTask(item.task);
+}
+
+/* =========================================================================
    9. Application state
    ========================================================================= */
 
@@ -659,7 +1239,37 @@ const state = {
   generator: null,
 
   graph: { zoom: 1 },
-  packageOptions: null
+  packageOptions: null,
+
+  /* 2.1 cockpit state */
+  settings: null,
+  settingsLoaded: false,
+  settingsError: null,
+  settingsUI: null,
+  health: null,
+  filterFields: null,
+  views: { builtin: [], saved: [], all: [] },
+  viewsLoaded: false,
+  viewsError: null,
+  activeViewId: '',
+  structuredFilters: [],
+  groupBy: 'status',
+  sort: { field: 'id', dir: 'asc' },
+  density: 'comfortable',
+  filterEditorOpen: false,
+  filterDraft: null,
+  filterError: null,
+  yourWork: null,
+  yourWorkLoaded: false,
+  yourWorkError: null,
+  inbox: null,
+  inboxItems: [],
+  inboxCounts: { total: 0, unread: 0, high: 0 },
+  inboxLoaded: false,
+  inboxError: null,
+  worklog: null,
+  worklogLoaded: false,
+  worklogError: null
 };
 
 const dom = {
@@ -671,6 +1281,8 @@ const dom = {
   live: document.getElementById('live-indicator'),
   liveLabel: document.getElementById('live-label'),
   themeButton: document.getElementById('btn-theme'),
+  inboxButton: document.getElementById('btn-inbox'),
+  bellCount: document.getElementById('bell-count'),
   checkButton: document.getElementById('btn-check'),
   auditButton: document.getElementById('btn-audit'),
   drawer: document.getElementById('drawer'),
@@ -845,11 +1457,49 @@ function startViewTimers() {
     setViewInterval(() => loadSessions({ quiet: true }), 2600);
     if (state.sessionSelected) startViewSessionWatch(state.sessionSelected);
   }
+  if (state.route.view === 'yourwork') {
+    setViewInterval(async () => {
+      await Promise.all([loadYourWork(), loadInboxCounts(), loadInbox()]);
+      if (state.route.view === 'yourwork') renderView();
+    }, 30000);
+  }
 }
 
 /* =========================================================================
    12. Header, tabs, live indicator
    ========================================================================= */
+
+/* =========================================================================
+   2.1 — boot, routing, header, tabs, SSE and refresh
+   ========================================================================= */
+
+async function loadHealth() {
+  try {
+    state.health = await api('/api/health');
+  } catch (err) {
+    state.health = null;
+  }
+}
+
+function renderBell() {
+  const bell = document.getElementById('btn-inbox');
+  const count = document.getElementById('bell-count');
+  if (!bell || !count) return;
+  if (!feature('inbox')) {
+    bell.hidden = true;
+    return;
+  }
+  bell.hidden = false;
+  const unread = Number(state.inboxCounts && state.inboxCounts.unread) || 0;
+  const high = Number(state.inboxCounts && state.inboxCounts.high) || 0;
+  count.hidden = unread <= 0;
+  count.textContent = unread > 99 ? '99+' : String(unread);
+  count.className = 'bell-count' + (high ? ' is-high' : '');
+  bell.title = unread
+    ? unread + ' unread inbox item' + (unread === 1 ? '' : 's') + (high ? ' · ' + high + ' high' : '')
+    : 'Inbox is empty';
+  bell.setAttribute('aria-label', unread ? 'Open your inbox (' + unread + ' unread)' : 'Open your inbox');
+}
 
 function renderHeader() {
   const snapshot = state.snapshot;
@@ -888,6 +1538,9 @@ function renderHeader() {
   if (config && config.token_required) {
     dom.headerMeta.appendChild(pill('token', '', 'This dashboard requires a bearer token'));
   }
+  if (state.settingsLoaded || (snapshot && snapshot.settings)) {
+    dom.headerMeta.appendChild(pill('me ' + settingsMe(), '', 'Your handle in Settings → General'));
+  }
   if (config && config.version) dom.projectName.title = 'Polier dashboard ' + config.version;
   const writable = canWrite();
   dom.checkButton.disabled = !writable;
@@ -895,15 +1548,18 @@ function renderHeader() {
   dom.checkButton.title = writable ? 'Run the board check job (POST /api/jobs/check)' : 'The dashboard is read-only';
   dom.auditButton.title = writable ? 'Run the project audit job (POST /api/jobs/audit)' : 'The dashboard is read-only';
   paintJobsButtonState();
+  renderBell();
 }
 
 function renderTabs() {
   clear(dom.tabs);
   const snapshot = state.snapshot;
   const counts = {
-    approvals: snapshot && snapshot.approvals && snapshot.approvals.pending ? snapshot.approvals.pending.length : 0
+    approvals: snapshot && snapshot.approvals && snapshot.approvals.pending ? snapshot.approvals.pending.length : 0,
+    yourwork: Number(state.inboxCounts && state.inboxCounts.unread) || 0
   };
   for (const view of VIEWS) {
+    if (view.feature && !feature(view.feature)) continue;
     const tab = h('a', {
       class: 'tab',
       href: '#/' + view.key,
@@ -930,8 +1586,6 @@ let eventRetry = 0;
 let eventReconnectTimer = null;
 
 function connectEvents() {
-  // `?noevents=1` freezes live updates: useful for screenshots, print views and
-  // reading a page on a static host. Explicit "Refresh" buttons still refetch.
   if (new URLSearchParams(location.search).get('noevents') === '1') {
     setLive('static', 'Static');
     return;
@@ -958,6 +1612,23 @@ function connectEvents() {
   source.addEventListener('approval', () => scheduleRefresh());
   source.addEventListener('claim', () => scheduleRefresh());
   source.addEventListener('plan', () => { scheduleRefresh(); if (state.route.view === 'plan') loadPlan(); });
+  source.addEventListener('settings', () => {
+    loadSettings().then(() => {
+      renderHeader();
+      renderTabs();
+      if (state.route.view === 'settings') renderView();
+      else renderView();
+    });
+  });
+  source.addEventListener('views', () => {
+    loadViews().then(() => {
+      if (state.route.view === 'board' || state.route.view === 'table') renderView();
+    });
+  });
+  source.addEventListener('inbox', () => {
+    loadInboxCounts();
+    if (state.route.view === 'yourwork') loadInbox().then(() => { if (state.route.view === 'yourwork') renderView(); });
+  });
   source.addEventListener('job', () => { loadJobs(); });
   source.addEventListener('session', (event) => {
     const payload = ssePayload(event);
@@ -1158,7 +1829,10 @@ function scheduleRefresh() {
 async function refreshAll() {
   await loadConfig();
   await loadSnapshot();
-  if (!state.packageOptions) await loadPackageOptions();
+  if (!state.packageOptions && !state.noBoard) await loadPackageOptions();
+  await loadSettings();
+  if (!state.viewsLoaded) await loadViews();
+  loadInboxCounts();
   renderHeader();
   renderTabs();
   if (state.route.taskId) loadDrawer(state.route.taskId, true);
@@ -1168,6 +1842,9 @@ async function refreshAll() {
   else if (view === 'activity') await loadActivity();
   else if (view === 'plan') await loadPlan();
   else if (view === 'sessions') await loadSessions({ quiet: true });
+  else if (view === 'yourwork') await Promise.all([loadYourWork(), loadInbox()]);
+  else if (view === 'settings') await loadHealth();
+  if ((view === 'board' || view === 'table') && feature('worklog')) await loadWorklog();
   renderView();
   renderJobsTray();
   if (state.jobsOpen) loadJobs();
@@ -1175,39 +1852,33 @@ async function refreshAll() {
 
 async function loadViewData(view) {
   const startedView = view;
-  if (view === 'dispatch') {
-    await loadDispatch();
-    if (state.route.view === startedView) renderView();
-    return;
-  }
+  const rerender = () => { if (state.route.view === startedView) renderView(); };
+
+  if (view === 'dispatch') { await loadDispatch(); return rerender(); }
   if (view === 'approvals') {
     await Promise.all([(!state.snapshot && !state.noBoard && !state.snapshotError) ? loadSnapshot() : Promise.resolve(), loadApprovals()]);
-    if (state.route.view === startedView) renderView();
-    return;
+    return rerender();
   }
-  if (view === 'activity') {
-    await loadActivity();
-    if (state.route.view === startedView) renderView();
-    return;
+  if (view === 'activity') { await loadActivity(); return rerender(); }
+  if (view === 'sessions') { await loadSessions(); return rerender(); }
+  if (view === 'plan') { await Promise.all([loadPlan(), loadSnapshot()]); return rerender(); }
+  if (view === 'yourwork') {
+    await Promise.all([loadSnapshot(), loadYourWork(), loadInboxCounts(), loadInbox()]);
+    return rerender();
   }
-  if (view === 'sessions') {
-    await loadSessions();
-    if (state.route.view === startedView) renderView();
-    return;
+  if (view === 'settings') {
+    await Promise.all([loadSettings(), loadConfig(), loadSnapshot(), loadViews(), loadHealth(), loadFilterFields()]);
+    return rerender();
   }
-  if (view === 'plan') {
-    await Promise.all([loadPlan(), loadSnapshot()]);
-    if (state.route.view === startedView) renderView();
-    return;
+
+  if (!state.snapshot && !state.noBoard && !state.snapshotError) await loadSnapshot();
+  if (!state.packageOptions && !state.noBoard) await loadPackageOptions();
+  if (!state.filterFields) await loadFilterFields();
+  if (!state.viewsLoaded) await loadViews();
+  if ((view === 'board' || view === 'table') && feature('worklog') && !state.worklogLoaded) {
+    await loadWorklog();
   }
-  if (!state.snapshot && !state.noBoard && !state.snapshotError) {
-    await loadSnapshot();
-    if (state.route.view === startedView) renderView();
-  }
-  if (!state.packageOptions && !state.noBoard) {
-    await loadPackageOptions();
-    if (state.route.view === startedView) renderView();
-  }
+  return rerender();
 }
 
 /* =========================================================================
@@ -1220,6 +1891,18 @@ function renderView() {
   clear(dom.view);
   const view = state.route.view;
 
+  if (view === 'settings') {
+    renderSettings();
+    restoreFocus(focus);
+    return;
+  }
+  if (view === 'yourwork' && !feature('inbox')) {
+    state.route = { view: 'board', taskId: null };
+    try { history.replaceState(null, '', '#/board'); } catch (err) { location.hash = '#/board'; }
+    renderBoard();
+    restoreFocus(focus);
+    return;
+  }
   if (view === 'plan') {
     renderPlanView();
     restoreFocus(focus);
@@ -1250,6 +1933,7 @@ function renderView() {
   }
 
   switch (view) {
+    case 'yourwork': renderYourWork(); break;
     case 'board': renderBoard(); break;
     case 'table': renderTable(); break;
     case 'graph': renderGraph(); break;
@@ -1330,68 +2014,622 @@ function packageMatches(task, packagePath) {
 }
 
 function visibleTasks() {
-  return applyFilters((state.snapshot && state.snapshot.tasks) || []);
+  const tasks = (state.snapshot && state.snapshot.tasks) || [];
+  const text = String(state.filters.text || '').trim().toLowerCase();
+  let out = tasks;
+  if (text) {
+    out = out.filter((task) => {
+      const haystack = [
+        task.id, task.title, task.goal, task.why, task.owner, task.stage_title,
+        task.stage, task.package, task.parallel_group, task.branch,
+        (task.labels || []).join(' '), (task.depends_on || []).join(' '),
+        (task.gates || []).join(' '), (task.scope_write || []).join(' ')
+      ].filter(Boolean).join(' ').toLowerCase();
+      return haystack.indexOf(text) !== -1;
+    });
+  }
+  if (feature('views') && Array.isArray(state.structuredFilters) && state.structuredFilters.length) {
+    out = out.filter((task) => matchAllConditions(task, state.structuredFilters));
+  }
+  return out;
 }
 
-function renderFilters(options) {
-  const opts = options || {};
-  const wrap = h('div', { class: 'filters' });
-  const textInput = h('input', {
-    class: 'input filter-text', type: 'search', placeholder: 'Filter by id, title, owner…',
-    value: state.filters.text, 'aria-label': 'Filter tasks', 'data-fkey': 'filter-text',
+/* =========================================================================
+   2.1 — structured filter builder, views bar and saved views
+   ========================================================================= */
+
+function viewField(label, control) {
+  return h('label', { class: 'view-field' }, h('span', { text: label }), control);
+}
+
+function capitalize(text) {
+  const value = String(text || '');
+  return value ? value.charAt(0).toUpperCase() + value.slice(1).replace(/_/g, ' ') : value;
+}
+
+function renderViewBar() {
+  const bar = h('div', { class: 'view-bar' });
+  const views = (state.views && state.views.all) || [];
+
+  const select = h('select', {
+    class: 'select', 'aria-label': 'Active view',
+    on: { change: (event) => applyView(event.target.value) }
+  });
+  const custom = h('option', { value: '', text: 'Custom view' });
+  select.appendChild(custom);
+  if (views.length) {
+    const builtinGroup = h('optgroup', { label: 'Built-in' });
+    const savedGroup = h('optgroup', { label: 'Saved' });
+    for (const view of views) {
+      const option = h('option', { value: view.id, text: view.name || view.id });
+      if (view.builtin) builtinGroup.appendChild(option);
+      else savedGroup.appendChild(option);
+    }
+    if (builtinGroup.children.length) select.appendChild(builtinGroup);
+    if (savedGroup.children.length) select.appendChild(savedGroup);
+  }
+  select.value = state.activeViewId || '';
+  bar.appendChild(viewField('View', select));
+
+  const active = currentView();
+  bar.appendChild(h('button', {
+    class: 'btn btn-sm', type: 'button', text: 'Save view',
+    disabled: !canWrite(),
+    title: canWrite() ? 'Save the current filters, grouping and sorting as a view' : 'The dashboard is read-only',
+    on: { click: () => openSaveViewModal() }
+  }));
+  if (active && !active.builtin) {
+    bar.appendChild(h('button', {
+      class: 'btn btn-sm btn-danger', type: 'button', text: 'Delete', disabled: !canWrite(),
+      title: canWrite() ? 'Delete this saved view' : 'The dashboard is read-only',
+      on: { click: () => deleteCurrentView() }
+    }));
+  }
+
+  const groupSelect = h('select', {
+    class: 'select', 'aria-label': 'Group by',
     on: {
-      input: (event) => {
-        state.filters.text = event.target.value;
-        scheduleFilterRender();
+      change: (event) => {
+        state.groupBy = event.target.value || 'status';
+        markCustomView();
+        rerenderWithFocus();
       }
     }
   });
-  wrap.appendChild(textInput);
+  const groupOptions = ['status'].concat(filterGroupByOptions().filter((option) => option !== 'status'));
+  for (const option of groupOptions) {
+    const node = h('option', { value: option, text: option === 'status' ? 'Status' : capitalize(option) });
+    if ((state.groupBy || 'status') === option) node.selected = true;
+    groupSelect.appendChild(node);
+  }
+  groupSelect.value = state.groupBy || 'status';
+  bar.appendChild(viewField('Group', groupSelect));
 
-  const stageSelect = filterSelect('stage', 'All stages', filterValues('stage'), (value) => {
-    state.filters.stage = value;
-    rerenderWithFocus();
+  const sortSelect = h('select', {
+    class: 'select', 'aria-label': 'Sort by',
+    on: {
+      change: (event) => {
+        state.sort = { field: event.target.value, dir: (state.sort && state.sort.dir) || 'asc' };
+        markCustomView();
+        rerenderWithFocus();
+      }
+    }
   });
-  if (stageSelect) wrap.appendChild(stageSelect);
-
-  const packageOptions = filterValues('package');
-  if (packageOptions.length) {
-    wrap.appendChild(filterSelect('package', 'All packages', packageOptions, (value) => {
-      state.filters.package = value;
-      rerenderWithFocus();
-    }));
+  for (const field of filterSortableFields()) {
+    const node = h('option', { value: field, text: FIELD_LABELS[field] || capitalize(field) });
+    if ((state.sort && state.sort.field) === field) node.selected = true;
+    sortSelect.appendChild(node);
   }
+  sortSelect.value = (state.sort && state.sort.field) || 'id';
+  bar.appendChild(viewField('Sort', sortSelect));
 
-  const ownerOptions = filterValues('owner');
-  if (ownerOptions.length > 1) {
-    wrap.appendChild(filterSelect('owner', 'All owners', ownerOptions, (value) => {
-      state.filters.owner = value;
-      rerenderWithFocus();
-    }));
-  }
+  const descending = state.sort && state.sort.dir === 'desc';
+  bar.appendChild(h('button', {
+    class: 'btn btn-sm btn-icon', type: 'button',
+    text: descending ? '↓' : '↑',
+    'aria-label': descending ? 'Sorted descending, switch to ascending' : 'Sorted ascending, switch to descending',
+    title: descending ? 'Descending' : 'Ascending',
+    on: {
+      click: () => {
+        state.sort = { field: (state.sort && state.sort.field) || 'id', dir: descending ? 'asc' : 'desc' };
+        markCustomView();
+        rerenderWithFocus();
+      }
+    }
+  }));
 
-  const active = Boolean(state.filters.text || state.filters.stage || state.filters.package || state.filters.owner);
+  bar.appendChild(h('button', {
+    class: 'btn btn-sm btn-ghost', type: 'button',
+    text: state.density === 'compact' ? 'Compact' : 'Comfortable',
+    title: 'Toggle display density',
+    on: { click: () => toggleDensity() }
+  }));
+
+  const hint = h('span', { class: 'view-hint' });
   if (active) {
-    wrap.appendChild(h('button', {
-      class: 'btn btn-ghost btn-sm', type: 'button', text: 'Clear',
+    append(hint, ['View ', h('strong', { text: active.name || active.id }), active.builtin ? ' · built-in' : ' · saved']);
+  } else {
+    hint.textContent = 'Custom filters · not saved';
+  }
+  bar.appendChild(hint);
+  return bar;
+}
+
+function renderFilterBuilder() {
+  const wrap = h('div', { class: 'filter-builder' });
+  const chips = h('div', { class: 'filter-chips' });
+  const conditions = state.structuredFilters || [];
+
+  if (!conditions.length) {
+    chips.appendChild(h('span', { class: 'hint', text: 'No filters — every task is shown.' }));
+  }
+  conditions.forEach((condition, index) => {
+    chips.appendChild(h('span', { class: 'filter-chip' },
+      h('span', { text: conditionText(condition) }),
+      h('button', {
+        class: 'filter-chip-x', type: 'button', 'aria-label': 'Remove filter', title: 'Remove filter', text: '×',
+        on: {
+          click: () => {
+            state.structuredFilters.splice(index, 1);
+            markCustomView();
+            rerenderWithFocus();
+          }
+        }
+      })));
+  });
+  if (conditions.length) {
+    chips.appendChild(h('button', {
+      class: 'btn btn-sm btn-ghost', type: 'button', text: 'Clear all',
       on: {
         click: () => {
-          state.filters = { text: '', stage: '', package: '', owner: '' };
-          syncSearchInput();
+          state.structuredFilters = [];
+          markCustomView();
           rerenderWithFocus();
         }
       }
     }));
+    if (conditions.length > 1) chips.appendChild(h('span', { class: 'hint', style: { fontSize: '10.5px' }, text: 'All conditions must match (AND)' }));
   }
 
-  if (opts.count !== false) {
-    const total = (state.snapshot && state.snapshot.tasks ? state.snapshot.tasks.length : 0);
-    const shown = visibleTasks().length;
-    wrap.appendChild(h('span', {
-      class: 'filter-count',
-      text: active ? shown + ' of ' + total + ' tasks' : total + ' ' + plural(total, 'task')
+  const total = (state.snapshot && state.snapshot.tasks ? state.snapshot.tasks.length : 0);
+  const shown = visibleTasks().length;
+  chips.appendChild(h('span', {
+    class: 'filter-count',
+    text: conditions.length ? shown + ' of ' + total + ' tasks' : total + ' ' + plural(total, 'task')
+  }));
+  wrap.appendChild(chips);
+
+  if (state.filterEditorOpen) wrap.appendChild(renderFilterEditor());
+  else {
+    wrap.appendChild(h('button', {
+      class: 'btn btn-sm', type: 'button', text: '+ Add filter',
+      on: {
+        click: () => {
+          state.filterEditorOpen = true;
+          state.filterDraft = defaultFilterDraft();
+          state.filterError = null;
+          renderView();
+        }
+      }
     }));
   }
+  return wrap;
+}
+
+function filterFieldOptions() {
+  const api = state.filterFields;
+  if (api && api.fields) return Object.keys(api.fields);
+  return Object.keys(FIELD_LABELS);
+}
+
+function filterTextSuggestions(field) {
+  const tasks = (state.snapshot && state.snapshot.tasks) || [];
+  const values = [];
+  for (const task of tasks) {
+    const value = field === 'stage' ? (task.stage_title || task.stage) : task[field];
+    if (value !== null && value !== undefined && value !== '' && values.indexOf(String(value)) === -1) {
+      values.push(String(value));
+    }
+  }
+  return values.slice(0, 40);
+}
+
+function renderFilterValueControl(draft) {
+  const kind = filterKind(draft.field);
+  const op = draft.op;
+  const control = h('div', { class: 'filter-values' });
+
+  if (NO_VALUE_OPERATORS.indexOf(op) !== -1) {
+    control.appendChild(h('span', { class: 'hint', text: 'This operator takes no value.' }));
+    return control;
+  }
+
+  if (kind === 'status') {
+    const statuses = statusOrder();
+    if (op === 'any_of' || op === 'none_of') {
+      const selected = Array.isArray(draft.value) ? draft.value : [];
+      for (const status of statuses) {
+        const meta = stMeta(status);
+        const box = h('label', { class: 'filter-value-option' },
+          h('input', {
+            type: 'checkbox', value: status, checked: selected.indexOf(status) !== -1,
+            on: {
+              change: (event) => {
+                const list = Array.isArray(state.filterDraft.value) ? state.filterDraft.value.slice() : [];
+                const index = list.indexOf(status);
+                if (event.target.checked && index === -1) list.push(status);
+                if (!event.target.checked && index !== -1) list.splice(index, 1);
+                state.filterDraft.value = list;
+              }
+            }
+          }),
+          h('span', { class: 'dot st-' + meta.color }), meta.label);
+        control.appendChild(box);
+      }
+    } else {
+      const select = h('select', { class: 'select', 'aria-label': 'Status value', on: { change: (event) => { state.filterDraft.value = event.target.value; } } });
+      for (const status of statuses) {
+        const option = h('option', { value: status, text: stMeta(status).label });
+        if (draft.value === status) option.selected = true;
+        select.appendChild(option);
+      }
+      select.value = draft.value || 'pending';
+      control.appendChild(select);
+    }
+    return control;
+  }
+
+  if (kind === 'label') {
+    const selected = Array.isArray(draft.value) ? draft.value : [];
+    const groups = settingsGroups();
+    const labels = settingsLabels();
+    const byGroup = new Map();
+    for (const label of labels) {
+      const group = groups.indexOf(label.group) !== -1 ? label.group : 'custom';
+      if (!byGroup.has(group)) byGroup.set(group, []);
+      byGroup.get(group).push(label);
+    }
+    for (const group of groups) {
+      if (!byGroup.has(group)) continue;
+      control.appendChild(h('span', { class: 'props-label-group', text: group }));
+      for (const label of byGroup.get(group)) {
+        control.appendChild(h('label', { class: 'filter-value-option' },
+          h('input', {
+            type: 'checkbox', value: label.id, checked: selected.indexOf(label.id) !== -1,
+            on: {
+              change: (event) => {
+                const list = Array.isArray(state.filterDraft.value) ? state.filterDraft.value.slice() : [];
+                const index = list.indexOf(label.id);
+                if (event.target.checked && index === -1) list.push(label.id);
+                if (!event.target.checked && index !== -1) list.splice(index, 1);
+                state.filterDraft.value = list;
+              }
+            }
+          }),
+          labelChip(label)));
+      }
+    }
+    return control;
+  }
+
+  if (kind === 'bool') {
+    const select = h('select', { class: 'select', 'aria-label': 'Boolean value', on: { change: (event) => { state.filterDraft.value = event.target.value === 'true'; } } });
+    for (const [value, label] of [['true', 'true'], ['false', 'false']]) {
+      const option = h('option', { value: value, text: label });
+      if (Boolean(draft.value) === (value === 'true')) option.selected = true;
+      select.appendChild(option);
+    }
+    select.value = draft.value ? 'true' : 'false';
+    control.appendChild(select);
+    return control;
+  }
+
+  if (kind === 'budget') {
+    const select = h('select', { class: 'select', 'aria-label': 'Budget state', on: { change: (event) => { state.filterDraft.value = event.target.value; } } });
+    for (const value of ['over', 'warn', 'ok']) {
+      const option = h('option', { value: value, text: value });
+      if (draft.value === value) option.selected = true;
+      select.appendChild(option);
+    }
+    select.value = draft.value || 'over';
+    control.appendChild(select);
+    return control;
+  }
+
+  if (kind === 'number') {
+    const input = h('input', {
+      class: 'input', type: 'number', value: draft.value === undefined || draft.value === null ? '' : String(draft.value),
+      'aria-label': 'Filter value', step: 'any', style: { width: '110px' },
+      on: { input: (event) => { state.filterDraft.value = event.target.value; } }
+    });
+    control.appendChild(input);
+    return control;
+  }
+
+  const listId = 'filter-suggestions-' + (state.filterDraft.field || 'text');
+  const input = h('input', {
+    class: 'input', type: 'text', value: draft.value === undefined || draft.value === null ? '' : String(draft.value),
+    placeholder: 'value', 'aria-label': 'Filter value', list: listId,
+    on: { input: (event) => { state.filterDraft.value = event.target.value; } }
+  });
+  control.appendChild(input);
+  const suggestions = filterTextSuggestions(draft.field);
+  if (suggestions.length) {
+    const datalist = h('datalist', { id: listId });
+    for (const suggestion of suggestions) datalist.appendChild(h('option', { value: suggestion }));
+    control.appendChild(datalist);
+  }
+  return control;
+}
+
+function renderFilterEditor() {
+  const draft = state.filterDraft || defaultFilterDraft();
+  const editor = h('div', { class: 'filter-editor' });
+
+  const fieldSelect = h('select', {
+    class: 'select', 'aria-label': 'Filter field',
+    on: {
+      change: (event) => {
+        const field = event.target.value;
+        const operators = filterOperators(field);
+        state.filterDraft = { field: field, op: operators[0], value: defaultFilterValue(field, operators[0]) };
+        state.filterError = null;
+        renderView();
+      }
+    }
+  });
+  for (const field of filterFieldOptions()) {
+    const option = h('option', { value: field, text: FIELD_LABELS[field] || field });
+    if (draft.field === field) option.selected = true;
+    fieldSelect.appendChild(option);
+  }
+  fieldSelect.value = draft.field;
+  editor.appendChild(viewField('Field', fieldSelect));
+
+  const operators = filterOperators(draft.field);
+  const opSelect = h('select', {
+    class: 'select', 'aria-label': 'Filter operator',
+    on: {
+      change: (event) => {
+        const op = event.target.value;
+        state.filterDraft = {
+          field: draft.field,
+          op: op,
+          value: NO_VALUE_OPERATORS.indexOf(op) !== -1 ? undefined : (
+            op === 'any_of' || op === 'none_of'
+              ? (Array.isArray(draft.value) ? draft.value.slice() : [])
+              : defaultFilterValue(draft.field, op)
+          )
+        };
+        state.filterError = null;
+        renderView();
+      }
+    }
+  });
+  for (const op of operators) {
+    const option = h('option', { value: op, text: OPERATOR_LABELS[op] || op });
+    if (draft.op === op) option.selected = true;
+    opSelect.appendChild(option);
+  }
+  opSelect.value = draft.op;
+  editor.appendChild(viewField('Operator', opSelect));
+
+  editor.appendChild(viewField(filterValueLabel(draft.field), renderFilterValueControl(draft)));
+
+  editor.appendChild(h('div', { class: 'row', style: { gap: '6px' } },
+    h('button', {
+      class: 'btn btn-primary btn-sm', type: 'button', text: 'Add',
+      on: { click: () => addFilterFromEditor() }
+    }),
+    h('button', {
+      class: 'btn btn-ghost btn-sm', type: 'button', text: 'Cancel',
+      on: {
+        click: () => {
+          state.filterEditorOpen = false;
+          state.filterError = null;
+          renderView();
+        }
+      }
+    })));
+  if (state.filterError) editor.appendChild(h('div', { class: 'filter-error', text: state.filterError }));
+  return editor;
+}
+
+function addFilterFromEditor() {
+  const draft = state.filterDraft;
+  if (!draft || !draft.field) {
+    state.filterError = 'Choose a field first.';
+    renderView();
+    return;
+  }
+  const kind = filterKind(draft.field);
+  let value = draft.value;
+  if (NO_VALUE_OPERATORS.indexOf(draft.op) === -1) {
+    if (kind === 'number') {
+      const number = Number(value);
+      if (value === '' || value === null || value === undefined || !isFinite(number)) {
+        state.filterError = 'Enter a number for this filter.';
+        renderView();
+        return;
+      }
+      value = number;
+    } else if (kind === 'status' || kind === 'label') {
+      if ((draft.op === 'any_of' || draft.op === 'none_of')) {
+        if (!Array.isArray(value) || !value.length) {
+          state.filterError = 'Select at least one ' + (kind === 'status' ? 'status' : 'label') + '.';
+          renderView();
+          return;
+        }
+        value = value.slice();
+      }
+    } else if (kind === 'bool') {
+      value = Boolean(value);
+    } else if (kind === 'budget') {
+      if (['over', 'warn', 'ok'].indexOf(value) === -1) value = 'over';
+    } else if (String(value === null || value === undefined ? '' : value).trim() === '') {
+      state.filterError = 'Enter a value, or use an empty/not-empty operator.';
+      renderView();
+      return;
+    } else {
+      value = String(value).trim();
+    }
+  } else {
+    value = undefined;
+  }
+  const condition = { field: draft.field, op: draft.op };
+  if (value !== undefined) condition.value = value;
+  state.structuredFilters = (state.structuredFilters || []).concat([condition]);
+  state.filterEditorOpen = false;
+  state.filterError = null;
+  markCustomView();
+  renderView();
+}
+
+function openSaveViewModal() {
+  const active = currentView();
+  const nameInput = h('input', {
+    class: 'input', type: 'text', placeholder: 'Review queue',
+    value: active && !active.builtin ? (active.name || '') : ''
+  });
+  const idInput = h('input', {
+    class: 'input', type: 'text', placeholder: 'review-queue',
+    value: active && !active.builtin ? (active.id || '') : ''
+  });
+  let idTouched = Boolean(active && !active.builtin);
+  nameInput.addEventListener('input', () => {
+    if (!idTouched) idInput.value = slugify(nameInput.value);
+  });
+  idInput.addEventListener('input', () => { idTouched = true; });
+
+  const kindSelect = h('select', { class: 'select', 'aria-label': 'View kind' },
+    h('option', { value: 'board', text: 'Board' }),
+    h('option', { value: 'table', text: 'Table' }));
+  kindSelect.value = state.route.view === 'table' ? 'table' : 'board';
+
+  const errorBox = h('div');
+  const body = h('div', { class: 'plan-editor' },
+    errorBox,
+    h('div', { class: 'form-grid' },
+      h('label', { class: 'field' }, h('span', { class: 'field-label', text: 'Name' }), nameInput),
+      h('label', { class: 'field' },
+        h('span', { class: 'field-label', text: 'View id' }), idInput,
+        h('span', { class: 'field-help', text: 'Lowercase letters, digits and dashes (a-z, 0-9, -).' })),
+      h('label', { class: 'field' },
+        h('span', { class: 'field-label', text: 'Default kind' }), kindSelect)),
+    h('p', { class: 'hint', text: 'Saves the current filters, grouping and sorting into views/<id>.json.' }));
+
+  openModal({
+    title: 'Save view',
+    body: body,
+    footer: [
+      h('button', { class: 'btn', type: 'button', text: 'Cancel', on: { click: () => closeModal() } }),
+      h('button', {
+        class: 'btn btn-primary', type: 'button', text: 'Save view',
+        on: {
+          click: () => saveViewFromModal({
+            nameInput, idInput, kindSelect, errorBox,
+            saveButton: null
+          })
+        }
+      })
+    ]
+  });
+  focusSoon(nameInput);
+}
+
+async function saveViewFromModal(context) {
+  const name = context.nameInput.value.trim();
+  const id = context.idInput.value.trim();
+  const errorBox = context.errorBox;
+  if (!name) {
+    errorBox.replaceChildren(errorCallout(new ApiError('A view name is required.', 400, null)));
+    return;
+  }
+  if (!/^[a-z][a-z0-9-]{0,40}$/.test(id)) {
+    errorBox.replaceChildren(errorCallout(new ApiError('View id must start with a lowercase letter and use only a-z, 0-9 and dashes.', 400, null)));
+    return;
+  }
+  const active = currentView();
+  const payload = {
+    name: name,
+    kind: context.kindSelect.value === 'table' ? 'table' : 'board',
+    filters: JSON.parse(JSON.stringify(state.structuredFilters || [])),
+    group_by: state.groupBy || 'status',
+    sort: { field: (state.sort && state.sort.field) || 'id', dir: (state.sort && state.sort.dir) || 'asc' }
+  };
+  if (active && Array.isArray(active.columns) && active.columns.length) payload.columns = active.columns.slice();
+  try {
+    const saved = await api('/api/views/' + encodeURIComponent(id), { method: 'PUT', body: payload });
+    closeModal();
+    await loadViews();
+    if (!(state.views.all || []).some((view) => view.id === id)) {
+      const local = Object.assign({ version: 1, id: id, builtin: false }, payload, saved && saved.id ? saved : {});
+      state.views.saved = (state.views.saved || []).concat([local]);
+      state.views.all = (state.views.all || []).concat([local]);
+    }
+    state.activeViewId = id;
+    prefSet(PREF_VIEW, id);
+    toast('View saved', 'ok');
+    applyView(id);
+  } catch (err) {
+    errorBox.replaceChildren(errorCallout(err));
+  }
+}
+
+async function deleteCurrentView() {
+  const view = currentView();
+  if (!view || view.builtin) return;
+  const confirmed = await confirmDialog({
+    title: 'Delete view "' + (view.name || view.id) + '"?',
+    message: 'The saved view file is removed from views/. Tasks and board data are untouched.',
+    confirmLabel: 'Delete view'
+  });
+  if (!confirmed) return;
+  try {
+    await api('/api/views/' + encodeURIComponent(view.id), { method: 'DELETE' });
+    await loadViews();
+    state.activeViewId = '';
+    prefSet(PREF_VIEW, '');
+    toast('View deleted', 'ok');
+    renderView();
+  } catch (err) {
+    toast('Delete failed: ' + describeError(err), 'error');
+  }
+}
+
+function renderGraphFilterNote() {
+  if (!feature('views')) return null;
+  const conditions = state.structuredFilters || [];
+  if (!conditions.length) return null;
+  const row = h('div', { class: 'row-wrap', style: { marginBottom: '10px' } },
+    h('span', { class: 'hint', text: 'Board/Table filters apply here:' }));
+  for (const condition of conditions) row.appendChild(h('span', { class: 'filter-chip', text: conditionText(condition) }));
+  row.appendChild(h('button', {
+    class: 'btn btn-sm btn-ghost', type: 'button', text: 'Clear',
+    on: {
+      click: () => {
+        state.structuredFilters = [];
+        markCustomView();
+        renderView();
+      }
+    }
+  }));
+  return row;
+}
+
+function renderFilters(options) {
+  const opts = options || {};
+  const wrap = h('div', { class: 'filters-block' });
+  if (!feature('views')) {
+    const total = (state.snapshot && state.snapshot.tasks ? state.snapshot.tasks.length : 0);
+    wrap.appendChild(h('div', { class: 'row-wrap' },
+      h('span', { class: 'hint', text: 'Filtering is disabled (feature "views" is off) — search in the header still works.' }),
+      h('span', { class: 'filter-count', text: total + ' ' + plural(total, 'task') })));
+    return wrap;
+  }
+  wrap.appendChild(renderViewBar());
+  wrap.appendChild(renderFilterBuilder());
+  if (opts.note) wrap.appendChild(h('p', { class: 'hint', text: opts.note }));
   return wrap;
 }
 
@@ -1690,6 +2928,12 @@ function openJobLog(jobId) {
 
 function bindStatic() {
   dom.themeButton.addEventListener('click', toggleTheme);
+  if (dom.inboxButton) {
+    dom.inboxButton.addEventListener('click', () => {
+      if (feature('inbox')) navigate('yourwork');
+      else toast('The inbox feature is disabled in Settings', 'warn');
+    });
+  }
   dom.checkButton.addEventListener('click', () => startJob('check'));
   dom.auditButton.addEventListener('click', () => startJob('audit'));
   dom.jobsToggle.addEventListener('click', () => toggleJobs());
@@ -1782,17 +3026,31 @@ function shortcutRow(key, label) {
 
 async function boot() {
   initTheme();
+  restorePreferences();
   bindStatic();
   renderTabs();
   renderHeader();
 
   await loadConfig();
   await loadSnapshot();
-  if (!state.noBoard) await loadPackageOptions();
+  await loadSettings();
+  await loadFilterFields();
+  await loadViews();
+  await loadInboxCounts();
+  await loadHealth();
+
+  if (!state.noBoard) {
+    await loadPackageOptions();
+    applySavedViewPreferences();
+  }
 
   const known = location.hash && location.hash.startsWith('#/');
   if (!known) {
-    const startView = state.config && state.config.board_present === false ? 'plan' : (state.noBoard ? 'plan' : 'board');
+    const active = currentView();
+    let startView = 'board';
+    if (!state.config || state.config.board_present === false || state.noBoard) startView = 'plan';
+    else if (!feature('inbox') && state.route.view === 'yourwork') startView = 'board';
+    else if (active && active.kind === 'table') startView = 'table';
     try { history.replaceState(null, '', '#/' + startView); } catch (err) { location.hash = '#/' + startView; }
   }
   await loadJobs();
@@ -1809,8 +3067,10 @@ function renderBoard() {
   const tasks = snapshot.tasks || [];
   const stages = snapshot.stages || [];
   const project = snapshot.project || {};
+  const view = h('div', { class: 'board-view' + (state.density === 'compact' ? ' density-compact' : '') });
+  dom.view.appendChild(view);
 
-  dom.view.appendChild(h('div', { class: 'view-head' },
+  view.appendChild(h('div', { class: 'view-head' },
     h('div', {},
       h('h1', { class: 'view-title', text: 'Board' }),
       h('p', {
@@ -1832,10 +3092,10 @@ function renderBoard() {
         on: { click: () => navigate('plan') }
       }))));
 
-  dom.view.appendChild(renderFilters());
+  view.appendChild(renderFilters());
 
   if (!tasks.length) {
-    dom.view.appendChild(emptyState('No tasks on the board',
+    view.appendChild(emptyState('No tasks on the board',
       'The board exists but has no tasks yet. Add tasks in the Plan view.',
       h('button', { class: 'btn btn-primary', type: 'button', text: 'Open plan', on: { click: () => navigate('plan') } })));
     return;
@@ -1843,12 +3103,14 @@ function renderBoard() {
 
   const filtered = visibleTasks();
   if (!filtered.length) {
-    dom.view.appendChild(emptyState('No matching tasks', 'Adjust the filters or clear them to see the whole board.',
+    view.appendChild(emptyState('No matching tasks', 'Adjust the filters or clear them to see the whole board.',
       h('button', {
         class: 'btn', type: 'button', text: 'Clear filters',
         on: {
           click: () => {
+            state.structuredFilters = [];
             state.filters = { text: '', stage: '', package: '', owner: '' };
+            markCustomView();
             syncSearchInput();
             renderView();
           }
@@ -1857,21 +3119,29 @@ function renderBoard() {
     return;
   }
 
+  const sortableFilters = feature('views');
+  const sorted = sortableFilters
+    ? sortTaskList(filtered, (state.sort && state.sort.field) || 'id', (state.sort && state.sort.dir) || 'asc')
+    : filtered;
+  const groupBy = sortableFilters ? (state.groupBy || 'status') : 'status';
+
   const wrap = h('div', { class: 'board-wrap' });
   const board = h('div', { class: 'board' });
-  for (const column of COLUMNS) {
-    board.appendChild(renderColumn(column, filtered));
+  if (groupBy === 'status') {
+    for (const column of COLUMNS) board.appendChild(renderColumn(column, sorted));
+  } else {
+    for (const group of groupTaskList(sorted, groupBy)) board.appendChild(renderGroupColumn(group));
   }
   wrap.appendChild(board);
   wrap.appendChild(renderStagePanel());
-  dom.view.appendChild(wrap);
+  view.appendChild(wrap);
 }
 
-function refreshSnapshotButton() {
-  loadSnapshot({ fresh: true }).then(() => {
-    renderHeader();
-    renderView();
-  });
+async function refreshSnapshotButton() {
+  await loadSnapshot({ fresh: true });
+  if (feature('worklog')) await loadWorklog();
+  renderHeader();
+  renderView();
 }
 
 function renderColumn(column, tasks) {
@@ -1883,11 +3153,10 @@ function renderColumn(column, tasks) {
     'aria-label': column.label + ' column'
   });
 
-  const header = h('header', { class: 'column-head' },
+  node.appendChild(h('header', { class: 'column-head' },
     statusDot(column.statuses[0]),
     h('span', { class: 'column-name', text: column.label }),
-    h('span', { class: 'column-count', text: String(members.length) }));
-  node.appendChild(header);
+    h('span', { class: 'column-count', text: String(members.length) })));
 
   if (collapsed) {
     node.style.cursor = 'pointer';
@@ -1902,11 +3171,8 @@ function renderColumn(column, tasks) {
   }
 
   const list = h('div', { class: 'column-list' });
-  if (!members.length) {
-    list.appendChild(h('div', { class: 'column-empty', text: '—' }));
-  } else {
-    for (const task of members) list.appendChild(renderTaskCard(task));
-  }
+  if (!members.length) list.appendChild(h('div', { class: 'column-empty', text: '—' }));
+  else for (const task of members) list.appendChild(renderTaskCard(task));
   node.appendChild(list);
   if (column.key === 'done') {
     node.appendChild(h('button', {
@@ -1918,12 +3184,29 @@ function renderColumn(column, tasks) {
   return node;
 }
 
+function renderGroupColumn(group) {
+  const node = h('section', {
+    class: 'column', dataset: { group: group.key },
+    'aria-label': group.label + ' group'
+  });
+  node.appendChild(h('header', { class: 'column-head' },
+    h('span', { class: 'column-dot st-neutral' }),
+    h('span', { class: 'column-name', text: group.label }),
+    h('span', { class: 'column-count', text: String(group.tasks.length) })));
+  const list = h('div', { class: 'column-list' });
+  if (!group.tasks.length) list.appendChild(h('div', { class: 'column-empty', text: '—' }));
+  else for (const task of group.tasks) list.appendChild(renderTaskCard(task));
+  node.appendChild(list);
+  return node;
+}
+
 function renderTaskCard(task) {
   const meta = stMeta(task.status);
   const gates = task.gates || [];
   const passed = (task.gates_passed || []).length;
   const claim = task.claim;
   const ownerText = task.owner || 'unassigned';
+  const labels = taskLabelIds(task);
 
   const card = h('article', {
     class: 'task-card status-' + meta.color,
@@ -1948,6 +3231,7 @@ function renderTaskCard(task) {
     }, h('span', { class: 'dot' }), 'claimed') : null));
 
   card.appendChild(h('div', { class: 'task-card-title', text: task.title || '(untitled)' }));
+  if (labels.length) card.appendChild(labelChips(labels, 3));
 
   card.appendChild(h('div', { class: 'task-card-meta' },
     h('span', { text: task.stage_title || String(task.stage || '—') }),
@@ -1955,6 +3239,19 @@ function renderTaskCard(task) {
     h('span', { text: ownerText }),
     task.wave !== null && task.wave !== undefined ? h('span', { class: 'sep', text: '·' }) : null,
     task.wave !== null && task.wave !== undefined ? h('span', { text: 'wave ' + (task.wave + 1) }) : null));
+
+  const effort = effortText(task);
+  if (effort) {
+    card.appendChild(h('div', { class: 'effort-line' },
+      h('span', { text: effort }),
+      estimateOf(task) !== null && actualOf(task) !== null
+        ? h('span', {
+          class: (actualOf(task) - estimateOf(task)) > 0 ? 'delta-over' : 'delta-under',
+          title: 'Actual minus estimate',
+          text: (actualOf(task) - estimateOf(task) > 0 ? '+' : '') + fmtHours(Number(actualOf(task)) - Number(estimateOf(task)))
+        })
+        : null));
+  }
 
   const foot = h('div', { class: 'task-card-foot' });
   if (gates.length) {
@@ -2022,8 +3319,10 @@ function renderTable() {
   const snapshot = state.snapshot;
   const tasks = snapshot.tasks || [];
   const project = snapshot.project || {};
+  const view = h('div', { class: 'table-view' + (state.density === 'compact' ? ' density-compact' : '') });
+  dom.view.appendChild(view);
 
-  dom.view.appendChild(h('div', { class: 'view-head' },
+  view.appendChild(h('div', { class: 'view-head' },
     h('div', {},
       h('h1', { class: 'view-title', text: 'Table' }),
       h('p', {
@@ -2034,85 +3333,146 @@ function renderTable() {
     h('div', { class: 'view-actions' },
       h('button', { class: 'btn btn-sm', type: 'button', text: 'Refresh', on: { click: () => refreshSnapshotButton() } }))));
 
-  dom.view.appendChild(renderFilters());
+  view.appendChild(renderFilters());
 
   if (!tasks.length) {
-    dom.view.appendChild(emptyState('No tasks on the board', 'Add tasks in the Plan view.', null));
+    view.appendChild(emptyState('No tasks on the board', 'Add tasks in the Plan view.', null));
     return;
   }
 
   const filtered = visibleTasks();
+  if (!filtered.length) {
+    view.appendChild(emptyState('No matching tasks', 'Adjust the filters or clear them.', null));
+    return;
+  }
+
+  const withViews = feature('views');
+  const sorted = withViews
+    ? sortTaskList(filtered, (state.sort && state.sort.field) || 'id', (state.sort && state.sort.dir) || 'asc')
+    : filtered;
+  const groupBy = withViews ? (state.groupBy || 'status') : 'status';
+  const groups = withViews
+    ? groupTaskList(sorted, groupBy)
+    : [{ key: 'all', label: null, tasks: sorted }];
+
+  const columns = [
+    { key: 'task', label: 'Task' },
+    { key: 'labels', label: 'Labels' },
+    { key: 'status', label: 'Status' },
+    { key: 'stage', label: 'Stage' },
+    { key: 'owner', label: 'Owner' },
+    { key: 'gates', label: 'Gates' },
+    { key: 'effort', label: 'Effort' },
+    { key: 'tokens', label: 'Tokens' },
+    { key: 'attempt', label: 'Attempts' },
+    { key: 'deps', label: 'Depends on' },
+    { key: 'package', label: 'Package' }
+  ];
+
   const table = h('table', { class: 'table' });
   const thead = h('thead');
   const headRow = h('tr');
-  for (const label of ['Task', 'Status', 'Stage', 'Owner', 'Gates', 'Tokens', 'Attempts', 'Depends on', 'Package']) {
-    headRow.appendChild(h('th', { text: label }));
-  }
+  for (const column of columns) headRow.appendChild(h('th', { text: column.label }));
   thead.appendChild(headRow);
   table.appendChild(thead);
 
   const tbody = h('tbody');
-  if (!filtered.length) {
-    tbody.appendChild(h('tr', { class: 'empty-row' },
-      h('td', { colspan: '9', text: 'No tasks match the current filters.' })));
-  }
-  for (const task of filtered) {
-    const meta = stMeta(task.status);
-    const gates = task.gates || [];
-    const passed = (task.gates_passed || []).length;
-    const maxTokens = task.budget && task.budget.max ? Number(task.budget.max) : 0;
-    const used = Number(task.tokens) || 0;
-    const row = h('tr', {
-      dataset: { taskId: task.id },
-      tabindex: '0',
-      'aria-label': 'Open task ' + task.id,
-      on: {
-        click: () => openTask(task.id),
-        keydown: (event) => {
-          if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openTask(task.id); }
-        }
-      }
-    });
-    row.appendChild(h('td', { class: 'cell-task' },
-      h('div', { class: 'cell-task-title', text: task.title || '(untitled)' }),
-      h('div', { class: 'cell-mono', text: task.id })));
-    row.appendChild(h('td', {}, statusPill(task.status)));
-    row.appendChild(h('td', { class: 'nowrap', text: task.stage_title || String(task.stage || '—') }));
-    row.appendChild(h('td', { class: 'nowrap', text: task.owner || '—' }));
-    row.appendChild(h('td', { class: 'cell-gates' },
-      gates.length
-        ? h('div', { class: 'gate-mini' },
-          h('span', { class: 'mini-num', text: passed + '/' + gates.length }),
-          progressBar(passed, gates.length, passed === gates.length ? 'is-ok' : ''))
-        : h('span', { class: 'faint', text: '—' })));
-    row.appendChild(h('td', {},
-      h('span', { class: 'cell-mono', text: maxTokens ? fmtTokens(used) + ' / ' + fmtTokens(maxTokens) : fmtTokens(used) }),
-      maxTokens ? progressBar(used, maxTokens, task.budget && task.budget.over ? 'is-over' : (task.budget && task.budget.warn ? 'is-warn' : '')) : null));
-    row.appendChild(h('td', { class: 'cell-mono', text: String(task.attempt || 0) + (task.max_attempts ? ' / ' + task.max_attempts : '') }));
-    const deps = task.depends_on || [];
-    row.appendChild(h('td', { class: 'cell-dep' },
-      deps.length
-        ? h('div', { class: 'row-wrap', style: { gap: '3px' } }, deps.map((dep) => taskChip(dep)))
-        : h('span', { class: 'faint', text: '—' })));
-    row.appendChild(h('td', { class: 'nowrap', text: task.package || '—' }));
-    tbody.appendChild(row);
+  const showGroups = withViews && groups.length > 1;
+  for (const group of groups) {
+    if (showGroups) {
+      tbody.appendChild(h('tr', { class: 'group-row' },
+        h('td', { colspan: String(columns.length) },
+          h('span', { text: group.label }),
+          h('span', { class: 'group-count', text: String(group.tasks.length) }))));
+    }
+    for (const task of group.tasks) tbody.appendChild(renderTableRow(task, columns.length));
   }
   table.appendChild(tbody);
 
-  const wrap = h('div', { class: 'table-wrap' }, table);
-  dom.view.appendChild(wrap);
-  if (filtered.length) {
-    dom.view.appendChild(h('p', {
-      class: 'hint', style: { marginTop: '8px' },
-      text: 'Click a row to open the task drawer; gates, tokens, attempts and dependencies come straight from the snapshot.'
-    }));
-  }
+  view.appendChild(h('div', { class: 'table-wrap' }, table));
+  view.appendChild(h('p', {
+    class: 'hint', style: { marginTop: '8px' },
+    text: 'Click a row to open the task drawer. Effort compares the estimate with the time Polier recorded from runs and sessions.'
+  }));
+}
+
+function renderTableRow(task, columnCount) {
+  const meta = stMeta(task.status);
+  const gates = task.gates || [];
+  const passed = (task.gates_passed || []).length;
+  const maxTokens = task.budget && task.budget.max ? Number(task.budget.max) : 0;
+  const used = Number(task.tokens) || 0;
+  const labels = taskLabelIds(task);
+  const row = h('tr', {
+    dataset: { taskId: task.id },
+    tabindex: '0',
+    'aria-label': 'Open task ' + task.id,
+    on: {
+      click: () => openTask(task.id),
+      keydown: (event) => {
+        if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openTask(task.id); }
+      }
+    }
+  });
+
+  row.appendChild(h('td', { class: 'cell-task' },
+    h('div', { class: 'cell-task-title', text: task.title || '(untitled)' }),
+    h('div', { class: 'cell-mono', text: task.id })));
+
+  row.appendChild(h('td', {}, labels.length ? labelChips(labels, 2) : h('span', { class: 'faint', text: '—' })));
+  row.appendChild(h('td', {}, statusPill(task.status)));
+  row.appendChild(h('td', { class: 'nowrap', text: task.stage_title || String(task.stage || '—') }));
+  row.appendChild(h('td', { class: 'nowrap', text: task.owner || '—' }));
+
+  row.appendChild(h('td', { class: 'cell-gates' },
+    gates.length
+      ? h('div', { class: 'gate-mini' },
+        h('span', { class: 'mini-num', text: passed + '/' + gates.length }),
+        progressBar(passed, gates.length, passed === gates.length ? 'is-ok' : ''))
+      : h('span', { class: 'faint', text: '—' })));
+
+  row.appendChild(effortCell(task));
+
+  row.appendChild(h('td', {},
+    h('span', { class: 'cell-mono', text: maxTokens ? fmtTokens(used) + ' / ' + fmtTokens(maxTokens) : fmtTokens(used) }),
+    maxTokens
+      ? progressBar(used, maxTokens, task.budget && task.budget.over ? 'is-over' : (task.budget && task.budget.warn ? 'is-warn' : ''))
+      : null));
+
+  row.appendChild(h('td', { class: 'cell-mono', text: String(task.attempt || 0) + (task.max_attempts ? ' / ' + task.max_attempts : '') }));
+
+  const deps = task.depends_on || [];
+  row.appendChild(h('td', { class: 'cell-dep' },
+    deps.length
+      ? h('div', { class: 'row-wrap', style: { gap: '3px' } }, deps.map((dep) => taskChip(dep)))
+      : h('span', { class: 'faint', text: '—' })));
+  row.appendChild(h('td', { class: 'nowrap', text: task.package || '—' }));
+  return row;
+}
+
+function effortCell(task) {
+  const estimate = estimateOf(task);
+  const actual = actualOf(task);
+  if (estimate === null && actual === null) return h('td', { class: 'effort-cell faint', text: '—' });
+  const delta = estimate !== null && actual !== null ? Number(actual) - Number(estimate) : null;
+  return h('td', { class: 'effort-cell' },
+    h('div', { text: [
+      estimate !== null ? 'est ' + fmtHours(estimate) : '',
+      actual !== null ? 'act ' + fmtHours(actual) : ''
+    ].filter(Boolean).join(' · ') }),
+    delta !== null
+      ? h('div', {
+        class: delta > 0 ? 'delta-over' : 'delta-under',
+        title: 'Actual minus estimate',
+        text: (delta > 0 ? '+' : '') + fmtHours(delta)
+      })
+      : null);
 }
 /* =========================================================================
    23. Task detail drawer
    ========================================================================= */
 
-const DRAWER_TABS = [
+const BASE_DRAWER_TABS = [
   { key: 'brief', label: 'Brief' },
   { key: 'gates', label: 'Gates' },
   { key: 'run', label: 'Run' },
@@ -2121,6 +3481,12 @@ const DRAWER_TABS = [
   { key: 'handoff', label: 'Handoff' },
   { key: 'session', label: 'Session' }
 ];
+
+function drawerTabs() {
+  const tabs = BASE_DRAWER_TABS.slice();
+  if (feature('worklog')) tabs.push({ key: 'worklog', label: 'Worklog' });
+  return tabs;
+}
 
 function canWrite() {
   const config = state.config;
@@ -2144,6 +3510,7 @@ function ensureDrawer(taskId) {
   state.drawer.watch = null;
   state.drawer.gate = { name: '', command: '', timeout: '1800' };
   state.drawer.sessionForm = { role: 'worker', worktree: false, note: '' };
+  state.drawer.props = null;
   clearDrawerTimers();
   state.drawer.sessionPoll = null;
   dom.drawer.hidden = false;
@@ -2217,15 +3584,14 @@ function renderDrawer() {
   }
   dom.drawer.hidden = false;
   dom.drawerBackdrop.hidden = false;
+  if (state.drawer.tab === 'worklog' && !feature('worklog')) state.drawer.tab = 'brief';
   const focusSnapshot = captureFocus();
   const task = currentDrawerTask();
   const detail = state.drawer.detail;
-  const meta = stMeta(task.status);
   clear(dom.drawer);
 
   const head = h('div', { class: 'drawer-head' });
 
-  /* top row */
   const top = h('div', { class: 'drawer-top' },
     h('span', { class: 'task-id', text: task.id || '' }),
     statusPill(task.status),
@@ -2237,7 +3603,6 @@ function renderDrawer() {
   head.appendChild(top);
   head.appendChild(h('h2', { class: 'drawer-title', text: task.title || '(untitled)' }));
 
-  /* meta pills */
   const metaRow = h('div', { class: 'drawer-meta' });
   if (task.stage_title || task.stage) metaRow.appendChild(pill(task.stage_title || String(task.stage), '', 'Stage'));
   if (task.owner) metaRow.appendChild(pill('owner ' + task.owner, '', 'Owner'));
@@ -2253,6 +3618,7 @@ function renderDrawer() {
   if (task.running) metaRow.appendChild(pill('running', 'pill-accent', 'A dispatch plan lists this task as running'));
   if (task.conflicted) metaRow.appendChild(pill('conflict', 'pill-danger', 'Scope overlaps with another task'));
   if (task.ready && task.wave !== null && task.wave !== undefined) metaRow.appendChild(pill('wave ' + (task.wave + 1), '', 'Ready in this wave'));
+  if (taskLabelIds(task).length) metaRow.appendChild(labelChips(taskLabelIds(task)));
   head.appendChild(metaRow);
 
   head.appendChild(renderDrawerActions(task, detail));
@@ -2368,7 +3734,7 @@ function cliButton(label, command) {
 
 function renderDrawerTabs(task) {
   const tabs = h('div', { class: 'drawer-tabs', role: 'tablist', 'aria-label': 'Task detail sections' });
-  for (const tab of DRAWER_TABS) {
+  for (const tab of drawerTabs()) {
     tabs.appendChild(h('button', {
       class: 'drawer-tab',
       type: 'button',
@@ -2482,6 +3848,7 @@ async function doReleaseClaim() {
 /* ---------- drawer tab bodies ---------- */
 
 function renderDrawerTab(task, detail) {
+  if (state.drawer.tab === 'worklog' && !feature('worklog')) state.drawer.tab = 'brief';
   switch (state.drawer.tab) {
     case 'gates': return drawerGatesTab(task, detail);
     case 'run': return drawerRunTab(task, detail);
@@ -2489,12 +3856,15 @@ function renderDrawerTab(task, detail) {
     case 'evidence': return drawerEvidenceTab(task, detail);
     case 'handoff': return drawerHandoffTab(task, detail);
     case 'session': return drawerSessionTab(task, detail);
+    case 'worklog': return drawerWorklogTab(task, detail);
     default: return drawerBriefTab(task, detail);
   }
 }
 
 function drawerBriefTab(task, detail) {
   const body = h('div');
+  body.appendChild(renderTaskProperties(task, detail));
+
   const goal = h('section', { class: 'drawer-section' },
     h('div', { class: 'drawer-label', text: 'Goal' }),
     h('div', { class: 'md' }, mdFragment(task.goal || '(no goal recorded)')));
@@ -2519,6 +3889,241 @@ function drawerBriefTab(task, detail) {
   }
   return body;
 }
+function drawerPropsState(task) {
+  if (!state.drawer.props || !state.drawer.props.init) {
+    state.drawer.props = {
+      init: true,
+      labels: taskLabelIds(task).slice(),
+      estimate: estimateOf(task) === null ? '' : String(estimateOf(task)),
+      open: false
+    };
+  }
+  return state.drawer.props;
+}
+
+function renderTaskProperties(task, detail) {
+  const readOnly = !canWrite() || task.status === 'done';
+  const props = drawerPropsState(task);
+  const section = h('section', { class: 'drawer-section' });
+  section.appendChild(h('div', { class: 'drawer-label', text: 'Properties' }));
+
+  if (readOnly) {
+    section.appendChild(h('div', { class: 'props' },
+      h('div', { class: 'props-current' },
+        taskLabelIds(task).length
+          ? taskLabelIds(task).map((id) => labelById(id) ? labelChip(labelById(id)) : h('span', { class: 'chip mono', text: id }))
+          : h('span', { class: 'hint', text: 'No labels' })),
+      h('div', { class: 'hint', text: 'Estimate: ' + (estimateOf(task) === null ? 'none' : fmtHours(estimateOf(task))) }),
+      h('div', { class: 'hint', text: task.status === 'done'
+        ? 'A done task is reopened through the state machine before its plan is edited.'
+        : 'The dashboard is read-only.' })));
+    return section;
+  }
+
+  const labelGrid = h('div', { class: 'props-labels' });
+  const labels = settingsLabels();
+  const groups = settingsGroups();
+  let anyGroup = false;
+  for (const group of groups) {
+    const inGroup = labels.filter((label) => (groups.indexOf(label.group) !== -1 ? label.group : 'custom') === group);
+    if (!inGroup.length) continue;
+    anyGroup = true;
+    labelGrid.appendChild(h('span', { class: 'props-label-group', text: group }));
+    for (const label of inGroup) {
+      labelGrid.appendChild(h('label', { class: 'checkbox' },
+        h('input', {
+          type: 'checkbox', value: label.id, checked: props.labels.indexOf(label.id) !== -1,
+          on: {
+            change: (event) => {
+              const current = state.drawer.props.labels.slice();
+              const index = current.indexOf(label.id);
+              if (event.target.checked && index === -1) current.push(label.id);
+              if (!event.target.checked && index !== -1) current.splice(index, 1);
+              state.drawer.props.labels = current;
+            }
+          }
+        }),
+        labelChip(label)));
+    }
+  }
+  if (!anyGroup) labelGrid.appendChild(h('span', { class: 'hint', text: 'No labels defined in Settings.' }));
+
+  const estimateInput = h('input', {
+    class: 'input', type: 'number', min: '0', max: '10000', step: '0.5',
+    value: props.estimate, placeholder: 'none',
+    on: { input: (event) => { state.drawer.props.estimate = event.target.value; } }
+  });
+
+  const details = h('details', {
+    open: props.open,
+    on: { toggle: (event) => { state.drawer.props.open = event.target.open; } }
+  });
+  details.appendChild(h('summary', {
+    class: 'hint',
+    style: { cursor: 'pointer', marginBottom: '6px' },
+    text: 'Labels (' + (props.labels.length || 0) + ' selected)'
+  }));
+  details.appendChild(labelGrid);
+
+  section.appendChild(h('div', { class: 'props' },
+    details,
+    h('div', { class: 'props-row' },
+      h('label', { class: 'field' },
+        h('span', { class: 'field-label', text: 'Estimate (hours)' }), estimateInput,
+        h('span', { class: 'field-help', text: 'Leave empty to clear the estimate.' })),
+      h('button', {
+        class: 'btn btn-sm btn-primary', type: 'button', text: 'Save properties',
+        disabled: state.drawer.busy === 'properties',
+        on: { click: () => saveTaskProperties() }
+      }))));
+  if (state.drawer.actionError) section.appendChild(errorCallout(state.drawer.actionError, { class: 'inline-error' }));
+  return section;
+}
+
+async function saveTaskProperties() {
+  const task = currentDrawerTask();
+  const props = state.drawer.props || {};
+  if (!task || !canWrite()) return;
+  if (task.status === 'done') { toast('Done tasks are reopened before their plan is edited', 'warn'); return; }
+  const payload = { labels: (props.labels || []).slice(), estimate_hours: null };
+  const estimateText = String(props.estimate === undefined || props.estimate === null ? '' : props.estimate).trim();
+  if (estimateText !== '') {
+    const number = Number(estimateText);
+    if (!isFinite(number) || number < 0 || number > 10000) {
+      state.drawer.actionError = new ApiError('Estimate must be a number between 0 and 10000.', 400, null);
+      renderDrawer();
+      return;
+    }
+    payload.estimate_hours = number;
+  }
+  state.drawer.busy = 'properties';
+  state.drawer.actionError = null;
+  renderDrawer();
+  try {
+    await api('/api/plan/tasks/' + encodeURIComponent(task.id), { method: 'PATCH', body: payload });
+    toast('Properties saved', 'ok');
+    state.drawer.props = null;
+    await loadSnapshot();
+    renderHeader();
+    renderView();
+    if (state.drawer.id) await loadDrawer(state.drawer.id, true);
+    if (feature('worklog')) loadWorklog();
+  } catch (err) {
+    state.drawer.actionError = err;
+    toast('Properties: ' + describeError(err), 'error');
+  } finally {
+    state.drawer.busy = null;
+    renderDrawer();
+  }
+}
+
+function worklogKpi(label, value, className) {
+  return h('div', { class: 'wl-kpi' },
+    h('div', { class: 'wl-kpi-label', text: label }),
+    h('div', { class: 'wl-kpi-value ' + (className || ''), text: value }));
+}
+
+function drawerWorklogTab(task, detail) {
+  const body = h('div');
+  const worklog = detail && detail.worklog;
+  if (!worklog) {
+    body.appendChild(loadingRow('Loading worklog…'));
+    return body;
+  }
+  const totals = worklog.totals || {};
+  const estimate = worklog.estimate_hours;
+  const actual = worklog.actual_hours;
+  const delta = worklog.delta_hours;
+
+  body.appendChild(h('div', { class: 'wl-kpis' },
+    worklogKpi('Estimate', estimate === null || estimate === undefined ? '—' : fmtHours(estimate)),
+    worklogKpi('Actual', actual === null || actual === undefined ? '—' : fmtHours(actual)),
+    worklogKpi('Delta', delta === null || delta === undefined ? '—' : (delta > 0 ? '+' : '') + fmtHours(delta),
+      delta === null || delta === undefined ? '' : (delta > 0 ? 'is-over' : (delta < 0 ? 'is-under' : ''))),
+    worklogKpi('Tokens', fmtTokens(totals.tokens || 0)),
+    worklogKpi('Sessions', String(totals.sessions || 0)),
+    worklogKpi('Attempts', String(totals.attempts || 0)),
+    worklogKpi('Gates', String(totals.gates || 0))));
+
+  if (estimate === null && actual !== null) {
+    body.appendChild(h('p', { class: 'hint', style: { marginTop: '-6px', marginBottom: '12px' },
+      text: 'No estimate yet — add one in Properties to compare effort.' }));
+  }
+
+  body.appendChild(worklogTableSection('Attempts', ['#', 'Result', 'Started', 'Duration', 'Note'],
+    (worklog.attempts || []).map((attempt) => [
+      h('span', { class: 'wl-num', text: '#' + (attempt.n === null || attempt.n === undefined ? '?' : attempt.n) }),
+      attempt.result ? statusPill(attempt.result === 'pass' ? 'done' : 'failed') : h('span', { class: 'faint', text: 'open' }),
+      h('span', { title: attempt.started || '', text: relTime(attempt.started) }),
+      h('span', { class: 'wl-num', text: fmtDuration(attempt.seconds || 0) }),
+      attempt.note ? h('span', { text: truncate(attempt.note, 90) }) : h('span', { class: 'faint', text: '—' })
+    ]), 'No attempts recorded.'));
+
+  body.appendChild(worklogTableSection('Sessions', ['Session', 'Role', 'Status', 'Provider', 'Started', 'Duration', 'Tokens'],
+    (worklog.sessions || []).map((session) => [
+      h('span', { class: 'wl-num', text: session.id || '—' }),
+      h('span', { text: session.role || '—' }),
+      session.status ? statusPill(session.status) : h('span', { class: 'faint', text: '—' }),
+      h('span', { text: session.provider || '—' }),
+      h('span', { title: session.started || '', text: relTime(session.started) }),
+      h('span', { class: 'wl-num', text: fmtDuration(session.seconds || 0) }),
+      h('span', { class: 'wl-num', text: fmtTokens(session.tokens || 0) })
+    ]), 'No headless sessions have run for this task.'));
+
+  body.appendChild(worklogTableSection('Gates', ['Gate', 'Result', 'Started', 'Duration', 'Command', ''],
+    (worklog.gates || []).map((gate) => [
+      h('span', { class: 'mono', text: gate.gate || '—' }),
+      gate.result ? h('span', { class: 'chip ' + (gate.result === 'pass' ? 'chip-pass' : 'chip-miss'), text: gate.result }) : h('span', { class: 'faint', text: '—' }),
+      h('span', { title: gate.started || '', text: relTime(gate.started) }),
+      h('span', { class: 'wl-num', text: fmtDuration(gate.seconds || 0) }),
+      h('span', { class: 'mono', style: { maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-block' }, title: gate.command || '', text: gate.command || '—' }),
+      gate.record ? h('button', {
+        class: 'btn btn-sm', type: 'button', text: 'Log',
+        on: { click: () => loadEvidenceLog('reviews/evidence/' + gate.record) }
+      }) : null
+    ]), 'No gate records for this task.'));
+
+  body.appendChild(worklogTableSection('Usage', ['Session', 'Tokens', 'Source', 'Updated'],
+    (worklog.usage || []).map((usage) => [
+      h('span', { class: 'wl-num', text: usage.session || '—' }),
+      h('span', { class: 'wl-num', text: fmtTokens(usage.tokens || 0) }),
+      h('span', { text: usage.source || '—' }),
+      h('span', { title: usage.updated || '', text: relTime(usage.updated) })
+    ]), 'No token usage recorded.'));
+
+  return body;
+}
+
+function worklogTableSection(title, headings, rows, emptyText) {
+  const section = h('section', { class: 'wl-section' });
+  section.appendChild(h('div', { class: 'drawer-label', text: title }));
+  if (!rows.length) {
+    section.appendChild(h('div', { class: 'hint', text: emptyText }));
+    return section;
+  }
+  const table = h('table', { class: 'wl-table' });
+  const head = h('tr');
+  for (const heading of headings) head.appendChild(h('th', { text: heading }));
+  table.appendChild(h('thead', {}, head));
+  const body = h('tbody');
+  for (const row of rows) {
+    const tr = h('tr');
+    for (const cell of row) {
+      if (cell === null || cell === undefined) {
+        tr.appendChild(h('td'));
+      } else if (cell instanceof Node) {
+        tr.appendChild(h('td', {}, cell));
+      } else {
+        tr.appendChild(h('td', { text: String(cell) }));
+      }
+    }
+    body.appendChild(tr);
+  }
+  table.appendChild(body);
+  section.appendChild(table);
+  return section;
+}
+
 
 function drawerGatesTab(task, detail) {
   const body = h('div');
@@ -3042,6 +4647,890 @@ async function stopSession(sessionId) {
   }
 }
 /* =========================================================================
+   2.1 — Your Work cockpit and Inbox
+   ========================================================================= */
+
+function ywQueueRow(options) {
+  const opts = options || {};
+  const row = h('button', {
+    class: 'queue-row', type: 'button',
+    title: opts.title || '',
+    on: { click: () => openTask(opts.taskId) }
+  });
+  const main = h('div', { class: 'queue-main' },
+    h('div', { class: 'queue-title', text: opts.title || opts.taskId }),
+    opts.sub ? h('div', { class: 'queue-sub', text: opts.sub }) : null);
+  row.appendChild(main);
+  if (opts.right) append(row, [opts.right]);
+  return row;
+}
+
+function ywTaskRow(taskId, fallbackTitle, extraSub, options) {
+  const task = taskById(taskId);
+  const opts = options || {};
+  const subParts = [];
+  if (task) {
+    subParts.push(task.stage_title || String(task.stage || ''));
+    if (task.owner) subParts.push('owner ' + task.owner);
+  }
+  if (extraSub) subParts.push(extraSub);
+  const status = task ? task.status : opts.status;
+  return ywQueueRow({
+    taskId: taskId,
+    title: (task && task.title) || fallbackTitle || taskId,
+    sub: subParts.filter(Boolean).join(' · ') || undefined,
+    right: status ? statusPill(status) : null
+  });
+}
+
+function ywCard(title, count, body, extraHead) {
+  return h('section', { class: 'card-panel', id: extraHead && extraHead.id ? extraHead.id : null },
+    h('div', { class: 'panel-head' },
+      h('div', { class: 'row' },
+        h('span', { class: 'panel-title', text: title }),
+        count !== null && count !== undefined ? h('span', { class: 'pill', text: String(count) }) : null),
+      extraHead && extraHead.actions ? h('div', { class: 'row' }, extraHead.actions) : null),
+    h('div', { class: 'panel-body' }, body));
+}
+
+function renderYourWork() {
+  const view = h('div', { class: 'yourwork' });
+  dom.view.appendChild(view);
+  const data = state.yourWork;
+  const me = settingsMe();
+
+  view.appendChild(h('div', { class: 'view-head' },
+    h('div', {},
+      h('h1', { class: 'view-title', text: 'Your Work' }),
+      h('p', { class: 'view-sub', text: [
+        'me: ' + me,
+        data && data.project ? data.project : '',
+        data && data.generated_at ? 'updated ' + relTime(data.generated_at) : ''
+      ].filter(Boolean).join(' · ') })),
+    h('div', { class: 'view-actions' },
+      h('button', {
+        class: 'btn btn-sm', type: 'button', text: 'Refresh',
+        on: {
+          click: async () => {
+            await Promise.all([loadYourWork(), loadInbox()]);
+            renderHeader();
+            renderView();
+          }
+        }
+      }))));
+
+  if (!state.yourWorkLoaded && !data) {
+    view.appendChild(loadingRow('Building your cockpit…'));
+    return;
+  }
+  if (!data) {
+    view.appendChild(errorCallout(state.yourWorkError || new ApiError('Your Work is unavailable.', 0, null)));
+    return;
+  }
+
+  const counts = data.counts || {};
+  const tiles = [
+    { label: 'Mine', value: counts.mine || 0, target: 'yw-mine', cls: 'tile-blue', sub: 'tasks you own' },
+    { label: 'Reviews', value: counts.reviews || 0, target: 'yw-reviews', cls: 'tile-violet', sub: 'awaiting a verdict' },
+    { label: 'Approvals', value: counts.approvals || 0, target: null, view: 'approvals', cls: 'tile-accent', sub: 'owner decisions' },
+    { label: 'Blocked', value: counts.blocked || 0, target: 'yw-blocked', cls: 'tile-orange', sub: 'need unblocking' },
+    { label: 'Budget', value: counts.budget || 0, target: 'yw-budget', cls: 'tile-red', sub: 'near or over tokens' },
+    { label: 'Ready', value: counts.ready || 0, target: 'yw-ready', cls: 'tile-green', sub: 'in the next wave' },
+    { label: 'Sessions running', value: counts.sessions_running || 0, target: null, view: 'sessions', cls: 'tile-accent', sub: 'headless agents' }
+  ];
+  const tileGrid = h('div', { class: 'tiles' });
+  for (const tile of tiles) {
+    tileGrid.appendChild(h('button', {
+      class: 'tile ' + tile.cls, type: 'button',
+      title: tile.label + ': ' + tile.value,
+      on: {
+        click: () => {
+          if (tile.view) navigate(tile.view);
+          else {
+            const target = document.getElementById(tile.target);
+            if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+        }
+      }
+    }, h('span', { class: 'tile-value', text: String(tile.value) }),
+      h('span', { class: 'tile-label', text: tile.label }),
+      h('span', { class: 'tile-sub', text: tile.sub })));
+  }
+  view.appendChild(tileGrid);
+
+  const grid = h('div', { class: 'yourwork-grid' });
+  const left = h('div', { class: 'yourwork-col' });
+  const right = h('div', { class: 'yourwork-col' });
+  grid.appendChild(left);
+  grid.appendChild(right);
+  view.appendChild(grid);
+
+  /* workload by status (mine) */
+  const workload = data.workload || {};
+  const workloadBody = h('div', { class: 'workload' });
+  const workloadTotal = Object.keys(workload).reduce((sum, key) => sum + Number(workload[key] || 0), 0);
+  if (!workloadTotal) {
+    workloadBody.appendChild(h('div', { class: 'hint', text: 'No tasks are assigned to ' + me + ' right now.' }));
+  } else {
+    for (const status of statusOrder()) {
+      const amount = Number(workload[status] || 0);
+      if (!amount) continue;
+      const meta = stMeta(status);
+      workloadBody.appendChild(h('div', { class: 'workload-row' },
+        h('span', { class: 'workload-label' },
+          h('span', { class: 'dot st-' + meta.color }), h('span', { text: meta.label })),
+        progressBar(amount, workloadTotal, ''),
+        h('span', { class: 'workload-value', text: String(amount) })));
+    }
+  }
+  left.appendChild(ywCard('Workload · mine', workloadTotal, workloadBody));
+
+  /* mine */
+  const mineRows = (data.mine || []).map((row) => ywTaskRow(row.id, row.title, null, { status: row.status }));
+  left.appendChild(ywCard('Mine', (data.mine || []).length,
+    mineRows.length ? h('div', { class: 'queue' }, mineRows) : h('div', { class: 'hint', text: 'No tasks are assigned to you.' }),
+    { id: 'yw-mine' }));
+
+  /* review queue */
+  const reviewRows = (data.reviews || []).map((row) => {
+    const verdict = row.review && row.review.verdict;
+    return ywTaskRow(row.id, row.title, verdict ? 'verdict: ' + verdict : 'no verdict yet', { status: row.status });
+  });
+  left.appendChild(ywCard('Review queue', (data.reviews || []).length,
+    reviewRows.length ? h('div', { class: 'queue' }, reviewRows) : h('div', { class: 'hint', text: 'Nothing waits for a review.' }),
+    { id: 'yw-reviews' }));
+
+  /* ready */
+  const readyRows = (data.ready || []).map((row) => ywTaskRow(row.id, row.title, 'wave 1', null));
+  left.appendChild(ywCard('Ready now', (data.ready || []).length,
+    readyRows.length ? h('div', { class: 'queue' }, readyRows) : h('div', { class: 'hint', text: 'No task is ready for dispatch.' }),
+    { id: 'yw-ready' }));
+
+  /* inbox */
+  right.appendChild(renderInboxPanel());
+
+  /* approvals */
+  const approvalRows = (data.approvals || []).map((record) => h('button', {
+    class: 'queue-row', type: 'button', title: record.note || '',
+    on: { click: () => navigate('approvals') }
+  },
+  h('div', { class: 'queue-main' },
+    h('div', { class: 'queue-title', text: (record.id || 'AP') + ' · ' + (record.action || 'approval') }),
+    h('div', { class: 'queue-sub', text: (record.task ? record.task + ' · ' : '') + (record.note || 'requested by ' + (record.requested_by || '—')) })),
+  h('span', { class: 'pill', text: relTime(record.requested_at) })));
+  right.appendChild(ywCard('Approvals waiting', (data.approvals || []).length,
+    approvalRows.length ? h('div', { class: 'queue' }, approvalRows) : h('div', { class: 'hint', text: 'No pending approvals.' })));
+
+  /* blocked */
+  const blockedRows = (data.blocked || []).map((row) => ywTaskRow(row.id, row.title, row.reason || 'blocked', { status: 'blocked' }));
+  right.appendChild(ywCard('Blocked', (data.blocked || []).length,
+    blockedRows.length ? h('div', { class: 'queue' }, blockedRows) : h('div', { class: 'hint', text: 'No task is blocked.' }),
+    { id: 'yw-blocked' }));
+
+  /* budget */
+  const budgetRows = (data.budget || []).map((row) => {
+    const budget = row.budget || {};
+    const sub = (budget.over ? 'over budget' : 'near budget') + (budget.max ? ' · ' + fmtTokens(budget.used || 0) + '/' + fmtTokens(budget.max) : '');
+    return ywTaskRow(row.id, row.title, sub, null);
+  });
+  right.appendChild(ywCard('Budget watch', (data.budget || []).length,
+    budgetRows.length ? h('div', { class: 'queue' }, budgetRows) : h('div', { class: 'hint', text: 'No task is near its token budget.' }),
+    { id: 'yw-budget' }));
+
+  /* claimed */
+  const claimedRows = (data.claimed || []).map((row) => {
+    const claim = row.claim || {};
+    return ywTaskRow(row.id, row.title, 'claimed by ' + (claim.harness || 'session') + (claim.session ? ' · ' + claim.session : ''), null);
+  });
+  right.appendChild(ywCard('Claimed now', (data.claimed || []).length,
+    claimedRows.length ? h('div', { class: 'queue' }, claimedRows) : h('div', { class: 'hint', text: 'No live claims.' })));
+
+  /* sessions */
+  const sessions = data.sessions || [];
+  const sessionRows = sessions.slice(0, 8).map((session) => h('button', {
+    class: 'session-row', type: 'button', title: 'Open Sessions',
+    on: { click: () => navigate('sessions') }
+  },
+  h('span', { class: 'session-id', text: session.id || 'session' }),
+  session.status ? statusPill(session.status) : h('span', { class: 'faint', text: '—' }),
+  session.task ? h('span', { class: 'chip mono', text: session.task }) : null,
+  h('span', { class: 'hint', text: (session.role || 'worker') + ' · ' + fmtTokens(session.tokens || 0) + ' tokens' }),
+  h('span', { class: 'hint', style: { marginLeft: 'auto' }, text: relTime(session.started) })));
+  right.appendChild(ywCard('Sessions', sessions.length,
+    sessionRows.length ? h('div', { class: 'sessions-strip' }, sessionRows) : h('div', { class: 'hint', text: 'No headless sessions recorded yet.' })));
+}
+
+function renderInboxPanel() {
+  const counts = state.inboxCounts || { total: 0, unread: 0, high: 0 };
+  const items = state.inboxItems || [];
+  const unread = items.filter((item) => !item.read);
+
+  const actions = h('div', { class: 'row' },
+    h('button', {
+      class: 'btn btn-sm', type: 'button', text: 'Mark all read',
+      disabled: !unread.length || !canWrite(),
+      title: canWrite() ? 'Mark every inbox item read' : 'The dashboard is read-only',
+      on: { click: () => markAllInboxRead() }
+    }));
+
+  const panel = h('section', { class: 'card-panel', id: 'yw-inbox' },
+    h('div', { class: 'panel-head' },
+      h('div', { class: 'inbox-head' },
+        h('span', { class: 'panel-title', text: 'Inbox' }),
+        h('span', { class: 'pill' + (counts.unread ? ' pill-accent' : ''), text: String(counts.unread || 0) + ' unread' }),
+        counts.high ? h('span', { class: 'pill pill-danger', text: String(counts.high) + ' high' }) : null),
+      actions),
+    h('div', { class: 'panel-body' }));
+
+  const body = panel.querySelector('.panel-body');
+  if (!state.inboxLoaded && !items.length) {
+    body.appendChild(loadingRow('Loading the inbox…'));
+    return panel;
+  }
+  if (!items.length) {
+    body.appendChild(h('div', { class: 'hint', text: 'Inbox zero — nothing needs your attention.' }));
+    return panel;
+  }
+
+  const list = h('div', { class: 'inbox-list' });
+  for (const item of items) {
+    const severity = ['high', 'medium', 'low', 'info'].indexOf(item.severity) !== -1 ? item.severity : 'info';
+    const row = h('div', {
+      class: 'inbox-item ' + (item.read ? 'is-read' : 'is-unread'),
+      role: 'button',
+      tabindex: '0',
+      title: item.summary || item.title || '',
+      on: {
+        click: () => openInboxItem(item),
+        keydown: (event) => {
+          if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openInboxItem(item); }
+        }
+      }
+    },
+    h('span', { class: 'inbox-sev sev-' + severity, title: 'Severity: ' + severity }),
+    h('div', { class: 'inbox-main' },
+      h('div', { class: 'inbox-title', text: item.title || item.id }),
+      item.summary ? h('div', { class: 'inbox-sub', text: item.summary }) : null,
+      h('div', { class: 'inbox-meta' },
+        h('span', { class: 'chip', text: item.kind || 'item' }),
+        item.task ? taskChip(item.task) : null,
+        h('span', { text: relTime(item.at) }))),
+    h('div', { class: 'inbox-side' },
+      item.read ? h('span', { class: 'faint text-sm', text: 'read' }) : h('span', { class: 'badge bg-blue st-blue', text: 'new' }),
+      item.action ? h('span', { class: 'hint text-sm', text: item.action }) : null,
+      !item.read ? h('button', {
+        class: 'btn btn-sm btn-ghost', type: 'button', text: 'Mark read',
+        disabled: !canWrite(),
+        title: canWrite() ? 'Mark this item read' : 'The dashboard is read-only',
+        on: {
+          click: (event) => {
+            event.stopPropagation();
+            markInboxRead([item.id], true);
+          }
+        }
+      }) : null));
+    list.appendChild(row);
+  }
+  body.appendChild(list);
+  return panel;
+}
+
+/* =========================================================================
+   2.1 — Settings: project, features, labels, local sessions and gates
+   ========================================================================= */
+
+const FEATURE_ORDER = ['inbox', 'worklog', 'views', 'labels', 'timeline', 'cycles',
+  'modules', 'pages', 'intake', 'analytics', 'assistant'];
+
+function settingsUI() {
+  if (!state.settingsUI) {
+    state.settingsUI = {
+      editLabel: null,
+      editColor: 'neutral',
+      addColor: 'neutral',
+      addGroup: 'custom',
+      labelError: null,
+      error: null,
+      busy: null,
+      adding: false
+    };
+  }
+  return state.settingsUI;
+}
+
+function renderSettings() {
+  const view = h('div', { class: 'settings' });
+  dom.view.appendChild(view);
+  const snapshot = state.snapshot;
+  const project = (snapshot && snapshot.project) || {};
+  const config = state.config || {};
+  const health = state.health || {};
+  const ui = settingsUI();
+
+  view.appendChild(h('div', { class: 'view-head' },
+    h('div', {},
+      h('h1', { class: 'view-title', text: 'Settings' }),
+      h('p', { class: 'view-sub', text: [
+        project.name || 'project',
+        'profile ' + (project.profile || '—'),
+        config.read_only ? 'read-only' : 'writable'
+      ].join(' · ') })),
+    h('div', { class: 'view-actions' },
+      h('button', {
+        class: 'btn btn-sm', type: 'button', text: 'Refresh',
+        on: {
+          click: async () => {
+            await Promise.all([loadSettings(), loadConfig(), loadSnapshot(), loadViews()]);
+            renderHeader();
+            renderTabs();
+            renderView();
+          }
+        }
+      }))));
+
+  if (!state.settingsLoaded && !state.settings) {
+    view.appendChild(loadingRow('Loading settings…'));
+    return;
+  }
+  if (state.settingsError) view.appendChild(errorCallout(state.settingsError));
+  if (ui.error) view.appendChild(errorCallout(ui.error));
+
+  const settingsErrors = (state.settings && state.settings.errors) || [];
+  if (settingsErrors.length) {
+    const box = h('div', { class: 'callout callout-warn' },
+      h('div', { class: 'callout-stack' },
+        h('div', { text: 'dashboard.json has validation problems:' }),
+        h('ul', {}, settingsErrors.map((message) => h('li', { text: message })))));
+    view.appendChild(box);
+  }
+
+  view.appendChild(renderSettingsGeneral(project, config, health));
+  view.appendChild(renderSettingsFeatures(ui));
+  if (feature('labels')) view.appendChild(renderSettingsLabels(ui));
+  view.appendChild(renderSettingsSessions(config, ui));
+  view.appendChild(renderSettingsGates(config, ui));
+  view.appendChild(renderSettingsAbout(project, config, health, settingsErrors));
+}
+
+/* ---------- General ---------- */
+
+function renderSettingsGeneral(project, config, health) {
+  const meInput = h('input', {
+    class: 'input', type: 'text', value: settingsMe(), 'data-fkey': 'settings-me',
+    'aria-label': 'My handle (me)'
+  });
+  const card = h('section', { class: 'card-panel settings-section' },
+    h('div', { class: 'panel-head' }, h('span', { class: 'panel-title', text: 'General' })),
+    h('div', { class: 'panel-body' },
+      h('dl', { class: 'kv settings-grid' },
+        h('dt', { text: 'Project' }), h('dd', { text: project.name || '—' }),
+        h('dt', { text: 'Profile' }), h('dd', { text: project.profile || '—' }),
+        h('dt', { text: 'Stage' }), h('dd', { text: project.stage === null || project.stage === undefined ? '—' : String(project.stage) }),
+        h('dt', { text: 'Base branch' }), h('dd', { text: project.base_branch || '—' }),
+        h('dt', { text: 'Board schema' }), h('dd', { text: project.schema_version || '—' }),
+        h('dt', { text: 'Generator' }), h('dd', { text: project.generator_version || '—' }),
+        h('dt', { text: 'Root' }), h('dd', { class: 'mono', text: (health && health.root) || config.project_root || '—' })),
+      h('div', { class: 'settings-row' },
+        h('div', { class: 'settings-row-main' },
+          h('div', { class: 'settings-row-title', text: '"Me" handle' }),
+          h('div', { class: 'settings-row-sub', text: 'Tasks with this owner count as "Mine" in Your Work and in the mine built-in view.' })),
+        h('div', { class: 'settings-actions' },
+          meInput,
+          h('button', {
+            class: 'btn btn-sm btn-primary', type: 'button', text: 'Save',
+            disabled: !canWrite() || uiBusy('general'),
+            title: canWrite() ? 'PUT /api/settings' : 'The dashboard is read-only',
+            on: {
+              click: async () => {
+                const value = meInput.value.trim();
+                if (!value) { toast('The handle must not be empty', 'warn'); return; }
+                await saveSettings({ defaults: { me: value } }, 'general', 'Handle saved');
+              }
+            }
+          })))));
+  return card;
+}
+
+function uiBusy(key) {
+  return Boolean(state.settingsUI && state.settingsUI.busy === key);
+}
+
+async function saveSettings(payload, busyKey, message) {
+  const ui = settingsUI();
+  ui.busy = busyKey;
+  ui.error = null;
+  renderView();
+  try {
+    await api('/api/settings', { method: 'PUT', body: payload });
+    await Promise.all([loadSettings(), loadSnapshot(), loadViews()]);
+    renderHeader();
+    renderTabs();
+    toast(message || 'Settings saved', 'ok');
+    ui.busy = null;
+    renderView();
+    return true;
+  } catch (err) {
+    ui.busy = null;
+    ui.error = err;
+    toast('Settings: ' + describeError(err), 'error');
+    renderView();
+    return false;
+  }
+}
+
+/* ---------- Features ---------- */
+
+function renderSettingsFeatures(ui) {
+  const defaults = featureDefaults();
+  const current = (state.settings && state.settings.features) || defaults;
+  const keys = FEATURE_ORDER.filter((key) => Object.prototype.hasOwnProperty.call(defaults, key));
+  for (const key of Object.keys(defaults)) if (keys.indexOf(key) === -1) keys.push(key);
+
+  const grid = h('div', { class: 'feature-grid' });
+  for (const key of keys) {
+    const planned = defaults[key] === false;
+    const enabled = Boolean(current[key]);
+    grid.appendChild(h('label', { class: 'settings-row' },
+      h('div', { class: 'settings-row-main' },
+        h('div', { class: 'settings-row-title' },
+          h('span', { text: FEATURE_LABELS[key] || key }),
+          planned ? h('span', { class: 'pill pill-planned', text: 'planned' }) : null,
+          planned && enabled ? h('span', { class: 'pill pill-accent', text: 'on' }) : null),
+        h('div', { class: 'settings-row-sub', text: FEATURE_NOTES[key] || '' })),
+      h('span', { class: 'switch' },
+        h('input', {
+          type: 'checkbox', checked: enabled,
+          'data-feature': key,
+          'aria-label': 'Enable ' + (FEATURE_LABELS[key] || key),
+          disabled: !canWrite() || uiBusy('features'),
+          on: {
+            change: async (event) => {
+              const boxes = document.querySelectorAll('[data-feature]');
+              const features = {};
+              for (const box of boxes) features[box.getAttribute('data-feature')] = box.checked;
+              event.target.disabled = true;
+              await saveSettings({ features: features }, 'features', 'Feature flags saved');
+            }
+          }
+        }))));
+  }
+
+  return h('section', { class: 'card-panel settings-section' },
+    h('div', { class: 'panel-head' },
+      h('span', { class: 'panel-title', text: 'Features' }),
+      h('span', { class: 'hint', text: 'Only the current views are on by default; planned views stay off until you enable them.' })),
+    h('div', { class: 'panel-body' }, grid));
+}
+
+/* ---------- Labels ---------- */
+
+function palettePicker(selected, onPick) {
+  const row = h('div', { class: 'palette-picker', role: 'group', 'aria-label': 'Label colour' });
+  for (const color of settingsPalette()) {
+    row.appendChild(h('button', {
+      class: 'swatch ' + paletteClass(color), type: 'button',
+      'aria-pressed': selected === color ? 'true' : 'false',
+      'aria-label': color, title: color,
+      on: { click: () => onPick(color) }
+    }));
+  }
+  return row;
+}
+
+function groupPicker(selected, onChange) {
+  const select = h('select', { class: 'select', 'aria-label': 'Label group', on: { change: (event) => onChange(event.target.value) } });
+  for (const group of settingsGroups()) {
+    const option = h('option', { value: group, text: group });
+    if ((selected || 'custom') === group) option.selected = true;
+    select.appendChild(option);
+  }
+  select.value = selected || 'custom';
+  return select;
+}
+
+function renderSettingsLabels(ui) {
+  const labels = settingsLabels();
+  const groups = settingsGroups();
+  const body = h('div', { class: 'panel-body' });
+
+  const grouped = new Map();
+  for (const label of labels) {
+    const group = groups.indexOf(label.group) !== -1 ? label.group : 'custom';
+    if (!grouped.has(group)) grouped.set(group, []);
+    grouped.get(group).push(label);
+  }
+
+  const admin = h('div', { class: 'label-admin' });
+  for (const group of groups) {
+    if (!grouped.has(group)) continue;
+    admin.appendChild(h('div', { class: 'label-group-head', text: group }));
+    for (const label of grouped.get(group)) {
+      const editing = ui.editLabel === label.id;
+      if (editing) {
+        const titleInput = h('input', {
+          class: 'input', type: 'text',
+          value: ui.editTitle !== undefined ? ui.editTitle : label.title,
+          'data-fkey': 'label-edit-title', 'aria-label': 'Label title',
+          on: { input: (event) => { ui.editTitle = event.target.value; } }
+        });
+        admin.appendChild(h('div', { class: 'label-form' },
+          h('label', { class: 'field' }, h('span', { class: 'field-label', text: 'Title' }), titleInput),
+          palettePicker(ui.editColor || label.color, (color) => { ui.editColor = color; renderView(); }),
+          groupPicker(label.group, (group) => { ui.editGroup = group; }),
+          h('button', {
+            class: 'btn btn-sm btn-primary', type: 'button', text: 'Save',
+            on: {
+              click: () => saveLabel(label.id, {
+                title: titleInput.value.trim(),
+                color: ui.editColor || label.color,
+                group: ui.editGroup || label.group
+              })
+            }
+          }),
+          h('button', {
+            class: 'btn btn-sm btn-ghost', type: 'button', text: 'Cancel',
+            on: { click: () => { ui.editLabel = null; ui.editTitle = undefined; ui.labelError = null; renderView(); } }
+          })));
+        if (ui.labelError) admin.appendChild(errorCallout(ui.labelError));
+        continue;
+      }
+      admin.appendChild(h('div', { class: 'label-admin-row' },
+        h('div', { class: 'label-admin-main' },
+          labelChip(label),
+          h('span', { class: 'label-admin-id', text: label.id }),
+          h('span', { class: 'chip', text: label.group })),
+        h('div', { class: 'label-admin-actions' },
+          h('button', {
+            class: 'btn btn-sm', type: 'button', text: 'Edit', disabled: !canWrite(),
+            on: {
+              click: () => {
+                ui.editLabel = label.id;
+                ui.editColor = label.color;
+                ui.editGroup = label.group;
+                ui.editTitle = label.title;
+                ui.labelError = null;
+                renderView();
+              }
+            }
+          }),
+          h('button', {
+            class: 'btn btn-sm btn-danger', type: 'button', text: 'Delete', disabled: !canWrite(),
+            on: { click: () => deleteLabel(label.id) }
+          }))));
+    }
+  }
+  if (!labels.length) admin.appendChild(h('div', { class: 'hint', text: 'No labels defined yet.' }));
+  body.appendChild(admin);
+
+  /* add form */
+  if (ui.adding) {
+    const idInput = h('input', {
+      class: 'input', type: 'text', placeholder: 'bug',
+      value: ui.addId || '', 'data-fkey': 'label-add-id', 'aria-label': 'Label id',
+      on: { input: (event) => { ui.addId = event.target.value; } }
+    });
+    const titleInput = h('input', {
+      class: 'input', type: 'text', placeholder: 'Bug',
+      value: ui.addTitle || '', 'data-fkey': 'label-add-title', 'aria-label': 'Label title',
+      on: { input: (event) => { ui.addTitle = event.target.value; } }
+    });
+    body.appendChild(h('div', { class: 'label-form' },
+      h('label', { class: 'field' }, h('span', { class: 'field-label', text: 'Id' }), idInput),
+      h('label', { class: 'field' }, h('span', { class: 'field-label', text: 'Title' }), titleInput),
+      palettePicker(ui.addColor, (color) => { ui.addColor = color; renderView(); }),
+      groupPicker(ui.addGroup, (group) => { ui.addGroup = group; }),
+      h('button', {
+        class: 'btn btn-primary btn-sm', type: 'button', text: 'Add label',
+        on: { click: () => addLabelFromForm(idInput.value.trim(), titleInput.value.trim()) }
+      }),
+      h('button', {
+        class: 'btn btn-ghost btn-sm', type: 'button', text: 'Cancel',
+        on: { click: () => { ui.adding = false; ui.labelError = null; renderView(); } }
+      })));
+    if (ui.labelError) body.appendChild(errorCallout(ui.labelError));
+  } else {
+    body.appendChild(h('div', { class: 'settings-actions' },
+      h('button', {
+        class: 'btn btn-sm', type: 'button', text: '+ Add label', disabled: !canWrite(),
+        on: { click: () => { ui.adding = true; ui.addColor = 'neutral'; ui.addGroup = 'custom'; ui.addId = ''; ui.addTitle = ''; ui.labelError = null; renderView(); } }
+      }),
+      h('span', { class: 'hint', text: 'Labels are committed in dashboard.json and referenced by id on the board.' })));
+  }
+
+  return h('section', { class: 'card-panel settings-section' },
+    h('div', { class: 'panel-head' },
+      h('span', { class: 'panel-title', text: 'Labels' }),
+      h('span', { class: 'pill', text: String(labels.length) })),
+    body);
+}
+
+async function addLabelFromForm(labelId, title) {
+  const ui = settingsUI();
+  if (!labelId || !/^[a-z][a-z0-9-]{0,40}$/.test(labelId)) {
+    ui.labelError = new ApiError('Label id must start with a lowercase letter and use only a-z, 0-9 and dashes.', 400, null);
+    renderView();
+    return;
+  }
+  if (!title) {
+    ui.labelError = new ApiError('A label title is required.', 400, null);
+    renderView();
+    return;
+  }
+  ui.busy = 'label';
+  try {
+    await api('/api/settings/labels', {
+      method: 'POST',
+      body: { id: labelId, title: title, color: ui.addColor || 'neutral', group: ui.addGroup || 'custom' }
+    });
+    ui.adding = false;
+    ui.busy = null;
+    ui.addId = '';
+    ui.addTitle = '';
+    ui.labelError = null;
+    await Promise.all([loadSettings(), loadSnapshot()]);
+    renderHeader();
+    toast('Label added', 'ok');
+    renderView();
+  } catch (err) {
+    ui.busy = null;
+    ui.labelError = err;
+    renderView();
+  }
+}
+
+async function saveLabel(labelId, payload) {
+  const ui = settingsUI();
+  if (!payload.title) {
+    ui.labelError = new ApiError('A label title is required.', 400, null);
+    renderView();
+    return;
+  }
+  ui.busy = 'label';
+  try {
+    await api('/api/settings/labels/' + encodeURIComponent(labelId), { method: 'PUT', body: payload });
+    ui.busy = null;
+    ui.editLabel = null;
+    ui.editTitle = undefined;
+    ui.labelError = null;
+    await Promise.all([loadSettings(), loadSnapshot()]);
+    renderHeader();
+    toast('Label saved', 'ok');
+    renderView();
+  } catch (err) {
+    ui.busy = null;
+    ui.labelError = err;
+    renderView();
+  }
+}
+
+async function deleteLabel(labelId) {
+  const ui = settingsUI();
+  const run = async (force) => {
+    try {
+      await api('/api/settings/labels/' + encodeURIComponent(labelId), {
+        method: 'DELETE',
+        body: force ? { force: true } : {}
+      });
+      await Promise.all([loadSettings(), loadSnapshot(), loadViews()]);
+      renderHeader();
+      toast('Label deleted', 'ok');
+      ui.labelError = null;
+      renderView();
+      return true;
+    } catch (err) {
+      if (!force && err.status === 400 && /used by/i.test(String(err.message))) {
+        const remove = await confirmDialog({
+          title: 'Label is in use',
+          message: describeError(err) + ' Remove it from those tasks and delete it?',
+          confirmLabel: 'Remove and delete'
+        });
+        if (remove) return run(true);
+        return false;
+      }
+      ui.labelError = err;
+      toast('Delete failed: ' + describeError(err), 'error');
+      renderView();
+      return false;
+    }
+  };
+  const confirmed = await confirmDialog({
+    title: 'Delete label "' + labelId + '"?',
+    message: 'The label is removed from dashboard.json. If tasks still use it, you are asked before it is stripped from them.',
+    confirmLabel: 'Delete label'
+  });
+  if (confirmed) await run(false);
+}
+
+/* ---------- Sessions (machine-local /api/config) ---------- */
+
+function renderSettingsSessions(config, ui) {
+  const session = Object.assign({
+    provider: 'claude', command: ['claude'], permission_mode: 'acceptEdits',
+    allowed_tools: [], model: null, timeout_s: 7200, max_concurrent: 2
+  }, (config && config.session) || {});
+
+  const providerInput = h('input', { class: 'input', type: 'text', value: session.provider || '', 'aria-label': 'Provider' });
+  const commandArea = h('textarea', {
+    class: 'textarea', rows: '2',
+    'aria-label': 'Provider command',
+    placeholder: 'claude\nor ["claude"]'
+  });
+  commandArea.value = Array.isArray(session.command) ? session.command.join('\n') : String(session.command || '');
+  const modeInput = h('input', { class: 'input', type: 'text', value: session.permission_mode || '', 'aria-label': 'Permission mode' });
+  const toolsInput = h('input', {
+    class: 'input', type: 'text', 'aria-label': 'Allowed tools',
+    value: Array.isArray(session.allowed_tools) ? session.allowed_tools.join(', ') : ''
+  });
+  const modelInput = h('input', { class: 'input', type: 'text', value: session.model || '', placeholder: 'provider default', 'aria-label': 'Model' });
+  const timeoutInput = h('input', { class: 'input', type: 'number', min: '1', value: String(session.timeout_s || 7200), 'aria-label': 'Timeout seconds' });
+  const concurrentInput = h('input', { class: 'input', type: 'number', min: '1', value: String(session.max_concurrent || 2), 'aria-label': 'Max concurrent sessions' });
+
+  const card = h('section', { class: 'card-panel settings-section' },
+    h('div', { class: 'panel-head' },
+      h('span', { class: 'panel-title', text: 'Sessions (this machine)' }),
+      h('span', { class: 'hint', text: 'Machine-local: stored in the dashboard runtime folder, not committed.' })),
+    h('div', { class: 'panel-body' },
+      h('div', { class: 'form-grid' },
+        h('label', { class: 'field' }, h('span', { class: 'field-label', text: 'Provider' }), providerInput),
+        h('label', { class: 'field' }, h('span', { class: 'field-label', text: 'Permission mode' }), modeInput),
+        h('label', { class: 'field span-2' },
+          h('span', { class: 'field-label', text: 'Command' }), commandArea,
+          h('span', { class: 'field-help', text: 'One argument per line, or a JSON array such as ["claude"].' })),
+        h('label', { class: 'field span-2' },
+          h('span', { class: 'field-label', text: 'Allowed tools' }), toolsInput,
+          h('span', { class: 'field-help', text: 'Comma-separated, e.g. Bash, Read, Write.' })),
+        h('label', { class: 'field' }, h('span', { class: 'field-label', text: 'Model' }), modelInput),
+        h('label', { class: 'field' }, h('span', { class: 'field-label', text: 'Timeout (seconds)' }), timeoutInput),
+        h('label', { class: 'field' }, h('span', { class: 'field-label', text: 'Max concurrent' }), concurrentInput)),
+      h('div', { class: 'settings-actions' },
+        h('button', {
+          class: 'btn btn-sm btn-primary', type: 'button', text: 'Save session settings',
+          disabled: !canWrite() || uiBusy('sessions'),
+          title: canWrite() ? 'PUT /api/config {session}' : 'The dashboard is read-only',
+          on: {
+            click: () => saveLocalSession({
+              providerInput, commandArea, modeInput, toolsInput, modelInput, timeoutInput, concurrentInput
+            })
+          }
+        }),
+        h('span', { class: 'hint', text: 'Changing the provider or command affects the next session only.' }))));
+  return card;
+}
+
+function parseCommand(text) {
+  const trimmed = String(text || '').trim();
+  if (!trimmed) return ['claude'];
+  if (trimmed.charAt(0) === '[') {
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (Array.isArray(parsed) && parsed.length && parsed.every((part) => typeof part === 'string')) return parsed;
+    } catch (err) { /* fall through to line split */ }
+  }
+  return trimmed.split('\n').map((line) => line.trim()).filter(Boolean);
+}
+
+async function saveLocalSession(form) {
+  const command = parseCommand(form.commandArea.value);
+  if (!command.length) {
+    toast('The provider command must not be empty', 'warn');
+    return;
+  }
+  const session = {
+    provider: form.providerInput.value.trim() || 'claude',
+    command: command,
+    permission_mode: form.modeInput.value.trim() || null,
+    allowed_tools: form.toolsInput.value.split(/[,\n]/).map((part) => part.trim()).filter(Boolean),
+    model: form.modelInput.value.trim() || null,
+    timeout_s: Number(form.timeoutInput.value) || 7200,
+    max_concurrent: Number(form.concurrentInput.value) || 2
+  };
+  try {
+    await api('/api/config', { method: 'PUT', body: { session: session } });
+    await loadConfig();
+    toast('Session settings saved', 'ok');
+    renderView();
+  } catch (err) {
+    toast('Session settings: ' + describeError(err), 'error');
+  }
+}
+
+/* ---------- Gate commands (machine-local) ---------- */
+
+function renderSettingsGates(config, ui) {
+  const commands = Object.assign({}, (config && config.gate_commands) || {});
+  const rowsHost = h('div', { class: 'col', style: { gap: '6px' } });
+  const addRow = (name, command) => {
+    const row = h('div', { class: 'row', 'data-gate-row': '1' },
+      h('input', { class: 'input', type: 'text', value: name || '', placeholder: 'gate name', 'aria-label': 'Gate name', style: { maxWidth: '180px' } }),
+      h('input', { class: 'input', type: 'text', value: command || '', placeholder: 'pnpm test', 'aria-label': 'Gate command' }),
+      h('button', {
+        class: 'btn btn-sm btn-ghost', type: 'button', text: '×', 'aria-label': 'Remove gate command',
+        on: { click: () => row.remove() }
+      }));
+    rowsHost.appendChild(row);
+  };
+  for (const name of Object.keys(commands).sort()) addRow(name, commands[name]);
+
+  return h('section', { class: 'card-panel settings-section' },
+    h('div', { class: 'panel-head' },
+      h('span', { class: 'panel-title', text: 'Gate commands (this machine)' }),
+      h('span', { class: 'hint', text: 'Prefills the gate runner; suggested values come from docs/quality.md.' })),
+    h('div', { class: 'panel-body' },
+      rowsHost,
+      h('div', { class: 'settings-actions' },
+        h('button', {
+          class: 'btn btn-sm', type: 'button', text: '+ Add gate', disabled: !canWrite(),
+          on: { click: () => addRow('', '') }
+        }),
+        h('button', {
+          class: 'btn btn-sm btn-primary', type: 'button', text: 'Save gate commands',
+          disabled: !canWrite() || uiBusy('gates'),
+          on: { click: () => saveGateCommands(rowsHost) }
+        }))));
+}
+
+async function saveGateCommands(rowsHost) {
+  const map = {};
+  for (const row of rowsHost.querySelectorAll('[data-gate-row]')) {
+    const inputs = row.querySelectorAll('input');
+    const name = inputs[0] ? inputs[0].value.trim() : '';
+    const command = inputs[1] ? inputs[1].value.trim() : '';
+    if (!name && !command) continue;
+    if (!name || !command) {
+      toast('Every gate row needs a name and a command', 'warn');
+      return;
+    }
+    map[name] = command;
+  }
+  try {
+    await api('/api/config', { method: 'PUT', body: { gate_commands: map } });
+    await loadConfig();
+    toast('Gate commands saved', 'ok');
+    renderView();
+  } catch (err) {
+    toast('Gate commands: ' + describeError(err), 'error');
+  }
+}
+
+/* ---------- About ---------- */
+
+function renderSettingsAbout(project, config, health, settingsErrors) {
+  const dashboardVersion = (config && config.version) || health.version || '—';
+  const polierVersion = config && config.polier ? config.polier.version : '—';
+  return h('section', { class: 'card-panel settings-section' },
+    h('div', { class: 'panel-head' }, h('span', { class: 'panel-title', text: 'About' })),
+    h('div', { class: 'panel-body' },
+      h('dl', { class: 'kv settings-grid' },
+        h('dt', { text: 'Dashboard' }), h('dd', { text: 'v' + dashboardVersion }),
+        h('dt', { text: 'Polier' }), h('dd', { text: polierVersion ? 'v' + polierVersion : '—' }),
+        h('dt', { text: 'Server started' }), h('dd', { text: health.started ? relTime(health.started) : '—' }),
+        h('dt', { text: 'Role' }), h('dd', { text: (health.role || config.role || '—') + (config.read_only ? ' · read-only' : '') }),
+        h('dt', { text: 'Token' }), h('dd', { text: config.token_required ? 'required' : 'not required' }),
+        h('dt', { text: 'dashboard.json' }), h('dd', { text: settingsErrors.length ? settingsErrors.length + ' problem(s)' : 'valid' })),
+      h('p', { class: 'hint', text: 'dashboard.json is committed project settings; sessions, gate commands and inbox read state live in the git-common runtime folder.' })));
+}
+
+/* =========================================================================
    24. Approvals inbox
    ========================================================================= */
 
@@ -3550,7 +6039,8 @@ function renderGraph() {
           on: { click: () => { state.graph.zoom = Math.min(1.8, Math.round((state.graph.zoom + 0.2) * 10) / 10); renderView(); } }
         })))));
 
-  dom.view.appendChild(renderFilters({ count: false }));
+  const graphFilterNote = renderGraphFilterNote();
+  if (graphFilterNote) dom.view.appendChild(graphFilterNote);
 
   const tasks = visibleTasks();
   if (!tasks.length) {

@@ -1,0 +1,75 @@
+{
+  "version": 1,
+  "features": {
+    "inbox": true,
+    "worklog": true,
+    "views": true,
+    "labels": true,
+    "timeline": false,
+    "cycles": false,
+    "modules": false,
+    "pages": false,
+    "intake": false,
+    "analytics": false,
+    "assistant": false
+  },
+  "labels": [
+    {
+      "id": "feature",
+      "title": "Feature",
+      "color": "green",
+      "group": "type"
+    },
+    {
+      "id": "bug",
+      "title": "Bug",
+      "color": "red",
+      "group": "type"
+    },
+    {
+      "id": "chore",
+      "title": "Chore",
+      "color": "neutral",
+      "group": "type"
+    },
+    {
+      "id": "experiment",
+      "title": "Experiment",
+      "color": "violet",
+      "group": "type"
+    },
+    {
+      "id": "risk-low",
+      "title": "Risk: low",
+      "color": "green",
+      "group": "risk"
+    },
+    {
+      "id": "risk-medium",
+      "title": "Risk: medium",
+      "color": "amber",
+      "group": "risk"
+    },
+    {
+      "id": "risk-high",
+      "title": "Risk: high",
+      "color": "red",
+      "group": "risk"
+    },
+    {
+      "id": "origin-owner",
+      "title": "From owner",
+      "color": "blue",
+      "group": "origin"
+    },
+    {
+      "id": "origin-agent",
+      "title": "From agent",
+      "color": "teal",
+      "group": "origin"
+    }
+  ],
+  "defaults": {
+    "me": "owner"
+  }
+}

@@ -26,7 +26,9 @@ from . import evidence as evidence_mod
 from . import paths
 from . import policy as policy_mod
 from . import runs as runs_mod
+from . import settings as settings_mod
 from . import state as state_mod
+from . import worklog as worklog_mod
 from .errors import PolierError
 
 DASHBOARD_SCHEMA = 1
@@ -39,7 +41,7 @@ TASK_FIELDS = (
     "complexity", "stage", "parallel_group", "scope_write", "scope_read",
     "acceptance", "gates", "owner", "branch", "worktree", "round",
     "evidence", "handoff", "scope_write_forbidden", "package", "exclusive",
-    "resources", "contract_followups",
+    "resources", "contract_followups", "labels", "estimate_hours",
 )
 
 
@@ -277,6 +279,7 @@ def snapshot(root, *, policy: Optional[dict] = None, plan: Optional[dict] = None
     if board is None:
         raise PolierError(f"no board.json at {root}; run the generator first")
     policy = policy if policy is not None else policy_mod.load_policy(root)
+    project_settings = settings_mod.load(root)
     plan = plan if plan is not None else dispatch_mod.plan(root, board, policy)
     stage_titles = _stage_titles(board)
     gates = _gate_index(root)
@@ -340,6 +343,13 @@ def snapshot(root, *, policy: Optional[dict] = None, plan: Optional[dict] = None
             if policy_mod.budget(policy).get("max_tokens_per_task") else None,
         },
         "counts": counts,
+        "settings": {
+            "me": settings_mod.me(project_settings),
+            "features": settings_mod.features(project_settings),
+            "labels": settings_mod.label_list(project_settings),
+            "palette": list(settings_mod.PALETTE),
+            "groups": list(settings_mod.GROUPS),
+        },
         "git": _git(root),
         "paths": {
             "board": "board.json",
@@ -389,9 +399,15 @@ def task_detail(root, task_id: str) -> Dict[str, Any]:
             })
     stage = next((entry for entry in board.get("stages", []) if isinstance(entry, dict)
                   and entry.get("id") == task.get("stage")), None)
+    project_settings = settings_mod.load(root)
     return {
         "schema": DASHBOARD_SCHEMA,
         "task": view,
+        "settings": {
+            "me": settings_mod.me(project_settings),
+            "labels": settings_mod.label_list(project_settings),
+        },
+        "worklog": worklog_mod.task_worklog(root, task_id, task=task),
         "brief": {"text": brief_text, "path": f"tasks/{task_id}.md"},
         "review": {"text": review_text, "path": f"reviews/{task_id}.md"},
         "run": run,
