@@ -98,6 +98,18 @@ The pages view and intake are controlled by `dashboard.json` → `features.pages
 
 All three features are controlled by `dashboard.json` → `features.assistant` / `features.automations` / `features.github` (default on). Assistant conversations are local runtime files; automation rules are committed; the GitHub panel is read-only.
 
+## AI, MCP and GitHub (2.5)
+
+- **Agents** (`agents.json`, committed) — profiles with role, model, instructions, skills and connectors; *Assign to a task* starts a headless session with them. Built-in Builder, Reviewer and Lead until the file exists.
+- **Skills** (`.claude/skills/<id>/SKILL.md`, committed) — reusable instructions with a "when to use" description; inlined into the prompts of the agents that list them and discovered by interactive Claude Code. Examples ship in `templates/skills/`.
+- **MCP** — the Polier MCP server (`tools/mcp.py`) with copy-paste setup for Claude Code, Claude Desktop, Cursor and VS Code and a handshake test; **connectors** are other MCP servers (stdio or HTTP) that sessions and the assistant may use, configured per machine in the runtime config with masked secrets and passed to Claude Code via `--mcp-config`.
+- **GitHub login** — *Connect GitHub* signs the `gh` CLI in with the device flow or a token; *Disconnect* signs it out. Polier stores no credential.
+
+The handbook in Pages (*Guides → AI and MCP*, *API reference → AI and integrations*) documents every screen and route.
+
+![Agents](images/dashboard-agents.png)
+![MCP](images/dashboard-mcp.png)
+
 Reading the page without live updates: add `?noevents=1` (static mode) and
 `?theme=light|dark` to freeze the theme; deep links are `#/board`, `#/table`,
 `#/graph`, `#/dispatch`, `#/approvals`, `#/activity`, `#/sessions`, `#/plan`
@@ -221,6 +233,9 @@ the `errors`/`actions` the CLI would print.
 | `GET /api/analytics` | throughput, cycle time, gate pass rate, rework, effort and tokens |
 | `GET /api/pages`, `/api/page?path=&ref=`, `/api/page/history`, `/api/pages/search`, `PUT /api/pages/favorites` | Markdown knowledge layer: collections, content, revisions, search, favorites |
 | `GET /api/handbook` | the shipped guides and API reference (spaces, sections, pages with Markdown) |
+| `GET/PUT /api/agents`, `GET /api/skills`, `PUT/DELETE /api/skills/<id>`, `POST /api/skills/examples` | agent profiles and skills |
+| `GET /api/mcp`, `PUT/DELETE /api/mcp/connectors/<name>`, `POST /api/mcp/connectors/<name>/test` | MCP server setup and connectors |
+| `GET /api/github/auth`, `POST /api/github/login`, `/api/github/login/cancel`, `/api/github/logout` | GitHub account connection through gh |
 | `GET/POST /api/intake`, `PATCH /api/intake/<id>`, `POST /api/intake/<id>/accept\|reject` | intake proposals and triage into validated tasks |
 | `GET/POST /api/task-templates`, `DELETE /api/task-templates/<id>` | reusable task templates |
 | `GET/POST /api/assistant`, `/api/assistant/chat`, `/api/assistant/<id>`, `/api/assistant/apply` | read-only assistant conversations and validated proposal application |
@@ -246,13 +261,16 @@ page falls back to `.polier-dashboard/`):
 | `intake/<id>.json` (project root, committed) | intake proposals and their decisions |
 | `templates/tasks/<id>.json` (project root, committed) | reusable task templates |
 | `automations.json` (project root, committed) | deterministic automation rules (evaluated as a dry run) |
-| `config.json` (runtime) | provider command/settings, gate-command overrides, UI preferences |
+| `agents.json` (project root, committed) | agent profiles |
+| `.claude/skills/<id>/SKILL.md` (committed) | skills |
+| `config.json` (runtime) | provider command/settings, gate-command overrides, MCP connectors (`mcp_servers`, `polier_mcp`), UI preferences |
 | `plan.json`, `plan/` | interview answers and the last generator prompt |
 | `jobs/<id>.log` | full output of gate/check/audit jobs |
 | `sessions/<id>/` | prompt, generated Claude settings, transcript, session log, meta |
 | `inbox.json` | read state of the inbox items |
 | `pages.json` | local page favorites |
 | `assistant/<id>.json` | local assistant conversations |
+| `sessions/<id>/mcp.json` | the MCP connectors a session got (contains secrets; machine-local) |
 
 Deleting the folder loses transcripts, job logs and read marks only; `dashboard.json` and `views/` are project files and survive.
 

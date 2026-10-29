@@ -24,4 +24,5 @@ Polier plans an AI coding project before the first line of code and then keeps t
 
 - [Quickstart](polier:quickstart) — start the dashboard and move your first task.
 - [Core concepts](polier:concepts) — board, statuses, gates, claims and approvals.
+- [AI in Polier](polier:ai-overview) — assistant, agents, skills and MCP.
 - [API introduction](polier:api-introduction) — script the dashboard from your own tools.

@@ -28,6 +28,18 @@
           ]
         },
         {
+          "title": "AI and MCP",
+          "pages": [
+            "ai-overview",
+            "assistant",
+            "agents",
+            "skills",
+            "mcp-server",
+            "mcp-connectors",
+            "github-integration"
+          ]
+        },
+        {
           "title": "Tutorials",
           "pages": [
             "plan-a-project",
@@ -79,7 +91,8 @@
             "api-work",
             "api-planning",
             "api-knowledge",
-            "api-intelligence"
+            "api-intelligence",
+            "api-ai"
           ]
         }
       ]

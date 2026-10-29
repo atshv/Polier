@@ -36,7 +36,7 @@ Each run streams into the **Jobs** tray at the bottom and writes a record with e
 1. **→ Verifying** checks that every gate has a passing record.
 2. **→ Reviewing** hands the task to a reviewer (a person or a reviewer session).
 3. The reviewer writes `reviews/ENG-01.md` with `verdict: pass` or `verdict: fail` and findings.
-4. **→ Done** needs the passing verdict and a handoff note.
+4. **→ Done** needs the passing verdict and a `handoff` on the task: up to three lines that dependent tasks need to know.
 
 > [!NOTE]
 > A failing review sends the task to `rework` with a note. The round counter rises; after the policy limit the task escalates instead of looping forever.

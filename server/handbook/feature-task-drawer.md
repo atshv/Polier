@@ -19,7 +19,7 @@ ID, status, title, stage, package, complexity, review round and attempt. Below i
 | **Run** | the event log of every attempt |
 | **Review** | the verdict and findings |
 | **Evidence** | gate logs from `reviews/evidence/` |
-| **Handoff** | the handoff note for the next task |
+| **Handoff** | up to three lines that dependent tasks need (board field `handoff`, required for `done`) |
 | **Session** | start or watch a headless agent for this task |
 | **Worklog** | attempts, sessions, tokens and hours against the estimate |
 

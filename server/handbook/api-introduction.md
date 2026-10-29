@@ -102,3 +102,4 @@ async function call(method, path, body) {
 | [Planning views](polier:api-planning) | timeline, cycles, modules, coverage, analytics |
 | [Knowledge](polier:api-knowledge) | pages, search, intake, task templates |
 | [Intelligence](polier:api-intelligence) | assistant, automations, GitHub |
+| [AI and integrations](polier:api-ai) | agents, skills, MCP server and connectors, GitHub account |

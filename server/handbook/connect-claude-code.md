@@ -1,6 +1,6 @@
 # Connect Claude Code
 
-Give your interactive Claude Code session the board as tools, without starting the dashboard.
+Give your interactive Claude Code session the board as tools, without starting the dashboard. For other clients (Claude Desktop, Cursor, VS Code) see [Polier MCP server](polier:mcp-server).
 
 ## Add the MCP server
 
@@ -20,6 +20,7 @@ Restart the session. Ask "what is ready to start?" and Claude calls `polier_disp
 | `polier_timeline`, `polier_cycles`, `polier_modules`, `polier_coverage`, `polier_analytics` | read | planning views |
 | `polier_pages`, `polier_page`, `polier_pages_search`, `polier_intake`, `polier_templates` | read | knowledge and templates |
 | `polier_automations`, `polier_github` | read | automation dry run, PRs and CI |
+| `polier_agents`, `polier_skills` | read | agent profiles and project skills |
 | `polier_state_set`, `polier_gate`, `polier_claim`, `polier_release` | write | lead actions |
 | `polier_intake_add`, `polier_inbox_read` | write | intake, read marks |
 

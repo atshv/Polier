@@ -21,6 +21,8 @@ Tools (JSON-RPC ``tools/call``):
     polier_gate       run one gate and return its record summary
     polier_claim      take the claim for a task
     polier_release    release the claim of a task
+    polier_agents     agent profiles (2.5)
+    polier_skills     project skills, or one skill with ?id (2.5)
 
 The server speaks newline-delimited JSON-RPC 2.0 on stdio (MCP stdio
 transport), runs on the Python standard library only, and writes nothing but
@@ -35,6 +37,7 @@ from typing import Any, Dict, List, Optional
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from core import agents as agents_mod  # noqa: E402
 from core import approvals as approvals_mod  # noqa: E402
 from core import board as board_mod  # noqa: E402
 from core import claims as claims_mod  # noqa: E402
@@ -53,6 +56,7 @@ from core import intake as intake_mod  # noqa: E402
 from core import modules as modules_mod  # noqa: E402
 from core import pages as pages_mod  # noqa: E402
 from core import settings as settings_mod  # noqa: E402
+from core import skills as skills_mod  # noqa: E402
 from core import state as state_mod  # noqa: E402
 from core import task_templates as templates_mod  # noqa: E402
 from core import timeline as timeline_mod  # noqa: E402
@@ -122,6 +126,10 @@ class Server:
                  "kind": {"type": "string"}, "priority": {"type": "string"}}, "required": ["title"]}},
             {"name": "polier_templates", "description": "Task templates (reusable scope, gates, labels and estimates).",
              "inputSchema": {"type": "object", "properties": {}}},
+            {"name": "polier_agents", "description": "Agent profiles: role, model, instructions, skills and connectors.",
+             "inputSchema": {"type": "object", "properties": {}}},
+            {"name": "polier_skills", "description": "Project skills (.claude/skills): name, when to use, instructions.",
+             "inputSchema": {"type": "object", "properties": {"id": {"type": "string", "description": "one skill with its body"}}}},
             {"name": "polier_timeline", "description": "Auto-scheduled timeline: stage lanes, task bars, critical path and planning dates.",
              "inputSchema": {"type": "object", "properties": {}}},
             {"name": "polier_cycles", "description": "Stages as cycles: progress, exit gates, owner decision, burndown and effort.",
@@ -269,6 +277,16 @@ class Server:
             return intake_mod.create(self.root, arguments, by="mcp", source="mcp")
         if name == "polier_templates":
             return {"templates": templates_mod.load_all(self.root)}
+        if name == "polier_agents":
+            return agents_mod.load(self.root)
+        if name == "polier_skills":
+            if _text(arguments.get("id")):
+                try:
+                    return skills_mod.get(self.root, _text(arguments.get("id")))
+                except KeyError:
+                    raise PolierError(f"unknown skill {arguments.get('id')}")
+            return {"skills": [{key: skill[key] for key in ("id", "name", "description", "path")}
+                               for skill in skills_mod.load_all(self.root)]}
         if name == "polier_timeline":
             return timeline_mod.build(self.root)
         if name == "polier_cycles":

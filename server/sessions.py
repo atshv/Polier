@@ -84,6 +84,8 @@ class Session:
         self.last_message: Optional[str] = None
         self.claimed = False
         self.stopped = threading.Event()
+        self.agent: Optional[str] = None
+        self.connectors: Dict[str, Dict[str, Any]] = {}
 
     def log(self, text: str) -> None:
         text = text.rstrip("\n")
@@ -117,6 +119,8 @@ class Session:
                 "prompt": self.prompt,
                 "claimed": self.claimed,
                 "last_message": self.last_message,
+                "agent": self.agent,
+                "connectors": sorted(self.connectors),
                 "lines": list(self.lines[-200:]),
             }
 
@@ -136,6 +140,8 @@ class SessionManager:
         self.folder = runtime_mod.sub(self.root, "sessions")
         self._sessions: Dict[str, Session] = {}
         self._lock = threading.Lock()
+        # Optional callable(role, only) -> {name: mcp server entry}, set by the app.
+        self.connector_source = None
 
     # -- configuration -----------------------------------------------------
     def settings(self) -> Dict[str, Any]:
@@ -200,7 +206,9 @@ class SessionManager:
               prompt: Optional[str] = None, note: Optional[str] = None,
               worktree: bool = False, model: Optional[str] = None,
               extra_env: Optional[Dict[str, str]] = None,
-              label: Optional[str] = None) -> Dict[str, Any]:
+              label: Optional[str] = None, addendum: Optional[str] = None,
+              agent: Optional[str] = None,
+              connectors: Optional[Dict[str, Dict[str, Any]]] = None) -> Dict[str, Any]:
         role = (role or "worker").strip()
         if role not in ROLES:
             raise PolierError(f"role must be one of {', '.join(ROLES)}")
@@ -226,8 +234,17 @@ class SessionManager:
             session = Session(session_id, task, role, folder)
             session.provider = str(self.config.get("provider") or "claude")
             session.model = model or self.config.get("model")
+            session.agent = agent
+            if connectors is None and self.connector_source is not None:
+                try:
+                    connectors = self.connector_source(role, None)
+                except Exception:  # noqa: BLE001 - a broken connector config must not block a session
+                    connectors = {}
+            session.connectors = dict(connectors or {})
             self._sessions[session_id] = session
         prompt_text = prompt if prompt is not None else self._compose_prompt(board or {}, task, role, note)
+        if addendum:
+            prompt_text = prompt_text.rstrip("\n") + "\n\n" + addendum.strip() + "\n"
         session.prompt = prompt_text
         runtime_mod.write_text(session.folder / "prompt.md", prompt_text)
         session.save_meta()
@@ -412,6 +429,17 @@ class SessionManager:
             argv += ["--model", str(session.model)]
         if settings is not None:
             argv += ["--settings", str(settings)]
+        if session.connectors:
+            config_path = session.folder / "mcp.json"
+            runtime_mod.write_json(config_path, {"mcpServers": session.connectors})
+            try:
+                os.chmod(config_path, 0o600)
+            except OSError:
+                pass
+            argv += ["--mcp-config", str(config_path)]
+            if isinstance(tools, list) and tools:
+                index = argv.index("--allowedTools") + 1
+                argv[index] = " ".join([argv[index]] + [f"mcp__{name}" for name in sorted(session.connectors)])
         if self.config.get("append_system_prompt"):
             argv += ["--append-system-prompt", str(self.config["append_system_prompt"])]
         argv.append(session.prompt)

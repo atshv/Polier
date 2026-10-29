@@ -17,7 +17,8 @@ const VIEW_GROUPS = [
   { key: 'work', label: '' },
   { key: 'plan', label: 'Plan' },
   { key: 'track', label: 'Track' },
-  { key: 'agents', label: 'Agents' },
+  { key: 'ai', label: 'AI' },
+  { key: 'integrations', label: 'Integrations' },
   { key: 'knowledge', label: 'Knowledge' },
   { key: 'system', label: '' }
 ];
@@ -36,10 +37,13 @@ const VIEWS = [
   { key: 'coverage', label: 'Coverage', group: 'track', feature: 'coverage' },
   { key: 'modules', label: 'Modules', group: 'track', feature: 'modules' },
   { key: 'analytics', label: 'Analytics', group: 'track', feature: 'analytics' },
-  { key: 'sessions', label: 'Sessions', group: 'agents' },
-  { key: 'assistant', label: 'Assistant', group: 'agents', feature: 'assistant' },
-  { key: 'automations', label: 'Automations', group: 'agents', feature: 'automations' },
-  { key: 'github', label: 'GitHub', group: 'agents', feature: 'github' },
+  { key: 'assistant', label: 'Assistant', group: 'ai', feature: 'assistant' },
+  { key: 'agents', label: 'Agents', group: 'ai', feature: 'agents' },
+  { key: 'sessions', label: 'Sessions', group: 'ai' },
+  { key: 'skills', label: 'Skills', group: 'ai', feature: 'skills' },
+  { key: 'mcp', label: 'MCP', group: 'ai', feature: 'mcp' },
+  { key: 'automations', label: 'Automations', group: 'ai', feature: 'automations' },
+  { key: 'github', label: 'GitHub', group: 'integrations', feature: 'github' },
   { key: 'pages', label: 'Pages', group: 'knowledge', feature: 'pages' },
   { key: 'intake', label: 'Intake', group: 'knowledge', feature: 'intake' },
   { key: 'settings', label: 'Settings', group: 'system' }
@@ -775,7 +779,10 @@ const FEATURE_NOTES = {
   intake: 'Proposals that become tasks after an accept decision.',
   assistant: 'Ask the project questions; conversations are local to this machine.',
   automations: 'Committed rules that suggest actions; dry run only, nothing executes.',
-  github: 'Read-only pull request and CI status through the gh CLI.'
+  github: 'Pull request and CI status through the gh CLI, and the GitHub account connection.',
+  agents: 'Agent profiles (role, model, instructions, skills, connectors) assigned to tasks.',
+  skills: 'Reusable agent instructions in .claude/skills/, inlined into session prompts.',
+  mcp: 'Polier as an MCP server for your AI clients, and MCP connectors for sessions.'
 };
 const FEATURE_LABELS = {
   inbox: 'Your Work and Inbox',
@@ -791,7 +798,10 @@ const FEATURE_LABELS = {
   intake: 'Intake',
   assistant: 'Assistant',
   automations: 'Automations',
-  github: 'GitHub'
+  github: 'GitHub',
+  agents: 'Agents',
+  skills: 'Skills',
+  mcp: 'MCP'
 };
 
 const FIELD_LABELS = {
@@ -2883,6 +2893,18 @@ function connectEvents() {
     });
   });
   source.addEventListener('job', () => { loadJobs(); });
+  source.addEventListener('agents', () => {
+    if (state.route.view === 'agents') loadAgents().then(() => { if (state.route.view === 'agents') renderView(); });
+  });
+  source.addEventListener('skills', () => {
+    if (state.route.view === 'skills' || state.route.view === 'agents') loadSkills().then(() => renderView());
+  });
+  source.addEventListener('mcp', () => {
+    if (state.route.view === 'mcp' && dom.modalBackdrop.hidden) loadMcp().then(() => { if (state.route.view === 'mcp') renderView(); });
+  });
+  source.addEventListener('github', () => {
+    if ((state.route.view === 'github' || state.route.view === 'settings') && dom.modalBackdrop.hidden) refreshGithubViews();
+  });
   source.addEventListener('session', (event) => {
     const payload = ssePayload(event);
     if (payload && payload.id && state.sessionsLoaded) {
@@ -3097,7 +3119,11 @@ async function refreshAll() {
   else if (view === 'plan') await Promise.all([loadPlan(), loadTaskTemplates()]);
   else if (view === 'sessions') await loadSessions({ quiet: true });
   else if (view === 'yourwork') await Promise.all([loadYourWork(), loadInbox()]);
-  else if (view === 'settings') await Promise.all([loadHealth(), loadTaskTemplates()]);
+  else if (view === 'settings') await Promise.all([loadHealth(), loadTaskTemplates(), loadGithubAuth()]);
+  else if (view === 'agents') await Promise.all([loadAgents(), loadSkills(), loadMcp()]);
+  else if (view === 'skills') await loadSkills();
+  else if (view === 'mcp') await loadMcp();
+  else if (view === 'github') await loadGithubAuth();
   else if (view === 'timeline') await loadTimeline();
   else if (view === 'cycles') await loadCycles();
   else if (view === 'modules') await loadModules();
@@ -3141,7 +3167,7 @@ async function loadViewData(view) {
     return rerender();
   }
   if (view === 'settings') {
-    await Promise.all([loadSettings(), loadConfig(), loadSnapshot(), loadViews(), loadHealth(), loadFilterFields(), loadTaskTemplates()]);
+    await Promise.all([loadSettings(), loadConfig(), loadSnapshot(), loadViews(), loadHealth(), loadFilterFields(), loadTaskTemplates(), loadGithubAuth()]);
     return rerender();
   }
   if (view === 'timeline') { await Promise.all([loadSnapshot(), loadTimeline()]); return rerender(); }
@@ -3171,9 +3197,15 @@ async function loadViewData(view) {
     return rerender();
   }
   if (view === 'github') {
-    await Promise.all([loadSnapshot(), loadGithub(false)]);
+    await Promise.all([loadSnapshot(), loadGithub(false), loadGithubAuth()]);
     return rerender();
   }
+  if (view === 'agents') {
+    await Promise.all([loadSnapshot(), loadAgents(), loadSkills(), loadMcp()]);
+    return rerender();
+  }
+  if (view === 'skills') { await loadSkills(); return rerender(); }
+  if (view === 'mcp') { await loadMcp(); return rerender(); }
 
   if (!state.snapshot && !state.noBoard && !state.snapshotError) await loadSnapshot();
   if (!state.packageOptions && !state.noBoard) await loadPackageOptions();
@@ -3255,6 +3287,9 @@ function renderView() {
     case 'assistant': renderAssistant(); break;
     case 'automations': renderAutomations(); break;
     case 'github': renderGithub(); break;
+    case 'agents': renderAgents(); break;
+    case 'skills': renderSkills(); break;
+    case 'mcp': renderMcp(); break;
     default: renderBoard();
   }
   restoreFocus(focus);
@@ -5881,14 +5916,27 @@ function drawerHandoffTab(task, detail) {
 function drawerSessionTab(task, detail) {
   const body = h('div');
   const form = drawerSessionForm();
+  if (feature('agents') && !state.agents && !state.agentsLoading) {
+    state.agentsLoading = true;
+    loadAgents().then(() => { state.agentsLoading = false; if (state.drawer.id) renderDrawer(); });
+  }
   const sessions = (state.sessions || []).filter((session) => session.task === task.id);
 
   const launch = h('div', { class: 'card-panel panel-pad', style: { marginBottom: '12px' } },
     h('div', { class: 'drawer-label', text: 'Launch a headless session' }),
     h('div', { class: 'col', style: { gap: '8px' } },
       h('div', { class: 'row-wrap' },
+        feature('agents') && agentList().length
+          ? agentSelect(form.agent || '', (value) => {
+            form.agent = value;
+            const agent = agentList().find((entry) => entry.id === value);
+            if (agent) form.worktree = Boolean(agent.worktree);
+            renderDrawer();
+          })
+          : null,
         h('select', {
           class: 'select', 'aria-label': 'Session role', style: { width: 'auto' },
+          disabled: Boolean(form.agent), title: form.agent ? 'The agent decides the role' : '',
           on: { change: (event) => { form.role = event.target.value; } }
         }, SESSION_ROLES.map((role) => {
           const option = h('option', { value: role, text: role });
@@ -5976,7 +6024,7 @@ function drawerSessionTab(task, detail) {
 }
 
 function drawerSessionForm() {
-  if (!state.drawer.sessionForm) state.drawer.sessionForm = { role: 'worker', worktree: false, note: '' };
+  if (!state.drawer.sessionForm) state.drawer.sessionForm = { role: 'worker', agent: '', worktree: false, note: '' };
   return state.drawer.sessionForm;
 }
 
@@ -5989,7 +6037,7 @@ async function launchDrawerSession() {
   try {
     const session = await api('/api/sessions', {
       method: 'POST',
-      body: { task: task.id, role: form.role, note: form.note || '', worktree: Boolean(form.worktree) }
+      body: { task: task.id, role: form.role, agent: form.agent || undefined, note: form.note || '', worktree: Boolean(form.worktree) }
     });
     toast('Session ' + session.id + ' started', 'ok');
     await loadSessions({ quiet: true });
@@ -6343,7 +6391,8 @@ function renderInboxPanel() {
    ========================================================================= */
 
 const FEATURE_ORDER = ['inbox', 'worklog', 'views', 'labels', 'timeline', 'cycles',
-  'modules', 'coverage', 'analytics', 'pages', 'intake', 'assistant', 'automations', 'github'];
+  'modules', 'coverage', 'analytics', 'pages', 'intake', 'assistant', 'agents', 'skills', 'mcp',
+  'automations', 'github'];
 
 function settingsUI() {
   if (!state.settingsUI) {
@@ -6410,6 +6459,14 @@ function renderSettings() {
   view.appendChild(renderSettingsGeneral(project, config, health));
   view.appendChild(renderSettingsFeatures(ui));
   if (feature('labels')) view.appendChild(renderSettingsLabels(ui));
+  view.appendChild(h('section', { class: 'card-panel settings-section' },
+    h('div', { class: 'panel-head' }, h('span', { class: 'panel-title', text: 'Integrations' }),
+      h('span', { class: 'hint', text: 'This machine' })),
+    h('div', { class: 'panel-body' },
+      renderGithubAccount(),
+      h('div', { class: 'row-wrap' },
+        feature('mcp') ? h('button', { class: 'btn btn-sm', type: 'button', text: 'MCP server and connectors →', on: { click: () => navigate('mcp') } }) : null,
+        feature('agents') ? h('button', { class: 'btn btn-sm', type: 'button', text: 'Agents →', on: { click: () => navigate('agents') } }) : null))));
   view.appendChild(renderSettingsSessions(config, ui));
   view.appendChild(renderSettingsGates(config, ui));
   view.appendChild(renderSettingsTemplates(ui, config));
@@ -7919,6 +7976,7 @@ const KB_START = [
   { page: 'polier:quickstart', icon: '→', text: 'Start the dashboard and take a task from pending to done.' },
   { page: 'polier:concepts', icon: '◇', text: 'Board, statuses, gates, claims and approvals in five minutes.' },
   { page: 'polier:run-a-task', icon: '✓', text: 'Every checkpoint of a task, from the dashboard and the CLI.' },
+  { page: 'polier:ai-overview', icon: '✦', text: 'Assistant, agents, skills and MCP — and how they stay inside the rules.' },
   { page: 'polier:api-introduction', icon: '{}', text: 'Script the dashboard from your own tools and CI.' }
 ];
 
@@ -9548,6 +9606,8 @@ function renderGithub() {
         on: { click: () => loadGithub(true) }
       }))));
 
+  view.appendChild(renderGithubAccount());
+
   if (state.githubLoading && !data) {
     view.appendChild(loadingRow('Asking gh for pull requests and runs…'));
     return;
@@ -9575,8 +9635,8 @@ function renderGithub() {
       h('span', { text: '2. Install the GitHub CLI:' }),
       h('code', { text: 'brew install gh' })));
     hints.appendChild(h('div', { class: 'github-hint' },
-      h('span', { text: '3. Authenticate:' }),
-      h('code', { text: 'gh auth login' })));
+      h('span', { text: '3. Connect your account above (or run' }),
+      h('code', { text: 'gh auth login' }), h('span', { text: ')' })));
     hints.appendChild(h('div', { class: 'github-hint' },
       h('span', { text: '4. Refresh this panel.' })));
     card.appendChild(hints);
@@ -9694,6 +9754,849 @@ function renderGithub() {
 /* =========================================================================
    2.4 — Bulk operations and the command palette
    ========================================================================= */
+
+/* =========================================================================
+   2.5 — AI: agents, skills, MCP server and connectors; GitHub account
+   ========================================================================= */
+
+async function loadAgents() {
+  try {
+    state.agents = await api('/api/agents');
+    state.agentsError = null;
+  } catch (err) {
+    state.agentsError = err;
+  }
+  return state.agents;
+}
+
+async function loadSkills() {
+  try {
+    state.skills = await api('/api/skills');
+    state.skillsError = null;
+  } catch (err) {
+    state.skillsError = err;
+  }
+  return state.skills;
+}
+
+async function loadMcp() {
+  try {
+    state.mcp = await api('/api/mcp');
+    state.mcpError = null;
+  } catch (err) {
+    state.mcpError = err;
+  }
+  return state.mcp;
+}
+
+async function loadGithubAuth() {
+  try {
+    state.githubAuth = await api('/api/github/auth');
+  } catch (err) {
+    state.githubAuth = { auth: { gh: false, logged_in: false, reason: describeError(err) }, login: { status: 'idle' } };
+  }
+  return state.githubAuth;
+}
+
+function aiViewHead(title, sub, actions) {
+  return h('div', { class: 'view-head' },
+    h('div', {}, h('h1', { class: 'view-title', text: title }), h('p', { class: 'view-sub', text: sub })),
+    h('div', { class: 'view-actions' }, actions || []));
+}
+
+function guideLink(pageId, label) {
+  return h('button', {
+    class: 'btn btn-sm btn-ghost', type: 'button', text: label || 'Guide',
+    title: 'Open the handbook page', on: { click: () => openPage('polier:' + pageId) }
+  });
+}
+
+function skillById(skillId) {
+  const data = state.skills || {};
+  return (data.skills || []).find((skill) => skill.id === skillId) ||
+    (data.examples || []).find((skill) => skill.id === skillId) || null;
+}
+
+function fieldRow(label, control, help) {
+  return h('label', { class: 'field' },
+    h('span', { class: 'field-label', text: label }), control,
+    help ? h('span', { class: 'field-help', text: help }) : null);
+}
+
+/* ---------- Agents ---------- */
+
+function agentList() {
+  return (state.agents && state.agents.agents) || [];
+}
+
+function renderAgents() {
+  const view = h('div', { class: 'ai-view' });
+  dom.view.appendChild(view);
+  const data = state.agents;
+  view.appendChild(aiViewHead('Agents',
+    'Reusable agent profiles: a role, a model, instructions, skills and MCP connectors. Assign one to a task to start a headless session.',
+    [guideLink('agents', 'How agents work'),
+      h('button', {
+        class: 'btn btn-sm btn-primary', type: 'button', text: 'New agent', disabled: !canWrite(),
+        on: { click: () => openAgentEditor(null) }
+      })]));
+  if (state.agentsError) { view.appendChild(errorCallout(state.agentsError)); return; }
+  if (!data) { view.appendChild(loadingRow('Loading agents…')); return; }
+  if (data.builtin) {
+    view.appendChild(h('div', { class: 'callout callout-info ai-note' },
+      h('div', { text: 'These are the built-in profiles. Editing one writes agents.json to the project, so the team shares the same agents.' })));
+  }
+  for (const problem of data.errors || []) view.appendChild(h('div', { class: 'callout callout-warn', text: problem }));
+
+  const grid = h('div', { class: 'ai-grid' });
+  for (const agent of agentList()) {
+    const skills = h('div', { class: 'tag-row' });
+    for (const skillId of agent.skills) {
+      const missing = (agent.missing_skills || []).indexOf(skillId) !== -1;
+      const skill = skillById(skillId);
+      skills.appendChild(h('span', { class: 'chip' + (missing ? ' chip-warn' : ''), title: missing ? 'Skill not found' : (skill ? skill.description : skillId),
+        text: skill ? skill.name : skillId }));
+    }
+    const connectors = h('div', { class: 'tag-row' });
+    const connectorNames = agent.connectors.length ? agent.connectors : ['all enabled for ' + agent.role];
+    for (const name of connectorNames) {
+      const missing = (agent.missing_connectors || []).indexOf(name) !== -1;
+      connectors.appendChild(h('span', { class: 'chip mono' + (missing ? ' chip-warn' : ''), title: missing ? 'Connector not configured on this machine' : '', text: name }));
+    }
+    grid.appendChild(h('article', { class: 'card-panel ai-card' },
+      h('div', { class: 'ai-card-head' },
+        h('span', { class: 'ai-avatar', 'aria-hidden': 'true', text: (agent.name || '?').charAt(0).toUpperCase() }),
+        h('div', { class: 'ai-card-title' },
+          h('span', { class: 'panel-title', text: agent.name }),
+          h('span', { class: 'hint', text: agent.role + (agent.model ? ' · ' + agent.model : ' · default model') + (agent.worktree ? ' · worktree' : '') }))),
+      agent.description ? h('p', { class: 'ai-card-text', text: agent.description }) : null,
+      h('div', { class: 'ai-card-section' }, h('span', { class: 'drawer-label', text: 'Skills' }),
+        agent.skills.length ? skills : h('span', { class: 'hint', text: 'none' })),
+      h('div', { class: 'ai-card-section' }, h('span', { class: 'drawer-label', text: 'Connectors' }), connectors),
+      h('div', { class: 'ai-card-actions' },
+        h('button', {
+          class: 'btn btn-sm btn-primary', type: 'button', text: 'Assign to a task…', disabled: !canWrite(),
+          on: { click: () => openAgentRun(agent) }
+        }),
+        h('button', { class: 'btn btn-sm', type: 'button', text: 'Edit', disabled: !canWrite(), on: { click: () => openAgentEditor(agent) } }),
+        h('button', { class: 'btn btn-sm btn-danger', type: 'button', text: 'Delete', disabled: !canWrite(), on: { click: () => deleteAgent(agent) } }))));
+  }
+  if (!agentList().length) {
+    grid.appendChild(emptyState('No agents', 'Create a profile to assign work to an agent.', null));
+  }
+  view.appendChild(grid);
+}
+
+async function saveAgents(agents) {
+  const strip = (agent) => ({
+    id: agent.id, name: agent.name, role: agent.role, description: agent.description || '',
+    model: agent.model || null, instructions: agent.instructions || '',
+    skills: agent.skills || [], connectors: agent.connectors || [], worktree: Boolean(agent.worktree)
+  });
+  state.agents = await api('/api/agents', { method: 'PUT', body: { agents: agents.map(strip) } });
+  await loadAgents();
+  renderView();
+}
+
+async function deleteAgent(agent) {
+  const ok = await confirmDialog({ title: 'Delete agent', message: 'Delete the agent "' + agent.name + '"? Running sessions are not affected.', confirmLabel: 'Delete', danger: true });
+  if (!ok) return;
+  try {
+    await saveAgents(agentList().filter((entry) => entry.id !== agent.id));
+    toast('Agent deleted', 'ok');
+  } catch (err) {
+    toast('Agents: ' + describeError(err), 'error');
+  }
+}
+
+function checkboxGroup(options, selected, onChange) {
+  const host = h('div', { class: 'ai-checks' });
+  if (!options.length) host.appendChild(h('span', { class: 'hint', text: 'Nothing to choose yet.' }));
+  for (const option of options) {
+    host.appendChild(h('label', { class: 'checkbox', title: option.title || '' },
+      h('input', {
+        type: 'checkbox', checked: selected.indexOf(option.value) !== -1,
+        on: {
+          change: (event) => {
+            const next = selected.filter((value) => value !== option.value);
+            if (event.target.checked) next.push(option.value);
+            selected.splice(0, selected.length, ...next);
+            if (onChange) onChange(selected);
+          }
+        }
+      }),
+      h('span', { text: option.label })));
+  }
+  return host;
+}
+
+async function openAgentEditor(agent) {
+  if (!state.skills) await loadSkills();
+  if (!state.mcp) await loadMcp();
+  const draft = agent
+    ? JSON.parse(JSON.stringify(agent))
+    : { id: '', name: '', role: 'worker', description: '', model: '', instructions: '', skills: [], connectors: [], worktree: true };
+  const error = h('div', { class: 'inline-error' });
+  const input = (key, attrs) => {
+    const node = h('input', Object.assign({ class: 'input', type: 'text', value: draft[key] || '' }, attrs || {}));
+    node.addEventListener('input', () => { draft[key] = node.value; });
+    return node;
+  };
+  const idInput = input('id', { placeholder: 'e.g. frontend-builder', disabled: Boolean(agent), 'data-autofocus': agent ? null : '1' });
+  const nameInput = input('name', { placeholder: 'Frontend builder', 'data-autofocus': agent ? '1' : null });
+  nameInput.addEventListener('input', () => { if (!agent && !idInput.dataset.touched) { draft.id = slugify(nameInput.value); idInput.value = draft.id; } });
+  idInput.addEventListener('input', () => { idInput.dataset.touched = '1'; });
+  const roleSelect = h('select', { class: 'select', on: { change: (event) => { draft.role = event.target.value; } } },
+    ['worker', 'reviewer', 'lead'].map((role) => {
+      const option = h('option', { value: role, text: { worker: 'worker — implements a task', reviewer: 'reviewer — writes the verdict', lead: 'lead — gates and status' }[role] });
+      if (draft.role === role) option.selected = true;
+      return option;
+    }));
+  const instructions = h('textarea', { class: 'textarea', rows: '5', placeholder: 'Standing instructions, e.g. "Prefer small commits. UI work follows docs/design-rules.md."' });
+  instructions.value = draft.instructions || '';
+  instructions.addEventListener('input', () => { draft.instructions = instructions.value; });
+  const skillOptions = [];
+  const seen = new Set();
+  for (const skill of ((state.skills && state.skills.skills) || []).concat((state.skills && state.skills.examples) || [])) {
+    if (seen.has(skill.id)) continue;
+    seen.add(skill.id);
+    skillOptions.push({ value: skill.id, label: skill.name + (skill.source === 'example' && !skill.installed ? ' (example)' : ''), title: skill.description });
+  }
+  const connectorOptions = ((state.mcp && state.mcp.connectors) || []).map((entry) => ({ value: entry.name, label: entry.name + (entry.enabled ? '' : ' (off)'), title: entry.description }));
+  const worktree = h('label', { class: 'checkbox' },
+    h('input', { type: 'checkbox', checked: Boolean(draft.worktree), on: { change: (event) => { draft.worktree = event.target.checked; } } }),
+    'Run in a task worktree by default');
+
+  const body = h('div', { class: 'col' },
+    h('div', { class: 'form-grid' },
+      fieldRow('Name', nameInput),
+      fieldRow('ID', idInput, agent ? 'IDs do not change.' : 'Lowercase; used in the API and in agents.json.'),
+      fieldRow('Role', roleSelect, 'Decides what the write guard allows.'),
+      fieldRow('Model', input('model', { placeholder: 'default from Settings → Sessions' }))),
+    fieldRow('Description', input('description', { placeholder: 'One line: what this agent is for' })),
+    fieldRow('Instructions', instructions),
+    h('div', { class: 'field' }, h('span', { class: 'field-label', text: 'Skills' }),
+      checkboxGroup(skillOptions, draft.skills)),
+    h('div', { class: 'field' }, h('span', { class: 'field-label', text: 'MCP connectors' }),
+      checkboxGroup(connectorOptions, draft.connectors),
+      h('span', { class: 'field-help', text: 'None ticked: every connector enabled for the role. Connectors are configured per machine under MCP.' })),
+    worktree, error);
+
+  openModal({
+    title: agent ? 'Edit agent' : 'New agent',
+    body: body,
+    footer: [
+      h('button', { class: 'btn', type: 'button', text: 'Cancel', on: { click: () => closeModal() } }),
+      h('button', {
+        class: 'btn btn-primary', type: 'button', text: 'Save agent',
+        on: {
+          click: async () => {
+            const list = agentList().filter((entry) => !agent || entry.id !== agent.id);
+            draft.id = String(draft.id || '').trim();
+            if (!agent && list.some((entry) => entry.id === draft.id)) { error.textContent = 'An agent with this ID exists.'; return; }
+            const index = agent ? agentList().findIndex((entry) => entry.id === agent.id) : list.length;
+            list.splice(index, 0, draft);
+            try {
+              await saveAgents(list);
+              closeModal();
+              toast('Agent saved to agents.json', 'ok');
+            } catch (err) {
+              error.textContent = describeError(err);
+            }
+          }
+        }
+      })
+    ]
+  });
+}
+
+function openAgentRun(agent, presetTask) {
+  const tasks = (state.snapshot && state.snapshot.tasks) || [];
+  const form = { task: presetTask || '', note: '', worktree: Boolean(agent.worktree) };
+  const open = tasks.filter((task) => task.status !== 'done');
+  const select = h('select', { class: 'select', 'data-autofocus': '1', on: { change: (event) => { form.task = event.target.value; } } },
+    h('option', { value: '', text: agent.role === 'worker' ? 'Choose a task…' : 'No task (free session)' }),
+    open.map((task) => {
+      const option = h('option', { value: task.id, text: task.id + ' · ' + (task.title || '') + ' (' + stMeta(task.status).label + ')' });
+      if (form.task === task.id) option.selected = true;
+      return option;
+    }));
+  const note = h('textarea', { class: 'textarea', rows: '3', placeholder: 'Optional note for this run' });
+  note.addEventListener('input', () => { form.note = note.value; });
+  const error = h('div', { class: 'inline-error' });
+  openModal({
+    title: 'Assign ' + agent.name,
+    body: h('div', { class: 'col' },
+      h('p', { class: 'hint', text: 'Starts a headless ' + agent.role + ' session with this agent\'s instructions, skills and connectors. The session claims the task and runs under the write guard.' }),
+      fieldRow('Task', select),
+      fieldRow('Note', note),
+      h('label', { class: 'checkbox' },
+        h('input', { type: 'checkbox', checked: form.worktree, on: { change: (event) => { form.worktree = event.target.checked; } } }),
+        'Run in a task worktree'),
+      error),
+    footer: [
+      h('button', { class: 'btn', type: 'button', text: 'Cancel', on: { click: () => closeModal() } }),
+      h('button', {
+        class: 'btn btn-primary', type: 'button', text: 'Start session',
+        on: {
+          click: async () => {
+            if (agent.role === 'worker' && !form.task) { error.textContent = 'A worker needs a task.'; return; }
+            try {
+              const session = await api('/api/sessions', { method: 'POST', body: { agent: agent.id, task: form.task || null, note: form.note, worktree: form.worktree } });
+              closeModal();
+              toast(agent.name + ' started (' + session.id + ')', 'ok');
+              state.sessionSelected = session.id;
+              navigate('sessions');
+            } catch (err) {
+              error.textContent = describeError(err);
+            }
+          }
+        }
+      })
+    ]
+  });
+}
+
+/* A select of agents for the session forms; '' means "plain role". */
+function agentSelect(value, onChange) {
+  const select = h('select', { class: 'select', 'aria-label': 'Agent', on: { change: (event) => onChange(event.target.value) } },
+    h('option', { value: '', text: 'No agent (plain role)' }),
+    agentList().map((agent) => {
+      const option = h('option', { value: agent.id, text: agent.name + ' · ' + agent.role });
+      if (value === agent.id) option.selected = true;
+      return option;
+    }));
+  select.value = value || '';
+  return select;
+}
+
+/* ---------- Skills ---------- */
+
+function renderSkills() {
+  const view = h('div', { class: 'ai-view' });
+  dom.view.appendChild(view);
+  const data = state.skills;
+  view.appendChild(aiViewHead('Skills',
+    'Reusable instructions agents follow when their description applies. Stored as .claude/skills/<id>/SKILL.md — interactive Claude Code finds them too.',
+    [guideLink('skills', 'About skills'),
+      h('button', { class: 'btn btn-sm btn-primary', type: 'button', text: 'New skill', disabled: !canWrite(), on: { click: () => openSkillEditor(null) } })]));
+  if (state.skillsError) { view.appendChild(errorCallout(state.skillsError)); return; }
+  if (!data) { view.appendChild(loadingRow('Loading skills…')); return; }
+
+  view.appendChild(h('h2', { class: 'section-title ai-section-title', text: 'In this project · ' + data.skills.length }));
+  if (!data.skills.length) {
+    view.appendChild(emptyState('No skills in this project yet', 'Add the examples below or write your own. A skill is a name, a description of when to use it, and instructions.', null));
+  }
+  const grid = h('div', { class: 'ai-grid' });
+  for (const skill of data.skills) {
+    grid.appendChild(h('article', { class: 'card-panel ai-card' },
+      h('div', { class: 'ai-card-title' }, h('span', { class: 'panel-title', text: skill.name }), h('span', { class: 'hint mono', text: skill.path })),
+      h('p', { class: 'ai-card-text', text: skill.description }),
+      h('div', { class: 'ai-card-actions' },
+        h('button', { class: 'btn btn-sm', type: 'button', text: 'Edit', disabled: !canWrite(), on: { click: () => openSkillEditor(skill) } }),
+        h('button', { class: 'btn btn-sm btn-danger', type: 'button', text: 'Delete', disabled: !canWrite(), on: { click: () => deleteSkill(skill) } }))));
+  }
+  view.appendChild(grid);
+
+  const examples = data.examples || [];
+  const missing = examples.filter((skill) => !skill.installed);
+  view.appendChild(h('div', { class: 'between ai-section-title' },
+    h('h2', { class: 'section-title', text: 'Examples shipped with Polier' }),
+    missing.length ? h('button', { class: 'btn btn-sm', type: 'button', text: 'Add all ' + missing.length, disabled: !canWrite(), on: { click: () => installSkillExamples(null) } }) : null));
+  const exampleGrid = h('div', { class: 'ai-grid' });
+  for (const skill of examples) {
+    exampleGrid.appendChild(h('article', { class: 'card-panel ai-card is-example' },
+      h('div', { class: 'ai-card-title' }, h('span', { class: 'panel-title', text: skill.name })),
+      h('p', { class: 'ai-card-text', text: skill.description }),
+      h('div', { class: 'ai-card-actions' },
+        skill.installed
+          ? h('span', { class: 'badge bg-green st-green', text: 'added' })
+          : h('button', { class: 'btn btn-sm', type: 'button', text: 'Add to project', disabled: !canWrite(), on: { click: () => installSkillExamples([skill.id]) } }),
+        h('button', { class: 'btn btn-sm btn-ghost', type: 'button', text: 'Preview', on: { click: () => previewSkill(skill) } }))));
+  }
+  view.appendChild(exampleGrid);
+}
+
+function previewSkill(skill) {
+  openModal({
+    title: skill.name,
+    body: h('div', { class: 'col' }, h('p', { class: 'hint', text: skill.description }), h('div', { class: 'md' }, mdFragment(skill.body || ''))),
+    footer: [h('button', { class: 'btn btn-primary', type: 'button', text: 'Close', on: { click: () => closeModal() } })]
+  });
+}
+
+async function installSkillExamples(ids) {
+  try {
+    const result = await api('/api/skills/examples', { method: 'POST', body: ids ? { ids: ids } : {} });
+    toast(result.installed.length ? 'Added ' + result.installed.join(', ') : 'Nothing to add', 'ok');
+    await loadSkills();
+    renderView();
+  } catch (err) {
+    toast('Skills: ' + describeError(err), 'error');
+  }
+}
+
+async function deleteSkill(skill) {
+  const ok = await confirmDialog({ title: 'Delete skill', message: 'Delete ' + skill.path + '? Agents that list it skip it from now on.', confirmLabel: 'Delete', danger: true });
+  if (!ok) return;
+  try {
+    await api('/api/skills/' + encodeURIComponent(skill.id), { method: 'DELETE' });
+    await loadSkills();
+    renderView();
+  } catch (err) {
+    toast('Skills: ' + describeError(err), 'error');
+  }
+}
+
+function openSkillEditor(skill) {
+  const draft = skill ? { id: skill.id, name: skill.name, description: skill.description, body: skill.body } : { id: '', name: '', description: '', body: '' };
+  const error = h('div', { class: 'inline-error' });
+  const idInput = h('input', { class: 'input', type: 'text', value: draft.id, disabled: Boolean(skill), placeholder: 'e.g. api-conventions' });
+  idInput.addEventListener('input', () => { draft.id = idInput.value; idInput.dataset.touched = '1'; });
+  const nameInput = h('input', { class: 'input', type: 'text', value: draft.name, placeholder: 'API conventions', 'data-autofocus': '1' });
+  nameInput.addEventListener('input', () => { draft.name = nameInput.value; if (!skill && !idInput.dataset.touched) { draft.id = slugify(nameInput.value); idInput.value = draft.id; } });
+  const description = h('input', { class: 'input', type: 'text', value: draft.description, placeholder: 'Use when … (the agent decides from this line)' });
+  description.addEventListener('input', () => { draft.description = description.value; });
+  const body = h('textarea', { class: 'textarea mono', rows: '12', placeholder: 'Steps, rules and examples in Markdown' });
+  body.value = draft.body || '';
+  body.addEventListener('input', () => { draft.body = body.value; });
+  openModal({
+    title: skill ? 'Edit skill' : 'New skill',
+    body: h('div', { class: 'col' },
+      h('div', { class: 'form-grid' }, fieldRow('Name', nameInput), fieldRow('ID', idInput, 'Folder name under .claude/skills/')),
+      fieldRow('When to use it', description, 'One sentence. Agents read this to decide whether the skill applies.'),
+      fieldRow('Instructions', body), error),
+    footer: [
+      h('button', { class: 'btn', type: 'button', text: 'Cancel', on: { click: () => closeModal() } }),
+      h('button', {
+        class: 'btn btn-primary', type: 'button', text: 'Save skill',
+        on: {
+          click: async () => {
+            try {
+              await api('/api/skills/' + encodeURIComponent(String(draft.id || '').trim()), { method: 'PUT', body: draft });
+              closeModal();
+              toast('Skill saved', 'ok');
+              await loadSkills();
+              renderView();
+            } catch (err) {
+              error.textContent = describeError(err);
+            }
+          }
+        }
+      })
+    ]
+  });
+}
+
+/* ---------- MCP: Polier's server and the connectors ---------- */
+
+const MCP_CLIENTS = ['Claude Code', 'Claude Desktop', 'Cursor', 'VS Code', 'Other'];
+
+function mcpClientSnippet(client, server, readOnly) {
+  const args = [server.script, '--root', server.root].concat(readOnly ? ['--read-only'] : []);
+  const quoted = (value) => /[\s"']/.test(value) ? JSON.stringify(value) : value;
+  const entry = { command: server.python, args: args };
+  if (client === 'Claude Code') {
+    return { lang: 'bash', text: 'claude mcp add polier -- ' + [server.python].concat(args).map(quoted).join(' ') };
+  }
+  if (client === 'Claude Desktop') {
+    return { lang: 'json', text: JSON.stringify({ mcpServers: { polier: entry } }, null, 2), file: 'claude_desktop_config.json (Settings → Developer → Edit Config)' };
+  }
+  if (client === 'Cursor') {
+    return { lang: 'json', text: JSON.stringify({ mcpServers: { polier: entry } }, null, 2), file: '.cursor/mcp.json in the project' };
+  }
+  if (client === 'VS Code') {
+    return { lang: 'json', text: JSON.stringify({ servers: { polier: Object.assign({ type: 'stdio' }, entry) } }, null, 2), file: '.vscode/mcp.json in the project' };
+  }
+  return { lang: 'text', text: 'command: ' + server.python + '\nargs:    ' + args.join(' ') + '\ntransport: stdio (newline-delimited JSON-RPC 2.0)' };
+}
+
+function renderMcp() {
+  const view = h('div', { class: 'ai-view' });
+  dom.view.appendChild(view);
+  const data = state.mcp;
+  const tab = state.mcpTab || 'server';
+  view.appendChild(aiViewHead('MCP',
+    'The Model Context Protocol connects AI tools. Polier is an MCP server for your own AI clients, and agent sessions can use other MCP servers as connectors.',
+    [guideLink(tab === 'server' ? 'mcp-server' : 'mcp-connectors', 'Guide'),
+      h('button', { class: 'btn btn-sm', type: 'button', text: 'Refresh', on: { click: async () => { await loadMcp(); renderView(); } } })]));
+  const tabs = h('div', { class: 'seg', role: 'tablist' });
+  for (const [key, label] of [['server', 'Polier MCP server'], ['connectors', 'Connectors']]) {
+    tabs.appendChild(h('button', {
+      class: 'seg-btn' + (tab === key ? ' is-active' : ''), type: 'button', role: 'tab', 'aria-selected': tab === key ? 'true' : 'false', text: label,
+      on: { click: () => { state.mcpTab = key; renderView(); } }
+    }));
+  }
+  view.appendChild(tabs);
+  if (state.mcpError) { view.appendChild(errorCallout(state.mcpError)); return; }
+  if (!data) { view.appendChild(loadingRow('Loading MCP settings…')); return; }
+  view.appendChild(tab === 'server' ? renderMcpServer(data) : renderMcpConnectors(data));
+}
+
+function renderMcpServer(data) {
+  const wrap = h('div', { class: 'col ai-stack' });
+  const server = data.server || {};
+  const client = state.mcpClient || 'Claude Code';
+  const readOnly = state.mcpReadOnly !== false;
+
+  const connect = h('section', { class: 'card-panel panel-pad' });
+  connect.appendChild(h('div', { class: 'between' },
+    h('div', { class: 'panel-title', text: 'Connect an AI client' }),
+    h('label', { class: 'checkbox', title: 'Without --read-only, write tools (status changes, gates, claims) are offered too.' },
+      h('input', { type: 'checkbox', checked: readOnly, on: { change: (event) => { state.mcpReadOnly = event.target.checked; renderView(); } } }),
+      'read-only')));
+  connect.appendChild(h('p', { class: 'hint', text: 'Your client starts Polier\'s server itself (stdio). Paths below are for this machine and this project.' }));
+  const clients = h('div', { class: 'seg seg-sm' });
+  for (const name of MCP_CLIENTS) {
+    clients.appendChild(h('button', { class: 'seg-btn' + (client === name ? ' is-active' : ''), type: 'button', text: name, on: { click: () => { state.mcpClient = name; renderView(); } } }));
+  }
+  connect.appendChild(clients);
+  const snippet = mcpClientSnippet(client, server, readOnly);
+  if (snippet.file) connect.appendChild(h('p', { class: 'hint', text: 'Add to ' + snippet.file + ':' }));
+  connect.appendChild(h('div', { class: 'md' }, mdCodeBlock(snippet.lang, snippet.text)));
+  connect.appendChild(h('div', { class: 'row-wrap', style: { marginTop: '10px' } },
+    h('button', { class: 'btn btn-sm', type: 'button', text: 'Test the server', on: { click: (event) => testConnector('polier', event.currentTarget) } }),
+    h('span', { class: 'hint', id: 'mcp-test-polier', text: 'Starts the server once and lists its tools.' })));
+  wrap.appendChild(connect);
+
+  const tools = server.tools || [];
+  const writeTools = new Set(['polier_state_set', 'polier_gate', 'polier_claim', 'polier_release', 'polier_intake_add', 'polier_inbox_read']);
+  const table = h('table', { class: 'md-tbl' },
+    h('thead', {}, h('tr', {}, h('th', { text: 'Tool' }), h('th', { text: 'Access' }), h('th', { text: 'What it does' }))),
+    h('tbody', {}, tools.map((tool) => h('tr', {},
+      h('td', {}, h('code', { class: 'md-inline-code', text: tool.name })),
+      h('td', {}, h('span', { class: 'badge ' + (writeTools.has(tool.name) ? 'bg-amber st-amber' : 'bg-neutral st-neutral'), text: writeTools.has(tool.name) ? 'write' : 'read' })),
+      h('td', { text: tool.description })))));
+  wrap.appendChild(h('section', { class: 'card-panel panel-pad' },
+    h('div', { class: 'panel-title', text: tools.length + ' tools' }),
+    h('p', { class: 'hint', text: 'Write tools are refused when the server runs with --read-only.' }),
+    h('div', { class: 'md-table-wrap', style: { marginTop: '10px' } }, table)));
+  return wrap;
+}
+
+const CONNECTOR_PRESETS = [
+  { label: 'GitHub (remote)', name: 'github', entry: { type: 'http', url: 'https://api.githubcopilot.com/mcp/', headers: { Authorization: 'Bearer <github token>' }, description: 'Issues, pull requests and code on GitHub.' } },
+  { label: 'Filesystem', name: 'files', entry: { type: 'stdio', command: 'npx', args: ['-y', '@modelcontextprotocol/server-filesystem', '<folder>'], description: 'Read files outside the project.' } },
+  { label: 'Fetch', name: 'fetch', entry: { type: 'stdio', command: 'uvx', args: ['mcp-server-fetch'], description: 'Fetch web pages as Markdown.' } },
+  { label: 'Playwright browser', name: 'browser', entry: { type: 'stdio', command: 'npx', args: ['@playwright/mcp@latest'], description: 'Drive a browser to check the UI.' } }
+];
+
+function renderMcpConnectors(data) {
+  const wrap = h('div', { class: 'col ai-stack' });
+  wrap.appendChild(h('div', { class: 'between' },
+    h('p', { class: 'hint', text: 'Connectors are MCP servers that headless sessions and the assistant get as tools. They are stored on this machine only (secrets are masked) and passed to Claude Code with --mcp-config.' }),
+    h('button', { class: 'btn btn-sm btn-primary', type: 'button', text: 'Add connector', disabled: !canWrite(), on: { click: () => openConnectorEditor(null) } })));
+  for (const entry of data.connectors || []) {
+    const target = entry.type === 'http' ? entry.url : [entry.command].concat(entry.args || []).join(' ');
+    const card = h('article', { class: 'card-panel ai-connector' + (entry.enabled ? '' : ' is-off') },
+      h('div', { class: 'ai-connector-main' },
+        h('div', { class: 'row-wrap' },
+          h('span', { class: 'panel-title mono', text: entry.name }),
+          h('span', { class: 'badge bg-neutral st-neutral', text: entry.type }),
+          entry.builtin ? h('span', { class: 'badge bg-blue st-blue', text: 'built-in' }) : null,
+          entry.builtin && entry.read_only ? h('span', { class: 'badge bg-neutral st-neutral', text: 'read-only' }) : null,
+          (entry.errors || []).length ? h('span', { class: 'badge bg-red st-red', title: entry.errors.join('\n'), text: 'invalid' }) : null),
+        entry.description ? h('div', { class: 'hint', text: entry.description }) : null,
+        h('code', { class: 'ai-connector-target', text: target }),
+        h('div', { class: 'hint', text: 'roles: ' + (entry.roles || []).join(', ') }),
+        h('div', { class: 'hint', id: 'mcp-test-' + entry.name })),
+      h('div', { class: 'ai-connector-side' },
+        h('label', { class: 'checkbox' },
+          h('input', { type: 'checkbox', checked: entry.enabled, disabled: !canWrite(), on: { change: (event) => updateConnector(entry, { enabled: event.target.checked }) } }),
+          'enabled'),
+        entry.builtin ? h('label', { class: 'checkbox', title: 'Lead sessions may use write tools when this is off' },
+          h('input', { type: 'checkbox', checked: entry.read_only, disabled: !canWrite(), on: { change: (event) => updateConnector(entry, { read_only: event.target.checked }) } }),
+          'read-only') : null,
+        h('div', { class: 'row-wrap' },
+          h('button', { class: 'btn btn-sm', type: 'button', text: 'Test', on: { click: (event) => testConnector(entry.name, event.currentTarget) } }),
+          entry.builtin ? null : h('button', { class: 'btn btn-sm', type: 'button', text: 'Edit', disabled: !canWrite(), on: { click: () => openConnectorEditor(entry) } }),
+          entry.builtin ? null : h('button', { class: 'btn btn-sm btn-danger', type: 'button', text: 'Remove', disabled: !canWrite(), on: { click: () => removeConnector(entry) } }))));
+    wrap.appendChild(card);
+  }
+  return wrap;
+}
+
+async function updateConnector(entry, changes) {
+  const body = entry.builtin ? changes : Object.assign({
+    type: entry.type, command: entry.command, args: entry.args, env: entry.env, url: entry.url,
+    headers: entry.headers, roles: entry.roles, description: entry.description, enabled: entry.enabled
+  }, changes);
+  try {
+    state.mcp = Object.assign({}, state.mcp, await api('/api/mcp/connectors/' + encodeURIComponent(entry.name), { method: 'PUT', body: body }));
+    renderView();
+  } catch (err) {
+    toast('Connector: ' + describeError(err), 'error');
+  }
+}
+
+async function removeConnector(entry) {
+  const ok = await confirmDialog({ title: 'Remove connector', message: 'Remove the connector "' + entry.name + '" from this machine?', confirmLabel: 'Remove', danger: true });
+  if (!ok) return;
+  try {
+    state.mcp = Object.assign({}, state.mcp, await api('/api/mcp/connectors/' + encodeURIComponent(entry.name), { method: 'DELETE' }));
+    renderView();
+  } catch (err) {
+    toast('Connector: ' + describeError(err), 'error');
+  }
+}
+
+async function testConnector(name, button) {
+  const out = document.getElementById('mcp-test-' + name);
+  if (button) button.disabled = true;
+  if (out) { out.textContent = 'Connecting…'; out.className = 'hint'; }
+  try {
+    const result = await api('/api/mcp/connectors/' + encodeURIComponent(name) + '/test', { method: 'POST', body: {} });
+    if (out) {
+      out.className = result.ok ? 'hint st-green' : 'hint st-red';
+      out.textContent = result.ok
+        ? '✓ ' + (result.server || name) + (result.version ? ' ' + result.version : '') + ' · ' + result.tools.length + ' tools' + (result.tools.length ? ': ' + result.tools.slice(0, 6).join(', ') + (result.tools.length > 6 ? ' …' : '') : '')
+        : '✕ ' + result.error;
+    }
+  } catch (err) {
+    if (out) { out.className = 'hint st-red'; out.textContent = '✕ ' + describeError(err); }
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
+function parsePairs(text, separator) {
+  const result = {};
+  for (const line of String(text || '').split('\n')) {
+    const at = line.indexOf(separator);
+    if (at <= 0) continue;
+    result[line.slice(0, at).trim()] = line.slice(at + 1).trim();
+  }
+  return result;
+}
+
+function pairsText(values, separator) {
+  return Object.keys(values || {}).map((key) => key + separator + (separator === ':' ? ' ' : '') + values[key]).join('\n');
+}
+
+function openConnectorEditor(entry) {
+  const roles = (state.mcp && state.mcp.roles) || ['worker', 'reviewer', 'lead', 'assistant', 'generator'];
+  const draft = entry
+    ? { name: entry.name, type: entry.type, command: entry.command || '', args: (entry.args || []).join('\n'), env: pairsText(entry.env, '='),
+      url: entry.url || '', headers: pairsText(entry.headers, ':'), roles: (entry.roles || roles).slice(), description: entry.description || '' }
+    : { name: '', type: 'stdio', command: '', args: '', env: '', url: '', headers: '', roles: ['worker', 'reviewer', 'lead', 'assistant'], description: '' };
+  const error = h('div', { class: 'inline-error' });
+  const host = h('div', { class: 'col' });
+  const paint = () => {
+    clear(host);
+    const text = (key, attrs) => {
+      const node = h('input', Object.assign({ class: 'input', type: 'text', value: draft[key] }, attrs || {}));
+      node.addEventListener('input', () => { draft[key] = node.value; });
+      return node;
+    };
+    const area = (key, placeholder) => {
+      const node = h('textarea', { class: 'textarea mono', rows: '3', placeholder: placeholder });
+      node.value = draft[key];
+      node.addEventListener('input', () => { draft[key] = node.value; });
+      return node;
+    };
+    if (!entry) {
+      const presets = h('select', { class: 'select', on: { change: (event) => {
+        const preset = CONNECTOR_PRESETS[Number(event.target.value)];
+        if (!preset) return;
+        Object.assign(draft, { name: preset.name, type: preset.entry.type, command: preset.entry.command || '', args: (preset.entry.args || []).join('\n'),
+          url: preset.entry.url || '', headers: pairsText(preset.entry.headers, ':'), env: '', description: preset.entry.description });
+        paint();
+      } } }, h('option', { value: '', text: 'Start from a preset…' }), CONNECTOR_PRESETS.map((preset, index) => h('option', { value: String(index), text: preset.label })));
+      host.appendChild(fieldRow('Preset', presets, 'Fills the form; replace the <placeholders> before saving.'));
+    }
+    const typeSeg = h('div', { class: 'seg seg-sm' });
+    for (const [key, label] of [['stdio', 'Local command (stdio)'], ['http', 'Remote URL (HTTP)']]) {
+      typeSeg.appendChild(h('button', { class: 'seg-btn' + (draft.type === key ? ' is-active' : ''), type: 'button', text: label, on: { click: () => { draft.type = key; paint(); } } }));
+    }
+    host.appendChild(h('div', { class: 'form-grid' },
+      fieldRow('Name', text('name', { disabled: Boolean(entry), placeholder: 'e.g. github', 'data-autofocus': '1' }), 'Tools appear as mcp__<name>__<tool>.'),
+      fieldRow('Description', text('description', { placeholder: 'What agents use it for' }))));
+    host.appendChild(h('div', { class: 'field' }, h('span', { class: 'field-label', text: 'Transport' }), typeSeg));
+    if (draft.type === 'stdio') {
+      host.appendChild(fieldRow('Command', text('command', { placeholder: 'npx' })));
+      host.appendChild(fieldRow('Arguments', area('args', 'one per line'), 'One argument per line.'));
+      host.appendChild(fieldRow('Environment', area('env', 'API_KEY=…'), 'KEY=value per line. Stored on this machine; shown masked.'));
+    } else {
+      host.appendChild(fieldRow('URL', text('url', { placeholder: 'https://example.com/mcp' })));
+      host.appendChild(fieldRow('Headers', area('headers', 'Authorization: Bearer …'), 'Name: value per line. Stored on this machine; shown masked.'));
+    }
+    host.appendChild(h('div', { class: 'field' }, h('span', { class: 'field-label', text: 'Available to' }),
+      checkboxGroup(roles.map((role) => ({ value: role, label: role })), draft.roles)));
+    host.appendChild(error);
+  };
+  paint();
+  openModal({
+    title: entry ? 'Edit connector' : 'Add connector',
+    body: host,
+    footer: [
+      h('button', { class: 'btn', type: 'button', text: 'Cancel', on: { click: () => closeModal() } }),
+      h('button', {
+        class: 'btn btn-primary', type: 'button', text: 'Save connector',
+        on: {
+          click: async () => {
+            const body = { type: draft.type, roles: draft.roles, description: draft.description, enabled: entry ? entry.enabled : true };
+            if (draft.type === 'stdio') {
+              body.command = draft.command.trim();
+              body.args = draft.args.split('\n').map((line) => line.trim()).filter(Boolean);
+              body.env = parsePairs(draft.env, '=');
+            } else {
+              body.url = draft.url.trim();
+              body.headers = parsePairs(draft.headers, ':');
+            }
+            try {
+              state.mcp = Object.assign({}, state.mcp, await api('/api/mcp/connectors/' + encodeURIComponent(draft.name.trim()), { method: 'PUT', body: body }));
+              closeModal();
+              toast('Connector saved on this machine', 'ok');
+              renderView();
+            } catch (err) {
+              error.textContent = describeError(err);
+            }
+          }
+        }
+      })
+    ]
+  });
+}
+
+/* ---------- GitHub account ---------- */
+
+function renderGithubAccount() {
+  const data = state.githubAuth;
+  const card = h('section', { class: 'card-panel panel-pad gh-account' });
+  if (!data) {
+    card.appendChild(loadingRow('Checking the GitHub connection…'));
+    return card;
+  }
+  const auth = data.auth || {};
+  const login = data.login || {};
+  const head = h('div', { class: 'gh-account-head' },
+    h('span', { class: 'gh-mark', 'aria-hidden': 'true', text: '◉' }),
+    h('div', { class: 'col', style: { gap: '2px' } },
+      h('span', { class: 'panel-title', text: auth.logged_in ? 'Connected as ' + (auth.user || 'GitHub user') : 'GitHub account' }),
+      h('span', { class: 'hint', text: auth.logged_in
+        ? 'via the gh CLI' + (auth.source ? ' (' + auth.source + ')' : '') + (auth.scopes && auth.scopes.length ? ' · scopes: ' + auth.scopes.join(', ') : '')
+        : (auth.gh ? (auth.reason || 'Not connected') : 'The gh CLI is not installed.') })));
+  card.appendChild(head);
+  if (auth.missing_scopes && auth.missing_scopes.length) {
+    card.appendChild(h('div', { class: 'callout callout-warn', text: 'The token lacks ' + auth.missing_scopes.join(', ') + '; pull requests of private repositories may be missing. Reconnect to grant them.' }));
+  }
+  const actions = h('div', { class: 'row-wrap', style: { marginTop: '12px' } });
+  if (!auth.gh) {
+    actions.appendChild(h('a', { class: 'btn btn-sm', href: 'https://cli.github.com', target: '_blank', rel: 'noopener noreferrer', text: 'Install the GitHub CLI' }));
+    actions.appendChild(h('button', { class: 'btn btn-sm btn-ghost', type: 'button', text: 'Check again', on: { click: async () => { await loadGithubAuth(); renderView(); } } }));
+  } else if (auth.logged_in) {
+    actions.appendChild(h('button', { class: 'btn btn-sm', type: 'button', text: 'Disconnect', disabled: !canWrite(), on: { click: () => githubLogout() } }));
+    actions.appendChild(h('button', { class: 'btn btn-sm btn-ghost', type: 'button', text: 'Reconnect', disabled: !canWrite(), on: { click: () => openGithubLogin() } }));
+  } else {
+    actions.appendChild(h('button', { class: 'btn btn-sm btn-primary', type: 'button', text: 'Connect GitHub', disabled: !canWrite(), on: { click: () => openGithubLogin() } }));
+  }
+  if (login.status === 'waiting') {
+    actions.appendChild(h('button', { class: 'btn btn-sm btn-ghost', type: 'button', text: 'Sign-in waiting · code ' + login.code, on: { click: () => openGithubLogin(true) } }));
+  }
+  card.appendChild(actions);
+  card.appendChild(h('p', { class: 'hint', style: { marginTop: '10px' }, text: 'Polier stores no GitHub credential: the gh CLI keeps the token in its own store. The connection powers this panel, the PR and CI status on tasks, and agent sessions that use gh.' }));
+  return card;
+}
+
+async function openGithubLogin(resume) {
+  const host = h('div', { class: 'col gh-login' });
+  let poll = null;
+  const stop = () => { if (poll) { window.clearInterval(poll); poll = null; } };
+  const paintDevice = (login) => {
+    clear(host);
+    if (!login || login.status === 'starting') {
+      host.appendChild(loadingRow('Asking GitHub for a one-time code…'));
+      return;
+    }
+    if (login.status === 'waiting') {
+      host.appendChild(h('p', { text: 'Open the GitHub device page, sign in and enter this code:' }));
+      host.appendChild(h('div', { class: 'gh-code' },
+        h('span', { class: 'gh-code-value', text: login.code }),
+        copyButton(login.code)));
+      host.appendChild(h('a', { class: 'btn btn-primary', href: login.url || 'https://github.com/login/device', target: '_blank', rel: 'noopener noreferrer', text: 'Open github.com/login/device ↗' }));
+      host.appendChild(h('div', { class: 'row-wrap hint' }, h('span', { class: 'spinner' }), h('span', { text: 'Waiting for you to confirm in the browser…' })));
+      return;
+    }
+    const cancel = document.getElementById('gh-cancel');
+    if (cancel) cancel.hidden = login.status !== 'waiting' && login.status !== 'starting';
+    if (login.status === 'done') {
+      stop();
+      host.appendChild(h('div', { class: 'callout callout-ok', text: '✓ Connected' + (login.user ? ' as ' + login.user : '') + '.' }));
+      return;
+    }
+    stop();
+    host.appendChild(h('div', { class: 'callout callout-warn', text: (login.status === 'cancelled' ? 'Sign-in cancelled.' : 'Sign-in failed: ' + (login.error || 'unknown error')) }));
+  };
+  const tokenInput = h('input', { class: 'input mono', type: 'password', placeholder: 'ghp_… or github_pat_…', autocomplete: 'off' });
+  const tokenError = h('div', { class: 'inline-error' });
+  const tokenBox = h('details', { class: 'gh-token' },
+    h('summary', { text: 'Use a personal access token instead' }),
+    h('div', { class: 'col', style: { marginTop: '8px' } },
+      h('p', { class: 'hint', text: 'A classic token with the scopes repo and read:org. It is handed to gh and not stored by Polier.' }),
+      tokenInput, tokenError,
+      h('button', {
+        class: 'btn btn-sm', type: 'button', text: 'Connect with token',
+        on: {
+          click: async () => {
+            try {
+              await api('/api/github/login', { method: 'POST', body: { token: tokenInput.value } });
+              tokenInput.value = '';
+              stop();
+              closeModal();
+              toast('GitHub connected', 'ok');
+              await refreshGithubViews();
+            } catch (err) {
+              tokenError.textContent = describeError(err);
+            }
+          }
+        }
+      })));
+  openModal({
+    title: 'Connect GitHub',
+    body: h('div', { class: 'col' }, host, tokenBox),
+    onClose: () => { stop(); refreshGithubViews(); },
+    footer: [
+      h('button', { class: 'btn', type: 'button', id: 'gh-cancel', text: 'Cancel sign-in', on: { click: async () => { stop(); try { await api('/api/github/login/cancel', { method: 'POST', body: {} }); } catch (err) { /* ignore */ } closeModal(); } } }),
+      h('button', { class: 'btn btn-primary', type: 'button', text: 'Close', on: { click: () => closeModal() } })
+    ]
+  });
+  paintDevice(null);
+  try {
+    const result = resume ? await api('/api/github/auth') : await api('/api/github/login', { method: 'POST', body: {} });
+    paintDevice(result.login);
+    poll = window.setInterval(async () => {
+      try {
+        const current = await api('/api/github/auth');
+        paintDevice(current.login);
+        if (current.login.status !== 'waiting' && current.login.status !== 'starting') {
+          stop();
+          if (current.login.status === 'done') { toast('GitHub connected', 'ok'); await refreshGithubViews(); }
+        }
+      } catch (err) { stop(); }
+    }, 2000);
+  } catch (err) {
+    clear(host);
+    host.appendChild(errorCallout(err));
+  }
+}
+
+async function githubLogout() {
+  const ok = await confirmDialog({ title: 'Disconnect GitHub', message: 'Sign the gh CLI out of github.com on this machine? Other tools that use gh are signed out too.', confirmLabel: 'Disconnect', danger: true });
+  if (!ok) return;
+  try {
+    await api('/api/github/logout', { method: 'POST', body: {} });
+    toast('GitHub disconnected', 'ok');
+  } catch (err) {
+    toast('GitHub: ' + describeError(err), 'error');
+  }
+  await refreshGithubViews();
+}
+
+async function refreshGithubViews() {
+  await loadGithubAuth();
+  if (state.route.view === 'github') await loadGithub(true);
+  if (state.route.view === 'github' || state.route.view === 'settings') renderView();
+}
 
 /* ---------- bulk selection ---------- */
 
@@ -10771,7 +11674,8 @@ function renderSessions() {
 
 function renderSessionStartForm() {
   const tasks = (state.snapshot && state.snapshot.tasks) || [];
-  const form = state.sessionStartForm || (state.sessionStartForm = { task: '', role: 'worker', worktree: false, note: '' });
+  const form = state.sessionStartForm || (state.sessionStartForm = { task: '', role: 'worker', agent: '', worktree: false, note: '' });
+  if (feature('agents') && !state.agents) loadAgents().then(() => { if (state.route.view === 'sessions') renderView(); });
 
   const taskSelect = h('select', {
     class: 'select', 'aria-label': 'Task for the session',
@@ -10784,13 +11688,18 @@ function renderSessionStartForm() {
     }));
 
   const roleSelect = h('select', {
-    class: 'select', 'aria-label': 'Session role',
+    class: 'select', 'aria-label': 'Session role', disabled: Boolean(form.agent),
+    title: form.agent ? 'The agent decides the role' : '',
     on: { change: (event) => { form.role = event.target.value; } }
   }, SESSION_ROLES.map((role) => {
     const option = h('option', { value: role, text: role });
     if (form.role === role) option.selected = true;
     return option;
   }));
+  const agentPicker = feature('agents') && agentList().length
+    ? h('label', { class: 'field' }, h('span', { class: 'field-label', text: 'Agent' }),
+      agentSelect(form.agent, (value) => { form.agent = value; renderView(); }))
+    : null;
 
   const noteInput = h('textarea', {
     class: 'textarea', rows: '2', placeholder: 'Optional operator note added to the prompt',
@@ -10803,6 +11712,7 @@ function renderSessionStartForm() {
     h('div', { class: 'panel-title', style: { marginBottom: '10px' }, text: 'Start a session' }),
     h('div', { class: 'form-grid' },
       h('label', { class: 'field' }, h('span', { class: 'field-label', text: 'Task' }), taskSelect),
+      agentPicker,
       h('label', { class: 'field' }, h('span', { class: 'field-label', text: 'Role' }), roleSelect),
       h('label', { class: 'field span-2' }, h('span', { class: 'field-label', text: 'Note' }), noteInput)),
     h('div', { class: 'form-actions', style: { marginTop: '10px' } },
@@ -10966,6 +11876,7 @@ async function startSessionFromView() {
       body: {
         task: form.task || null,
         role: form.role || 'worker',
+        agent: form.agent || undefined,
         note: form.note || '',
         worktree: Boolean(form.worktree)
       }

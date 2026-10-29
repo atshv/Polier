@@ -3,6 +3,7 @@
 
 Usage:
     python3 tools/github.py status [--json] [--force]
+    python3 tools/github.py auth [--json]        # is gh signed in, as whom, which scopes
 
 Uses the project's GitHub ``origin`` and the authenticated ``gh`` CLI. The output
 maps pull requests and workflow runs to tasks by branch (``task/<ID>`` or the
@@ -28,10 +29,21 @@ def main(argv=None) -> int:
     status = sub.add_parser("status", help="PRs, CI runs and task mapping")
     status.add_argument("--json", action="store_true")
     status.add_argument("--force", action="store_true")
+    auth = sub.add_parser("auth", help="the GitHub account connection of the gh CLI")
+    auth.add_argument("--json", action="store_true")
     for child in sub.choices.values():
         child.add_argument("--root", default=argparse.SUPPRESS)
     args = parser.parse_args(argv)
     root = Path(args.root)
+    if args.command == "auth":
+        value = github.auth_status()
+        if args.json:
+            print(json.dumps(value, indent=2, ensure_ascii=False))
+        elif value.get("logged_in"):
+            print(f"github: connected as {value.get('user')} (scopes: {', '.join(value.get('scopes') or []) or '-'})")
+        else:
+            print(f"github: not connected — {value.get('reason')}. Run: gh auth login --web")
+        return 0 if value.get("logged_in") else 1
     value = github.status(root, force=getattr(args, "force", False))
     if args.json:
         print(json.dumps(value, indent=2, ensure_ascii=False))
