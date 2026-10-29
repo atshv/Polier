@@ -63,6 +63,14 @@ def board_10() -> dict:
     }
 
 
+def board_12() -> dict:
+    board = board_11()
+    board["schema_version"] = "1.2"
+    board["tasks"][0]["planned_start"] = "2026-11-02"
+    board["tasks"][0]["target"] = "2026-11-06"
+    return board
+
+
 def board_11() -> dict:
     board = board_10()
     board["schema_version"] = "1.1"
@@ -288,6 +296,29 @@ class Schema11(unittest.TestCase):
     def test_id_pattern_is_widened_for_1_1(self):
         board = board_11()
         self.assertEqual(task_id_pattern(board).pattern, task_id_pattern(board_10()).pattern)
+
+
+class Schema12(unittest.TestCase):
+    def test_board_1_2_accepts_planning_dates(self):
+        self.assertEqual(board_errors(board_12()), [])
+        self.assertEqual(schema_version(board_12()), "1.2")
+
+    def test_1_2_fields_need_schema_1_2(self):
+        board = board_11()
+        board["tasks"][0]["planned_start"] = "2026-11-02"
+        self.assertTrue(any("needs schema version 1.2" in error for error in board_errors(board)))
+        board = board_11()
+        board["tasks"][0]["target"] = "2026-11-02"
+        self.assertTrue(any("needs schema version 1.2" in error for error in board_errors(board)))
+
+    def test_date_shape_and_order(self):
+        board = board_12()
+        board["tasks"][0]["planned_start"] = "02.11.2026"
+        self.assertTrue(any("YYYY-MM-DD" in error for error in board_errors(board)))
+        board = board_12()
+        board["tasks"][0]["planned_start"] = "2026-11-06"
+        board["tasks"][0]["target"] = "2026-11-02"
+        self.assertTrue(any("target must not be before" in error for error in board_errors(board)))
 
 
 class Render(unittest.TestCase):

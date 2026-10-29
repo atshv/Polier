@@ -9,6 +9,9 @@ Board schema versions:
   (dashboard label ids, defined in ``dashboard.json``) and ``estimate_hours``
   (a planning estimate; the worklog compares it with the actual run/session
   time). Additive: every 1.0 board stays valid.
+- 1.2: ``"schema_version": "1.2"``. Adds the optional planning dates
+  ``planned_start`` and ``target`` (``YYYY-MM-DD``) used by the dashboard
+  timeline. Additive: every 1.0/1.1 board stays valid.
 
 ``board_errors`` is the single schema check used by tools/check.py; the
 semantic project checks (cycles, briefs, evidence, budgets, ...) stay in the
@@ -16,6 +19,7 @@ tools that need them.
 """
 from __future__ import annotations
 
+import datetime as dt
 import json
 import os
 import re
@@ -29,7 +33,8 @@ BOARD = "board.json"
 SCHEMA_09 = "0.9"
 SCHEMA_10 = "1.0"
 SCHEMA_11 = "1.1"
-SCHEMAS = (SCHEMA_09, SCHEMA_10, SCHEMA_11)
+SCHEMA_12 = "1.2"
+SCHEMAS = (SCHEMA_09, SCHEMA_10, SCHEMA_11, SCHEMA_12)
 
 ID_09 = re.compile(r"^M[0-9]{2,3}$")
 ID_10 = re.compile(r"^(M[0-9]{2,3}|[A-Z][A-Z0-9]{0,5}-[0-9]{2,3})$")
@@ -57,6 +62,7 @@ TASK_FIELDS_10 = frozenset(TASK_FIELDS_09 | {
     "package", "exclusive", "resources", "claim", "contract_followups",
 })
 TASK_FIELDS_11 = frozenset(TASK_FIELDS_10 | {"labels", "estimate_hours"})
+TASK_FIELDS_12 = frozenset(TASK_FIELDS_11 | {"planned_start", "target"})
 
 BOARD_REQUIRED = ("project", "profile", "base_branch", "tasks")
 BOARD_FIELDS_09 = frozenset(BOARD_REQUIRED + (
@@ -67,6 +73,7 @@ BOARD_FIELDS_10 = frozenset(BOARD_FIELDS_09 | {
     "worktrees", "contracts",
 })
 BOARD_FIELDS_11 = BOARD_FIELDS_10
+BOARD_FIELDS_12 = BOARD_FIELDS_11
 
 STAGE_FIELDS = frozenset({
     "id", "title", "goal", "exit_criteria", "exit_gates", "owner_decision", "depends_on",
@@ -257,6 +264,10 @@ def _needs_11(label: str, field: str) -> str:
     return f"{label}: field {field!r} needs schema version 1.1 — set schema_version to 1.1"
 
 
+def _needs_12(label: str, field: str) -> str:
+    return f"{label}: field {field!r} needs schema version 1.2 — set schema_version to 1.2"
+
+
 def _check_task(task, version: str, known_ids: set, errors: List[str], stage_id_set: set,
                 package_set: set) -> None:
     if not isinstance(task, dict):
@@ -264,7 +275,9 @@ def _check_task(task, version: str, known_ids: set, errors: List[str], stage_id_
         return
     tid = task.get("id", "?")
     label = f"board.json: task {tid}"
-    if version == SCHEMA_11:
+    if version == SCHEMA_12:
+        allowed = TASK_FIELDS_12
+    elif version == SCHEMA_11:
         allowed = TASK_FIELDS_11
     elif version == SCHEMA_10:
         allowed = TASK_FIELDS_10
@@ -275,6 +288,8 @@ def _check_task(task, version: str, known_ids: set, errors: List[str], stage_id_
             errors.append(_needs_100(label, field))
         elif version in (SCHEMA_09, SCHEMA_10) and field in TASK_FIELDS_11:
             errors.append(_needs_11(label, field))
+        elif version in (SCHEMA_09, SCHEMA_10, SCHEMA_11) and field in TASK_FIELDS_12:
+            errors.append(_needs_12(label, field))
         else:
             errors.append(f"{label}: unknown field {field!r}")
     for field in TASK_REQUIRED:
@@ -361,6 +376,22 @@ def _check_task(task, version: str, known_ids: set, errors: List[str], stage_id_
         elif package_set and package.rstrip("/") not in package_set:
             errors.append(f"{label}: unknown package {package!r} (not in packages[].path)")
 
+    def _date(value):
+        if not isinstance(value, str) or not re.match(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$", value):
+            return None
+        try:
+            return dt.date.fromisoformat(value)
+        except ValueError:
+            return None
+
+    for field in ("planned_start", "target"):
+        if field in task:
+            if _date(task.get(field)) is None:
+                errors.append(f"{label}: {field} must be a date string (YYYY-MM-DD)")
+    if "planned_start" in task and "target" in task:
+        start, end = _date(task.get("planned_start")), _date(task.get("target"))
+        if start and end and end < start:
+            errors.append(f"{label}: target must not be before planned_start")
     if "labels" in task:
         labels = task.get("labels")
         if not (_is_str_list(labels) and all(re.match(r"^[a-z][a-z0-9-]{0,40}$", entry) for entry in labels)):
@@ -511,8 +542,14 @@ def board_errors(board) -> List[str]:
         errors.append(
             f"board.json: unknown schema_version {board['schema_version']!r} "
             f"(known: {', '.join(SCHEMAS)}; omit the field for 0.9)")
-    allowed = BOARD_FIELDS_11 if version == SCHEMA_11 else (
-        BOARD_FIELDS_10 if version == SCHEMA_10 else BOARD_FIELDS_09)
+    if version == SCHEMA_12:
+        allowed = BOARD_FIELDS_12
+    elif version == SCHEMA_11:
+        allowed = BOARD_FIELDS_11
+    elif version == SCHEMA_10:
+        allowed = BOARD_FIELDS_10
+    else:
+        allowed = BOARD_FIELDS_09
     for field in sorted(set(board) - allowed):
         if version == SCHEMA_09 and field in BOARD_FIELDS_10:
             errors.append(_needs_100("board.json", field))

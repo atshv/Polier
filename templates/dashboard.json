@@ -5,12 +5,13 @@
     "worklog": true,
     "views": true,
     "labels": true,
-    "timeline": false,
-    "cycles": false,
-    "modules": false,
+    "timeline": true,
+    "cycles": true,
+    "modules": true,
+    "coverage": true,
+    "analytics": true,
     "pages": false,
     "intake": false,
-    "analytics": false,
     "assistant": false
   },
   "labels": [
@@ -70,6 +71,7 @@
     }
   ],
   "defaults": {
-    "me": "owner"
+    "me": "owner",
+    "hours_per_day": 4
   }
 }

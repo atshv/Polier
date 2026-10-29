@@ -43,7 +43,9 @@ class McpTest(unittest.TestCase):
         self.assertIn("polier_snapshot", tools)
         self.assertIn("polier_state_set", tools)
         for name in ("polier_settings", "polier_views", "polier_worklog",
-                     "polier_me", "polier_inbox", "polier_inbox_read"):
+                     "polier_me", "polier_inbox", "polier_inbox_read",
+                     "polier_timeline", "polier_cycles", "polier_modules",
+                     "polier_coverage", "polier_analytics"):
             self.assertIn(name, tools)
         snapshot = json.loads(by_id[3]["result"]["content"][0]["text"])
         self.assertEqual(snapshot["project"]["name"], "canvas-mini")
@@ -79,6 +81,32 @@ class McpTest(unittest.TestCase):
         inbox = json.loads(by_id[5]["result"]["content"][0]["text"])
         self.assertIn("items", inbox)
         self.assertIn("counts", inbox)
+
+    def test_planning_tools(self) -> None:
+        root = sample_project()
+        calls = [
+            ("polier_timeline", {}),
+            ("polier_cycles", {}),
+            ("polier_modules", {}),
+            ("polier_coverage", {}),
+            ("polier_analytics", {}),
+        ]
+        messages = [{"jsonrpc": "2.0", "id": index + 1, "method": "tools/call",
+                     "params": {"name": name, "arguments": arguments}}
+                    for index, (name, arguments) in enumerate(calls)]
+        process, responses = mcp_session(root, messages)
+        self.assertEqual(process.returncode, 0, process.stderr)
+        by_id = {response.get("id"): response for response in responses}
+        timeline = json.loads(by_id[1]["result"]["content"][0]["text"])
+        self.assertIn("critical_path", timeline)
+        cycles = json.loads(by_id[2]["result"]["content"][0]["text"])
+        self.assertIn("cycles", cycles)
+        modules = json.loads(by_id[3]["result"]["content"][0]["text"])
+        self.assertIn("modules", modules)
+        coverage = json.loads(by_id[4]["result"]["content"][0]["text"])
+        self.assertIn("summary", coverage)
+        analytics = json.loads(by_id[5]["result"]["content"][0]["text"])
+        self.assertIn("kpis", analytics)
 
     def test_read_only_refuses_writes(self) -> None:
         root = sample_project()

@@ -38,6 +38,8 @@ python3 <skill-folder>/tools/mcp.py --root <project>
 python3 <skill-folder>/tools/settings.py show --root <project>
 python3 <skill-folder>/tools/views.py list --root <project>
 python3 <skill-folder>/tools/plan.py create --help
+# 2.2 planning view data (read-only): timeline, cycles, modules, coverage, analytics
+python3 -c "print('see tools/serve.py for the dashboard; board schema 1.2 adds planned_start/target')"
 # profile L only
 python3 <skill-folder>/tools/boundaries.py <project>
 python3 <skill-folder>/tools/contracts.py check --root <project>

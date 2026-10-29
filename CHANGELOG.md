@@ -2,6 +2,24 @@
 
 Each release lists what a running project must do to adopt it. Update between stages, never during a task (see `guide/cheatsheet.md`). The current version is in `VERSION`; projects record theirs in `board.json` → `generator_version`.
 
+## 2.2.0
+
+**Planning.** 2.1 made the dashboard the place where the owner works; 2.2 adds the overview: where the plan sits in time (Timeline), how each stage is doing (Cycles), how the packages are doing (Modules), which requirements are really covered (Coverage) and what the evidence says about the project (Analytics). Everything is derived from the files Polier already writes; there is no new store and no required field.
+
+**Timeline.** `core/timeline.py` schedules tasks from their dependencies and estimates at `dashboard.json` → `defaults.hours_per_day` (default 4), inside sequential stage lanes; completed tasks are placed at their run-record finish date, so history is visible. Board schema 1.2 adds optional `planned_start` and `target` (``YYYY-MM-DD``) that override the auto-schedule for one task; the plan editor and `tools/plan.py` set and clear them. The view shows day/week axes, a today line, critical path, explicit-date and overdue markers, and unscheduled work. `GET /api/timeline`, `polier_timeline`.
+
+**Cycles.** Each stage is treated as a cycle with its goal, exit criteria and exit gates, progress, owner decision, effort and a burndown built from run events. The active cycle is the first incomplete stage. Stage decisions can be set from the view. `GET /api/cycles`, `polier_cycles`.
+
+**Modules.** The package map becomes a module view: tasks per package, status breakdown, health (`ok`/`watch`/`attention`/`done`), docs presence (README/ARCHITECTURE), contract versions and effort. Tasks without a package stay visible in a separate section. `GET /api/modules`, `polier_modules`.
+
+**Coverage.** Requirement definitions are read from `docs/quality.md` (`**Dn** …`), joined with task `satisfies` references, statuses and passing evidence; every requirement is `covered`, `partial`, `open` or `missing`, and codes that tasks reference without a definition are reported. `GET /api/coverage`, `polier_coverage`.
+
+**Analytics.** One evidence-based model: completion and status counts, throughput per ISO week (12 weeks), cycle time per stage, gate pass rate, rework rate, blocked age, estimate vs actual effort, tokens per stage and session counts. `GET /api/analytics`, `polier_analytics`.
+
+**Settings.** `dashboard.json` features gain the five planning views (default on); `defaults.hours_per_day` (1–24, default 4) drives the timeline. Pages, Intake and Assistant remain planned (off).
+
+**Compatibility and migration.** Additive and optional: no existing board, policy, run or review file changes shape. Set `"schema_version": "1.2"` (or let the plan editor do it) to use planned dates; `labels`/`estimate_hours` stay 1.1 fields, and 0.9/1.0 boards remain valid. Start the dashboard as before. Plugin users: `git pull`, `dsh plugin --profile <name> add ./polier` again, restart. Claude Code users: replace the package copy; MCP gains the planning tools. Skill-only users: `./update.sh`.
+
 ## 2.1.0
 
 **The project cockpit.** 2.0 made the dashboard a control plane; 2.1 turns it into the place where the owner actually works. It adds committed project settings, labels, structured filters with saved views, a personal cockpit ("Your Work" and an inbox), and a worklog that derives real effort from the evidence Polier already writes. All of it is optional and additive: the CLI, the guards and existing projects keep working unchanged.

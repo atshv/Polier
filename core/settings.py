@@ -40,12 +40,13 @@ FEATURES: Dict[str, bool] = {
     "worklog": True,
     "views": True,
     "labels": True,
-    "timeline": False,
-    "cycles": False,
-    "modules": False,
+    "timeline": True,
+    "cycles": True,
+    "modules": True,
+    "coverage": True,
+    "analytics": True,
     "pages": False,
     "intake": False,
-    "analytics": False,
     "assistant": False,
 }
 
@@ -65,12 +66,12 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     "version": VERSION,
     "features": dict(FEATURES),
     "labels": [dict(label) for label in DEFAULT_LABELS],
-    "defaults": {"me": "owner"},
+    "defaults": {"me": "owner", "hours_per_day": 4},
 }
 
 LABEL_FIELDS = frozenset({"id", "title", "color", "group"})
 TOP_FIELDS = frozenset({"version", "features", "labels", "defaults"})
-DEFAULT_FIELDS = frozenset({"me"})
+DEFAULT_FIELDS = frozenset({"me", "hours_per_day"})
 
 
 def path(root) -> Path:
@@ -136,6 +137,10 @@ def errors(settings: Dict[str, Any]) -> List[str]:
         me = defaults_block.get("me")
         if me is not None and (not isinstance(me, str) or not me.strip()):
             found.append("dashboard.json: defaults.me must be a non-empty string")
+        hours = defaults_block.get("hours_per_day")
+        if hours is not None and (isinstance(hours, bool) or not isinstance(hours, (int, float))
+                                  or not 1 <= hours <= 24):
+            found.append("dashboard.json: defaults.hours_per_day must be a number between 1 and 24")
     return found
 
 
@@ -201,6 +206,13 @@ def label_list(settings: Dict[str, Any]) -> List[Dict[str, str]]:
 
 def label_map(settings: Dict[str, Any]) -> Dict[str, Dict[str, str]]:
     return {str(label.get("id")): label for label in label_list(settings)}
+
+
+def hours_per_day(settings: Dict[str, Any]) -> float:
+    value = (settings.get("defaults") or {}).get("hours_per_day", 4)
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not 1 <= value <= 24:
+        return 4.0
+    return float(value)
 
 
 def me(settings: Dict[str, Any]) -> str:

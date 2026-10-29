@@ -33,6 +33,10 @@ class DashboardDataTest(unittest.TestCase):
         self.assertTrue(done["gates_passed"])
         self.assertEqual(done["gates_missing"], [])
         self.assertIn("tokens", done)
+        self.assertIn("labels", done)
+        self.assertIn("estimate_hours", done)
+        self.assertIn("planned_start", done)
+        self.assertIn("target", done)
         self.assertIn("budget", done)
         self.assertIsInstance(snap["counts"].get("done"), int)
 
