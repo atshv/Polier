@@ -2,6 +2,26 @@
 
 Each release lists what a running project must do to adopt it. Update between stages, never during a task (see `guide/cheatsheet.md`). The current version is in `VERSION`; projects record theirs in `board.json` → `generator_version`.
 
+## 2.0.0
+
+**The dashboard.** 1.4 showed the project in a static page; 2.0 makes it a control plane. `tools/serve.py` starts a local HTTP + Server-Sent Events server (Python standard library only, loopback by default) that serves one self-contained page and a small JSON API over the same files the CLI uses. Nothing changes for projects that do not start it: the CLI, the guards and `STATUS.html` keep working, and no board field changes.
+
+**What the page does.**
+- Board with Kanban and table views, gate progress, token bars, live claims, stage/package/owner filters and stage progress.
+- Task drawer with brief, gates and evidence logs, run events, review verdict, handoff and quick actions: status transitions through `core.state`, claim/release, gate runs and headless sessions.
+- Approvals inbox (request, grant, deny), dispatch view (next wave, running, blocked, conflicts), activity feed, dependency graph as inline SVG, jobs tray with live gate/check/audit logs.
+- Interview wizard for greenfield projects: the Phase-A questions become a form, the answers compose the generator prompt, a generator session writes the artifacts and "approve plan" validates the board. For existing projects the Plan view edits tasks, dependencies, scopes and stage decisions with the same validation as the CLI.
+- Headless sessions: a provider command (Claude Code by default) runs per task or worktree with the shipped hooks installed, the transcript streams into the page, tokens are recorded in `runs/<ID>.json` and the claim is taken and released. `tools/session.py` does the same from the CLI.
+- `tools/mcp.py` exposes the board to any MCP host (Claude Code: `claude mcp add polier -- python3 …/tools/mcp.py --root .`), so an interactive session can read the plan and run lead-only actions as tools.
+
+**Server and safety.** Loopback only by default, optional bearer token (`--token`/`POLIER_DASHBOARD_TOKEN`), `X-Polier-Action: 1` and a same-origin check for writes, `--read-only` for a viewer page. State changes still go through `core.state`, plan edits through `core.plan_edit` (atomic board write, schema validation, dependency-cycle refusal), and gate runs through `core.gate`, which writes the same evidence records as `tools/gate.py`.
+
+**Runtime files.** Transcripts, job logs, the interview draft and the dashboard config live in `<git-common-dir>/polier/dashboard/`; nothing is committed.
+
+**Tests.** New suites cover the read models, plan editing, the interview/plan draft, the HTTP API (including token, CSRF and read-only), streaming jobs, the session lifecycle with a fake provider, and the MCP server.
+
+**Compatibility and migration.** Additive and optional; the board schema, `policy.json`, `runs/`, `reviews/` and every existing command are unchanged. Add `server/` to the shipped files (the package manifest covers it). Start it with `python3 tools/serve.py <project>`, read [`docs/dashboard.md`](docs/dashboard.md) for the API and the security model. Plugin users: `git pull`, `dsh plugin --profile <name> add ./polier` again, restart. Claude Code users: replace the package copy; add the MCP server with `claude mcp add`. Skill-only users: `./update.sh`.
+
 ## 1.4.0
 
 **Read-only views on the status page.** The page from 1.3 had the facts but only one way to read them. 1.4 adds four read-only views to `STATUS.html` — a Kanban board, a dependency graph, an activity timeline and a token history — with stage, package and owner filters and a table/Kanban switch. The page is still one self-contained file, nothing on it changes a status, and `tools/state.py` stays the only writer.

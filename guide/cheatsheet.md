@@ -23,6 +23,14 @@ The human's operating manual. The generator drafts and writes; you approve, star
 - **Generator copy:** if the package sits inside the project (`.generator/`), it is gitignored and ships `tools/manifest.json`, so `check.py` reports drift.
 - **Policy:** `policy.json` exists, `version: 1`, limits match the profile (S 3/1/3, M 3/2/3, L 3/3/3 for attempts/in progress/rounds), the manifest list matches the project; `docs/orchestration.md` exists and `AGENTS.md` names `policy.json`, `runs/` and the state commands.
 
+## The dashboard (2.0)
+
+- Start it with `python3 tools/serve.py <project> [--port 8765] [--open] [--token …] [--read-only]`; stop it with Ctrl+C. It needs no dependencies and writes only runtime files under `<git-common-dir>/polier/dashboard/`.
+- It shows the same state as `STATUS.md`/`dispatch.py` and drives the same actions: status transitions (`state.py`), claims, approvals (`approve.py`), gates (`gate.py` records), plan edits (validated `board.json` writes) and headless sessions.
+- Sessions: `tools/session.py run <ID> --role worker|reviewer|lead [--worktree] [--note "…"]`, then `list`/`show`/`stop`. The provider command, permission mode, allowed tools and model are in the dashboard config; the default is the Claude Code CLI in `-p` stream-json mode with the shipped hooks installed (scope, policy and stop checks apply).
+- MCP for an interactive Claude Code session: `claude mcp add polier -- python3 <package>/tools/mcp.py --root .` exposes `polier_snapshot`, `polier_task`, `polier_dispatch`, `polier_show`, `polier_activity`, `polier_approvals`, `polier_claims` and the write tools `polier_state_set`, `polier_gate`, `polier_claim`, `polier_release`.
+- Loop unchanged: the dashboard is a control plane, not a second source of truth. `runs/`, `reviews/` and `reviews/approvals/` stay the records; `state.py` stays the only status writer.
+
 ## The task loop
 
 Every status change goes through `tools/state.py set <ID> <status>` in a lead session: `in_progress → verifying → review → done`, or `rework`, `blocked`, `failed` with a note. The full model is `prompt/orchestration.md`; the checklists below are the human side of it.

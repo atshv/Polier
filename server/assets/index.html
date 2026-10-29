@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Polier — dashboard</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/assets/app.css">
+</head>
+<body>
+<header class="topbar" id="topbar">
+  <div class="topbar-left">
+    <a class="brand" href="#/board" aria-label="Polier dashboard, go to board">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 20 20" width="18" height="18" focusable="false" aria-hidden="true">
+          <rect x="2.5" y="2.5" width="6" height="6" rx="1.6" fill="currentColor" opacity=".9"></rect>
+          <rect x="11.5" y="2.5" width="6" height="6" rx="1.6" fill="currentColor" opacity=".45"></rect>
+          <rect x="2.5" y="11.5" width="6" height="6" rx="1.6" fill="currentColor" opacity=".45"></rect>
+          <rect x="11.5" y="11.5" width="6" height="6" rx="1.6" fill="currentColor"></rect>
+        </svg>
+      </span>
+      <span class="brand-name">Polier</span>
+      <span class="brand-sep" aria-hidden="true">/</span>
+      <span class="brand-project" id="project-name">dashboard</span>
+    </a>
+    <div class="header-meta" id="header-meta" aria-label="Project status"></div>
+  </div>
+  <div class="topbar-right">
+    <div class="searchbox" role="search">
+      <span class="search-icon" aria-hidden="true">
+        <svg viewBox="0 0 16 16" width="14" height="14" focusable="false" aria-hidden="true">
+          <circle cx="7" cy="7" r="4.4" fill="none" stroke="currentColor" stroke-width="1.4"></circle>
+          <path d="M10.4 10.4 14 14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"></path>
+        </svg>
+      </span>
+      <input id="global-search" type="search" placeholder="Search tasks" autocomplete="off"
+             spellcheck="false" aria-label="Search tasks" aria-keyshortcuts="/">
+      <kbd class="kbd" title="Press / to focus search">/</kbd>
+    </div>
+    <span class="live" id="live-indicator" data-live="connecting" title="Server-Sent Events connection">
+      <span class="live-dot" aria-hidden="true"></span>
+      <span class="live-label" id="live-label">Connecting</span>
+    </span>
+    <div class="toolbar">
+      <button class="btn btn-ghost" id="btn-check" type="button" title="Run the board check job (POST /api/jobs/check)">
+        <span class="btn-glyph" aria-hidden="true">✓</span><span>Check</span>
+      </button>
+      <button class="btn btn-ghost" id="btn-audit" type="button" title="Run the project audit job (POST /api/jobs/audit)">
+        <span class="btn-glyph" aria-hidden="true">◎</span><span>Audit</span>
+      </button>
+      <button class="btn btn-icon" id="btn-theme" type="button" aria-label="Toggle light and dark theme" title="Toggle theme">
+        <span id="theme-glyph" aria-hidden="true">◐</span>
+      </button>
+    </div>
+  </div>
+</header>
+
+<nav class="tabs" id="tabs" aria-label="Dashboard views"></nav>
+
+<main class="main" id="view" tabindex="-1"></main>
+
+<section class="jobs" id="jobs" aria-label="Background jobs">
+  <button class="jobs-toggle" id="jobs-toggle" type="button" aria-expanded="false" aria-controls="jobs-body">
+    <span class="jobs-dot" id="jobs-dot" aria-hidden="true"></span>
+    <span class="jobs-title">Jobs</span>
+    <span class="jobs-summary" id="jobs-summary">no jobs yet</span>
+    <span class="jobs-chevron" id="jobs-chevron" aria-hidden="true">▴</span>
+  </button>
+  <div class="jobs-body" id="jobs-body" hidden></div>
+</section>
+
+<aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-label="Task detail" aria-hidden="true" hidden></aside>
+<div class="drawer-backdrop" id="drawer-backdrop" hidden></div>
+<div class="modal-backdrop" id="modal-backdrop" hidden>
+  <div class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"></div>
+</div>
+<div class="toasts" id="toasts" aria-live="polite" aria-atomic="false"></div>
+
+<script src="/assets/app.js" defer></script>
+</body>
+</html>
