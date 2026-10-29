@@ -442,7 +442,9 @@ function inlineNodes(text, options) {
     if (match.index > last) nodes.push(document.createTextNode(source.slice(last, match.index)));
     const token = match[0];
     if (token.charAt(0) === '`') {
-      nodes.push(h('code', { class: 'md-inline-code', text: token.slice(1, -1) }));
+      const endpoint = /^(GET|POST|PUT|PATCH|DELETE)\s+(\/.*)$/.exec(token.slice(1, -1));
+      if (endpoint) nodes.push(h('span', { class: 'md-inline-endpoint' }, methodBadge(endpoint[1]), h('code', { class: 'md-inline-code', text: endpoint[2] })));
+      else nodes.push(h('code', { class: 'md-inline-code', text: token.slice(1, -1) }));
     } else if (token.charAt(0) === '[') {
       const parsed = /^\[([^\]]+)\]\(([^()\s]+)\)$/.exec(token);
       if (parsed) nodes.push(markdownLink(parsed[1], parsed[2], options));
@@ -457,6 +459,124 @@ function inlineNodes(text, options) {
   }
   if (last < source.length) nodes.push(document.createTextNode(source.slice(last)));
   return nodes;
+}
+
+/* Table cells split on pipes that are not escaped (\|) or inside `code`. */
+function mdTableCells(line) {
+  const cells = [];
+  let current = '';
+  let inCode = false;
+  const body = line.trim().replace(/^\|/, '').replace(/\|$/, '');
+  for (let i = 0; i < body.length; i += 1) {
+    const char = body.charAt(i);
+    if (char === '\\' && body.charAt(i + 1) === '|') { current += '|'; i += 1; continue; }
+    if (char === '`') inCode = !inCode;
+    if (char === '|' && !inCode) { cells.push(current.trim()); current = ''; continue; }
+    current += char;
+  }
+  cells.push(current.trim());
+  return cells;
+}
+
+function mdTable(rows, opts) {
+  const separator = (line) => /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/.test(line);
+  const hasHead = rows.length > 1 && separator(rows[1]);
+  const table = h('table', { class: 'md-tbl' });
+  const fill = (row, tag) => {
+    const tr = h('tr');
+    for (const cell of mdTableCells(row)) {
+      const node = h(tag);
+      append(node, inlineNodes(cell, opts));
+      tr.appendChild(node);
+    }
+    return tr;
+  };
+  if (hasHead) table.appendChild(h('thead', {}, fill(rows[0], 'th')));
+  const tbody = h('tbody');
+  rows.slice(hasHead ? 2 : 0).filter((row) => !separator(row)).forEach((row) => tbody.appendChild(fill(row, 'td')));
+  table.appendChild(tbody);
+  return h('div', { class: 'md-table-wrap' }, table);
+}
+
+const CODE_LANG_LABELS = {
+  bash: 'Shell', sh: 'Shell', shell: 'Shell', python: 'Python', py: 'Python',
+  javascript: 'JavaScript', js: 'JavaScript', json: 'JSON', text: 'Text', markdown: 'Markdown', md: 'Markdown'
+};
+const PREF_CODE_LANG = 'polier.codeLang';
+
+function codeLangLabel(lang, text) {
+  if ((lang === 'bash' || lang === 'sh' || lang === 'shell') && /^\s*curl\b/m.test(text || '')) return 'cURL';
+  return CODE_LANG_LABELS[lang] || (lang ? lang : 'Code');
+}
+
+function copyButton(text) {
+  return h('button', {
+    class: 'md-copy', type: 'button', text: 'Copy', title: 'Copy to the clipboard',
+    on: {
+      click: async (event) => {
+        const button = event.currentTarget;
+        await copyText(text);
+        button.textContent = 'Copied';
+        window.setTimeout(() => { button.textContent = 'Copy'; }, 1400);
+      }
+    }
+  });
+}
+
+function mdCodeBlock(lang, text) {
+  return h('div', { class: 'md-code-block' },
+    h('div', { class: 'md-code-head' },
+      h('span', { class: 'md-code-lang', text: lang ? codeLangLabel(lang, text) : '' }),
+      copyButton(text)),
+    h('pre', { class: 'md-code' }, h('code', { text: text })));
+}
+
+/* A tabbed example (cURL / Python / JavaScript). The chosen language is
+   remembered and every tab group on the page follows it. */
+function mdCodeTabs(blocks) {
+  const preferred = prefGet(PREF_CODE_LANG, '');
+  let active = Math.max(0, blocks.findIndex((block) => codeLangLabel(block.lang, block.text) === preferred));
+  const group = h('div', { class: 'md-code-block md-code-tabs' });
+  const head = h('div', { class: 'md-code-head', role: 'tablist' });
+  const panes = blocks.map((block) => h('pre', { class: 'md-code', role: 'tabpanel' }, h('code', { text: block.text })));
+  const tabs = blocks.map((block, position) => h('button', {
+    class: 'md-code-tab', type: 'button', role: 'tab', text: codeLangLabel(block.lang, block.text),
+    dataset: { lang: codeLangLabel(block.lang, block.text) },
+    on: {
+      click: () => {
+        const label = codeLangLabel(block.lang, block.text);
+        prefSet(PREF_CODE_LANG, label);
+        for (const other of document.querySelectorAll('.md-code-tabs')) {
+          if (other.selectTab) other.selectTab(label);
+        }
+        if (group.selectTab) group.selectTab(label);
+      }
+    }
+  }));
+  const copyHost = h('span', { class: 'md-code-copy' });
+  const paint = () => {
+    tabs.forEach((tab, position) => {
+      tab.setAttribute('aria-selected', position === active ? 'true' : 'false');
+      tab.classList.toggle('is-active', position === active);
+    });
+    panes.forEach((pane, position) => { pane.hidden = position !== active; });
+    clear(copyHost);
+    copyHost.appendChild(copyButton(blocks[active].text));
+  };
+  group.selectTab = (label) => {
+    const index = blocks.findIndex((block) => codeLangLabel(block.lang, block.text) === label);
+    if (index !== -1) { active = index; paint(); }
+  };
+  append(head, tabs);
+  head.appendChild(copyHost);
+  group.appendChild(head);
+  append(group, panes);
+  paint();
+  return group;
+}
+
+function methodBadge(method) {
+  return h('span', { class: 'method-badge m-' + String(method).toLowerCase(), text: String(method).toUpperCase() });
 }
 
 function mdFragment(text, options) {
@@ -479,11 +599,24 @@ function mdFragment(text, options) {
     const line = lines[index];
     if (/^\s*```/.test(line)) {
       flush();
-      const buffer = [];
-      index += 1;
-      while (index < lines.length && !/^\s*```/.test(lines[index])) { buffer.push(lines[index]); index += 1; }
-      if (index < lines.length) index += 1;
-      fragment.appendChild(h('pre', { class: 'md-code' }, h('code', { text: buffer.join('\n') })));
+      /* adjacent fences with distinct languages become one tabbed example */
+      const blocks = [];
+      while (index < lines.length && /^\s*```/.test(lines[index])) {
+        const lang = lines[index].replace(/^\s*```/, '').trim().toLowerCase();
+        const buffer = [];
+        index += 1;
+        while (index < lines.length && !/^\s*```/.test(lines[index])) { buffer.push(lines[index]); index += 1; }
+        if (index < lines.length) index += 1;
+        blocks.push({ lang: lang, text: buffer.join('\n') });
+        let peek = index;
+        while (peek < lines.length && lines[peek].trim() === '') peek += 1;
+        if (peek < lines.length && /^\s*```/.test(lines[peek])) index = peek;
+        else break;
+      }
+      const langs = blocks.map((block) => block.lang);
+      const tabbed = blocks.length > 1 && langs.every(Boolean) && new Set(langs).size === langs.length;
+      if (tabbed) fragment.appendChild(mdCodeTabs(blocks));
+      else for (const block of blocks) fragment.appendChild(mdCodeBlock(block.lang, block.text));
       continue;
     }
     const heading = /^(#{1,6})\s+(.*)$/.exec(line);
@@ -491,7 +624,13 @@ function mdFragment(text, options) {
       flush();
       const level = Math.min(6, heading[1].length + 1);
       const node = h('h' + level);
-      append(node, inlineNodes(heading[2].trim(), opts));
+      const endpoint = /^(GET|POST|PUT|PATCH|DELETE)\s+(\/\S*)$/.exec(heading[2].trim());
+      if (endpoint) {
+        node.className = 'md-endpoint';
+        append(node, [methodBadge(endpoint[1]), h('code', { class: 'md-endpoint-path', text: endpoint[2] })]);
+      } else {
+        append(node, inlineNodes(heading[2].trim(), opts));
+      }
       fragment.appendChild(node);
       index += 1;
       continue;
@@ -533,6 +672,18 @@ function mdFragment(text, options) {
         buffer.push(lines[index].replace(/^\s*>\s?/, ''));
         index += 1;
       }
+      const callout = /^\[!(NOTE|TIP|WARNING|IMPORTANT|CAUTION)\]\s*/i.exec(buffer[0] || '');
+      if (callout) {
+        const kind = callout[1].toLowerCase();
+        buffer[0] = buffer[0].slice(callout[0].length);
+        const box = h('div', { class: 'md-callout is-' + kind, role: 'note' },
+          h('div', { class: 'md-callout-title', text: { note: 'Note', tip: 'Tip', warning: 'Warning', important: 'Important', caution: 'Caution' }[kind] }));
+        const body = h('div', { class: 'md-callout-body' });
+        append(body, inlineNodes(buffer.join(' ').trim(), opts));
+        box.appendChild(body);
+        fragment.appendChild(box);
+        continue;
+      }
       const quote = h('blockquote');
       append(quote, inlineNodes(buffer.join(' '), opts));
       fragment.appendChild(quote);
@@ -542,7 +693,7 @@ function mdFragment(text, options) {
       flush();
       const buffer = [];
       while (index < lines.length && /^\s*\|/.test(lines[index])) { buffer.push(lines[index]); index += 1; }
-      fragment.appendChild(h('pre', { class: 'md-table' }, h('code', { text: buffer.join('\n') })));
+      fragment.appendChild(mdTable(buffer, opts));
       continue;
     }
     if (line.trim() === '') { flush(); index += 1; continue; }
@@ -1458,6 +1609,9 @@ function markdownLink(label, url, options) {
     return h('a', { href: url, rel: 'noopener noreferrer' }, inner);
   }
   if (url.startsWith('#')) return h('a', { href: url }, inner);
+  if (/^polier:[a-z0-9-]+$/.test(url)) {
+    return h('a', { href: '#/pages/' + encodeURIComponent(url), dataset: { pageLink: url } }, inner);
+  }
   const resolved = resolvePageLink(url, opts.linkBase);
   if (!resolved) return document.createTextNode(label);
   return h('a', {
@@ -1478,6 +1632,9 @@ async function loadPages() {
     state.pages = results[0];
     state.pageFavorites = Array.isArray(results[1].favorites) ? results[1].favorites : [];
     state.pagesLoaded = true;
+    if (!state.handbook) {
+      try { state.handbook = await api('/api/handbook'); } catch (err) { state.handbook = null; }
+    }
     state.pagesError = null;
   } catch (err) {
     state.pagesError = err;
@@ -1487,26 +1644,57 @@ async function loadPages() {
   return state.pages;
 }
 
+/* Handbook pages (guides, API reference) are shipped with the dashboard and
+   addressed as "polier:<id>" next to the project's own Markdown paths. */
+function handbookPages() {
+  if (state.handbookFlat && state.handbookFlat.source === state.handbook) return state.handbookFlat.pages;
+  const pages = [];
+  for (const space of (state.handbook && state.handbook.spaces) || []) {
+    for (const section of space.sections || []) {
+      for (const page of section.pages || []) {
+        const words = String(page.text || '').split(/\s+/).filter(Boolean).length;
+        pages.push({
+          path: 'polier:' + page.id, id: page.id, title: page.title, excerpt: page.summary,
+          text: page.text, words: words, handbook: true, space: space.id, spaceTitle: space.title,
+          section: section.title, kind: 'handbook'
+        });
+      }
+    }
+  }
+  state.handbookFlat = { source: state.handbook, pages: pages };
+  return pages;
+}
+
+function isHandbookPath(path) {
+  return /^polier:/.test(String(path || ''));
+}
+
 function pageExistsInIndex(path) {
+  if (isHandbookPath(path)) return handbookPages().some((page) => page.path === path);
   return Boolean(state.pages && (state.pages.pages || []).some((page) => page.path === path));
 }
 
 function pageByPath(path) {
+  if (isHandbookPath(path)) return handbookPages().find((page) => page.path === path) || null;
   return (state.pages && (state.pages.pages || []).find((page) => page.path === path)) || null;
 }
 
 function ensurePagesSelection() {
   if (!state.pages) return null;
-  if (state.pagesSelected && pageExistsInIndex(state.pagesSelected)) return state.pagesSelected;
-  const favorites = (state.pageFavorites || []).filter((path) => pageExistsInIndex(path));
-  const first = favorites[0] || (state.pages.pages && state.pages.pages[0] ? state.pages.pages[0].path : null);
-  state.pagesSelected = first;
-  state.pagesRef = null;
-  return first;
+  if (state.pagesSelected && !pageExistsInIndex(state.pagesSelected)) {
+    state.pagesSelected = null;
+    state.pagesRef = null;
+  }
+  return state.pagesSelected;
 }
 
 async function loadPage(path, ref) {
   if (!path) { state.pageDetail = null; return; }
+  if (isHandbookPath(path)) {
+    state.pageDetail = pageByPath(path);
+    state.pageError = state.pageDetail ? null : new ApiError('Unknown handbook page ' + path, 404, null);
+    return;
+  }
   state.pageLoading = true;
   try {
     const query = '/api/page?path=' + encodeURIComponent(path) + (ref ? '&ref=' + encodeURIComponent(ref) : '');
@@ -1542,7 +1730,7 @@ async function runPagesSearch(query) {
   if (String(state.pagesSearch || '').trim() !== query) return;
   try {
     const result = await api('/api/pages/search?q=' + encodeURIComponent(query) + '&limit=30');
-    state.pagesResults = result.results || [];
+    state.pagesResults = searchHandbook(query).concat(result.results || []).sort((a, b) => b.score - a.score);
     state.pagesSearchError = null;
   } catch (err) {
     state.pagesResults = [];
@@ -1550,6 +1738,31 @@ async function runPagesSearch(query) {
   }
   state.pagesSearching = false;
   renderView();
+}
+
+/* The handbook is searched in the page: a title hit counts more than body hits. */
+function searchHandbook(query) {
+  const words = String(query || '').toLowerCase().split(/\s+/).filter(Boolean);
+  if (!words.length) return [];
+  const hits = [];
+  for (const page of handbookPages()) {
+    const title = page.title.toLowerCase();
+    const text = String(page.text || '').toLowerCase();
+    let score = 0;
+    let missing = false;
+    for (const word of words) {
+      const inTitle = title.indexOf(word) !== -1;
+      const count = text.split(word).length - 1;
+      if (!inTitle && !count) { missing = true; break; }
+      score += (inTitle ? 10 : 0) + Math.min(count, 10);
+    }
+    if (missing) continue;
+    const at = text.indexOf(words[0]);
+    const raw = String(page.text || '');
+    const snippet = at === -1 ? page.excerpt : raw.slice(Math.max(0, at - 60), at + 120).replace(/\s+/g, ' ').replace(/[#`*>|]/g, '').trim();
+    hits.push({ path: page.path, title: page.title, score: score, snippet: (at > 60 ? '…' : '') + snippet + '…', handbook: true });
+  }
+  return hits;
 }
 
 async function togglePageFavorite(path) {
@@ -2204,6 +2417,8 @@ const state = {
   pagesSelected: null,
   pagesRef: null,
   pagesCollapsed: {},
+  kbSpace: 'project',
+  handbook: null,
   pagesSearch: '',
   pagesResults: [],
   pagesSearching: false,
@@ -2440,8 +2655,8 @@ function applyRoute() {
   syncSearchInput();
 
   if (parsed.view === 'pages') {
-    if (parsed.taskId && state.pagesSelected !== parsed.taskId) {
-      state.pagesSelected = parsed.taskId;
+    if ((parsed.taskId || null) !== state.pagesSelected) {
+      state.pagesSelected = parsed.taskId || null;
       state.pagesRef = null;
     }
     if (parsed.drawer) ensureDrawer(parsed.drawer);
@@ -4029,6 +4244,11 @@ function bindStatic() {
   });
 
   window.addEventListener('hashchange', applyRoute);
+  let tocFrame = 0;
+  window.addEventListener('scroll', () => {
+    if (tocFrame || state.route.view !== 'pages') return;
+    tocFrame = window.requestAnimationFrame(() => { tocFrame = 0; updatePagesTocActive(); });
+  }, { passive: true });
 
   document.addEventListener('keydown', (event) => {
     if (event.defaultPrevented) return;
@@ -7666,54 +7886,133 @@ function pageCollectionId(page) {
 
 
 function openPage(path, ref) {
-  if (!path) return;
-  state.pagesSelected = path;
+  state.pagesSelected = path || null;
   state.pagesRef = ref || null;
-  const target = '#/pages/' + encodeURIComponent(path);
+  if (path) state.pagesSearch = '';
+  const target = path ? '#/pages/' + encodeURIComponent(path) : '#/pages';
   if (location.hash === target) applyRoute();
   else location.hash = target;
+  window.scrollTo(0, 0);
+}
+
+/* The knowledge view reads like a documentation site: areas at the top of
+   the navigation (project docs, guides, API reference), a section tree, the
+   article in a readable column, "On this page" on the right and a
+   previous/next pager. #/pages without a path is the overview. */
+
+const KB_SECTIONS = [
+  { collection: 'root', title: 'Overview', icon: '◎', text: 'README, architecture, agents and the generated status of the project.' },
+  { collection: 'docs', title: 'Documentation', icon: '▤', text: 'Design rules, quality requirements, decisions (ADR), gates and research.' },
+  { collection: 'packages', title: 'Packages', icon: '▦', text: 'README and ARCHITECTURE of every package, service, app and tool.' },
+  { collection: 'tasks', title: 'Task briefs', icon: '☰', text: 'The brief each agent works from: scope, acceptance and gates.' },
+  { collection: 'reviews', title: 'Reviews', icon: '✓', text: 'Review feedback recorded for finished tasks.' }
+];
+
+const KB_SPACES = [
+  { id: 'project', title: 'Project docs' },
+  { id: 'guides', title: 'Guides' },
+  { id: 'api', title: 'API reference' }
+];
+
+/* Start points shown on the overview, like the "get started" row of a docs site. */
+const KB_START = [
+  { page: 'polier:quickstart', icon: '→', text: 'Start the dashboard and take a task from pending to done.' },
+  { page: 'polier:concepts', icon: '◇', text: 'Board, statuses, gates, claims and approvals in five minutes.' },
+  { page: 'polier:run-a-task', icon: '✓', text: 'Every checkpoint of a task, from the dashboard and the CLI.' },
+  { page: 'polier:api-introduction', icon: '{}', text: 'Script the dashboard from your own tools and CI.' }
+];
+
+function kbSectionOf(collection) {
+  const top = String(collection.id || '').split('/')[0];
+  return KB_SECTIONS.find((section) => section.collection === top) ||
+    { collection: top, title: collection.title || top, icon: '•', text: '' };
+}
+
+function kbSpace() {
+  const page = state.pagesSelected ? pageByPath(state.pagesSelected) : null;
+  if (page) return page.handbook ? page.space : 'project';
+  return state.kbSpace || 'project';
+}
+
+/* Navigation model of one area: sections with direct pages and nested
+   groups (subcollections); a group of one page is shown as the page. */
+function kbTree(space) {
+  const area = space || kbSpace();
+  if (area !== 'project') {
+    const source = ((state.handbook && state.handbook.spaces) || []).find((entry) => entry.id === area);
+    if (!source) return [];
+    return (source.sections || []).map((section) => ({
+      meta: { collection: area + ':' + section.title, title: section.title, icon: '', text: '' },
+      pages: (section.pages || []).map((page) => pageByPath('polier:' + page.id)).filter(Boolean),
+      groups: []
+    }));
+  }
+  const index = state.pages;
+  if (!index) return [];
+  const sections = [];
+  const bySection = new Map();
+  for (const collection of index.collections || []) {
+    const meta = kbSectionOf(collection);
+    if (!bySection.has(meta.collection)) {
+      const entry = { meta: meta, pages: [], groups: [] };
+      bySection.set(meta.collection, entry);
+      sections.push(entry);
+    }
+    const section = bySection.get(meta.collection);
+    if (!collection.sub) section.pages = section.pages.concat(collection.pages);
+    else if (collection.pages.length === 1) section.pages.push(Object.assign({ navTitle: collection.sub }, collection.pages[0]));
+    else section.groups.push({ id: collection.id, title: collection.sub, pages: collection.pages });
+  }
+  const order = KB_SECTIONS.map((section) => section.collection);
+  sections.sort((left, right) => {
+    const a = order.indexOf(left.meta.collection);
+    const b = order.indexOf(right.meta.collection);
+    return (a === -1 ? 99 : a) - (b === -1 ? 99 : b);
+  });
+  return sections;
+}
+
+/* Reading order for the pager: the tree of the area, top to bottom. */
+function kbFlatPages(space) {
+  const flat = [];
+  for (const section of kbTree(space)) {
+    for (const page of section.pages) flat.push({ page: page, section: section });
+    for (const group of section.groups) for (const page of group.pages) flat.push({ page: page, section: section, group: group });
+  }
+  return flat;
+}
+
+/* Titles like "Design Rules: canvas-mini" read better without the project name. */
+function kbPageTitle(page) {
+  if (!page) return '';
+  if (page.navTitle) return page.navTitle;
+  if (page.handbook) return page.title;
+  const project = state.snapshot && state.snapshot.project ? state.snapshot.project.name : '';
+  let title = String(page.title || page.path || '');
+  if (project) {
+    if (title === project) return basename(page.path || '').replace(/\.md$/i, '');
+    const suffix = new RegExp('\\s*(?::|—|–|-)\\s*' + project.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$');
+    title = title.replace(suffix, '') || title;
+  }
+  return title;
+}
+
+function openKbSpace(space) {
+  state.kbSpace = space;
+  state.pagesSearch = '';
+  if (space === 'project') { openPage(null); return; }
+  const first = kbFlatPages(space)[0];
+  openPage(first ? first.page.path : null);
 }
 
 function renderPages() {
-  const view = h('div', { class: 'pages-view' });
-  dom.view.appendChild(view);
   const index = state.pages;
-  const page = state.pageDetail;
   const searchQuery = String(state.pagesSearch || '').trim();
   const searching = searchQuery.length >= 2;
 
-  view.appendChild(h('div', { class: 'view-head' },
-    h('div', {},
-      h('h1', { class: 'view-title', text: 'Pages' }),
-      h('p', {
-        class: 'view-sub',
-        text: index
-          ? index.counts.pages + ' pages · ' + index.counts.collections + ' collections · ' + index.counts.favorites + ' favorites'
-          : 'The project knowledge layer'
-      })),
-    h('div', { class: 'view-actions' },
-      h('button', {
-        class: 'btn btn-sm', type: 'button', text: 'Refresh',
-        on: {
-          click: async () => {
-            await loadPages();
-            if (state.pagesSelected) await loadPage(state.pagesSelected, state.pagesRef);
-            renderView();
-          }
-        }
-      }))));
-
-  view.appendChild(h('div', { class: 'pages-toolbar' },
-    h('div', { class: 'pages-searchbox' },
-      h('input', {
-        class: 'input', type: 'search', value: state.pagesSearch || '',
-        placeholder: 'Search the project knowledge…', 'aria-label': 'Search pages',
-        'data-fkey': 'pages-search',
-        on: { input: (event) => schedulePagesSearch(event.target.value) }
-      })),
-    h('span', { class: 'hint', text: searching ? 'Searching titles and Markdown content (min 2 characters).' : 'Read-only view of Markdown files in the project.' })));
-
   if (!state.pagesLoaded && !index) {
+    const view = h('div', { class: 'pages-view' });
+    view.appendChild(h('h1', { class: 'view-title', text: 'Pages' }));
     if (state.pagesError) {
       view.appendChild(errorCallout(state.pagesError));
       view.appendChild(h('div', { style: { marginTop: '10px' } },
@@ -7721,227 +8020,381 @@ function renderPages() {
     } else {
       view.appendChild(loadingRow('Indexing the project pages…'));
     }
-    return;
-  }
-  if (state.pagesError) view.appendChild(errorCallout(state.pagesError));
-  if (!index || !(index.pages || []).length) {
-    view.appendChild(emptyState('No pages found',
-      'Polier indexes README, ARCHITECTURE, docs/, tasks/, reviews/ and package Markdown files.',
-      null));
+    dom.view.appendChild(view);
     return;
   }
 
-  const grid = h('div', { class: 'pages-grid' });
-  grid.appendChild(renderPagesSidebar());
-  grid.appendChild(renderPagesList(searching, searchQuery));
-  grid.appendChild(renderPagesReader());
-  view.appendChild(grid);
+  const mode = searching ? 'search' : (state.pagesSelected ? 'page' : 'home');
+  const kb = h('div', { class: 'kb' + (mode === 'home' ? ' is-home' : '') + (mode === 'search' ? ' is-search' : '') });
+  dom.view.appendChild(kb);
+  kb.appendChild(renderPagesSidebar());
+
+  const main = h('div', { class: 'kb-main' });
+  kb.appendChild(main);
+  if (state.pagesError) main.appendChild(errorCallout(state.pagesError));
+  if (mode === 'search') main.appendChild(renderPagesSearch(searchQuery));
+  else if (mode === 'home') main.appendChild(renderPagesHome());
+  else {
+    const toc = h('aside', { class: 'kb-toc', 'aria-label': 'On this page' });
+    main.appendChild(renderPagesReader(toc));
+    kb.appendChild(toc);
+  }
 }
 
 function renderPagesSidebar() {
-  const index = state.pages;
-  const sidebar = h('aside', { class: 'pages-sidebar', 'aria-label': 'Page collections' });
-  const favorites = (state.pageFavorites || []).filter((path) => pageExistsInIndex(path));
+  const nav = h('nav', { class: 'kb-nav', 'aria-label': 'Knowledge navigation' });
+  const icon = svgEl('svg', { viewBox: '0 0 16 16', width: '13', height: '13', 'aria-hidden': 'true' });
+  icon.appendChild(svgEl('circle', { cx: '7', cy: '7', r: '4.4', fill: 'none', stroke: 'currentColor', 'stroke-width': '1.4' }));
+  icon.appendChild(svgEl('path', { d: 'M10.4 10.4 14 14', fill: 'none', stroke: 'currentColor', 'stroke-width': '1.4', 'stroke-linecap': 'round' }));
+  nav.appendChild(h('div', { class: 'kb-search', role: 'search' },
+    h('span', { class: 'kb-search-icon' }, icon),
+    h('input', {
+      class: 'input', type: 'search', value: state.pagesSearch || '',
+      placeholder: 'Search docs and guides', 'aria-label': 'Search the knowledge base',
+      'data-fkey': 'pages-search',
+      on: { input: (event) => schedulePagesSearch(event.target.value) }
+    })));
 
-  sidebar.appendChild(h('div', { class: 'pages-section-title' },
-    h('span', { text: 'Favorites' }),
-    h('span', { class: 'collection-count', text: String(favorites.length) })));
-  if (!favorites.length) {
-    sidebar.appendChild(h('div', { class: 'hint', style: { padding: '2px 6px 6px' }, text: 'Star a page to keep it here.' }));
-  } else {
-    for (const path of favorites) {
-      const page = pageByPath(path);
-      if (!page) continue;
-      sidebar.appendChild(h('button', {
-        class: 'fav-page' + (state.pagesSelected === path ? ' is-active' : ''),
-        type: 'button', title: path,
-        on: { click: () => openPage(path) }
-      },
-        h('span', { class: 'page-star is-on', 'aria-hidden': 'true', text: '★' }),
-        h('span', { class: 'truncate', text: page.title })));
+  const space = kbSpace();
+  const hasHandbook = handbookPages().length > 0;
+  if (hasHandbook) {
+    const switcher = h('div', { class: 'kb-spaces', role: 'tablist', 'aria-label': 'Knowledge areas' });
+    for (const entry of KB_SPACES) {
+      switcher.appendChild(h('button', {
+        class: 'kb-space' + (entry.id === space ? ' is-active' : ''), type: 'button', role: 'tab',
+        'aria-selected': entry.id === space ? 'true' : 'false',
+        on: { click: () => openKbSpace(entry.id) }
+      }, entry.title));
+    }
+    nav.appendChild(switcher);
+  }
+
+  if (space === 'project') {
+    nav.appendChild(h('button', {
+      class: 'kb-nav-home' + (!state.pagesSelected && !String(state.pagesSearch || '').trim() ? ' is-active' : ''),
+      type: 'button',
+      on: { click: () => { state.kbSpace = 'project'; state.pagesSearch = ''; openPage(null); } }
+    }, h('span', { 'aria-hidden': 'true', text: '⌂' }), h('span', { text: 'Knowledge home' })));
+  }
+
+  const link = (page) => h('button', {
+    class: 'kb-link' + (state.pagesSelected === page.path ? ' is-active' : ''),
+    type: 'button', title: page.handbook ? page.title : page.path,
+    'aria-current': state.pagesSelected === page.path ? 'page' : null,
+    on: { click: () => openPage(page.path) }
+  },
+    h('span', { class: 'kb-link-text', text: kbPageTitle(page) }),
+    !page.handbook && (page.favorite || (state.pageFavorites || []).indexOf(page.path) !== -1)
+      ? h('span', { class: 'kb-star', 'aria-label': 'favorite', text: '★' }) : null);
+
+  if (space === 'project') {
+    const favorites = (state.pageFavorites || []).filter((path) => pageExistsInIndex(path));
+    if (favorites.length) {
+      const section = h('div', { class: 'kb-section' }, h('div', { class: 'kb-section-title', text: 'Favorites' }));
+      for (const path of favorites) section.appendChild(link(pageByPath(path)));
+      nav.appendChild(section);
     }
   }
 
-  sidebar.appendChild(h('div', { class: 'pages-section-title', style: { marginTop: '6px' } },
-    h('span', { text: 'Collections' })));
-  const selectedPage = state.pagesSelected ? pageByPath(state.pagesSelected) : null;
-  const selectedCollection = selectedPage ? pageCollectionId(selectedPage) : null;
-  for (const collection of index.collections || []) {
-    const containsSelected = collection.id === selectedCollection;
-    const stored = state.pagesCollapsed[collection.id];
-    const collapsed = stored === undefined ? !containsSelected : Boolean(stored);
-    const label = collection.sub ? collection.title + ' / ' + collection.sub : collection.title;
-    const wrapper = h('div', { class: 'tree-collection' });
-    wrapper.appendChild(h('button', {
-      class: 'tree-toggle', type: 'button',
-      'aria-expanded': collapsed ? 'false' : 'true',
-      title: collection.id,
+  const tree = kbTree(space);
+  if (!tree.length) nav.appendChild(h('div', { class: 'kb-empty', text: space === 'project' ? 'No Markdown in this project yet.' : 'Not available.' }));
+  for (const entry of tree) {
+    const section = h('div', { class: 'kb-section' }, h('div', { class: 'kb-section-title', text: entry.meta.title }));
+    for (const page of entry.pages) section.appendChild(link(page));
+    for (const group of entry.groups) {
+      const containsSelected = group.pages.some((page) => page.path === state.pagesSelected);
+      const stored = state.pagesCollapsed[group.id];
+      const open = stored === undefined ? containsSelected : !stored;
+      section.appendChild(h('button', {
+        class: 'kb-group-toggle', type: 'button', 'aria-expanded': open ? 'true' : 'false',
+        on: { click: () => { state.pagesCollapsed[group.id] = open; renderView(); } }
+      }, h('span', { class: 'kb-link-text', text: capitalize(group.title) }), h('span', { class: 'kb-caret', text: '▸' })));
+      if (open) {
+        const host = h('div', { class: 'kb-group-pages' });
+        for (const page of group.pages) host.appendChild(link(page));
+        section.appendChild(host);
+      }
+    }
+    nav.appendChild(section);
+  }
+  return nav;
+}
+
+function kbCard(options) {
+  return h('button', { class: 'kb-card', type: 'button', on: { click: options.onClick } },
+    options.icon ? h('span', { class: 'kb-card-icon', 'aria-hidden': 'true', text: options.icon }) : null,
+    h('span', { class: 'kb-card-title', text: options.title }),
+    options.text ? h('span', { class: 'kb-card-text', text: options.text }) : null,
+    options.foot ? h('span', { class: 'kb-card-foot', text: options.foot }) : null);
+}
+
+function renderPagesHome() {
+  const index = state.pages || { pages: [], counts: { pages: 0 } };
+  const article = h('div', { class: 'kb-article is-wide' });
+  const project = state.snapshot && state.snapshot.project ? state.snapshot.project.name : '';
+  article.appendChild(h('div', { class: 'kb-crumbs' }, h('span', { text: 'Knowledge' })));
+  article.appendChild(h('h1', { class: 'kb-title', text: project ? project + ' knowledge' : 'Knowledge' }));
+  article.appendChild(h('p', { class: 'kb-lead', text:
+    'The project\'s own documents — architecture, rules, briefs and reviews — next to the guides and the API reference of the dashboard. ' +
+    'Project documents are read-only here; agents edit them through the write guard.' }));
+
+  const start = KB_START.map((entry) => ({ entry: entry, page: pageByPath(entry.page) })).filter((item) => item.page);
+  if (start.length) {
+    article.appendChild(h('h2', { class: 'kb-h2', text: 'Get started' }));
+    const cards = h('div', { class: 'kb-cards' });
+    for (const item of start) {
+      cards.appendChild(kbCard({ icon: item.entry.icon, title: item.page.title, text: item.entry.text, foot: item.page.spaceTitle + ' →', onClick: () => openPage(item.page.path) }));
+    }
+    article.appendChild(cards);
+  }
+
+  const projectSections = kbTree('project');
+  if (projectSections.length) {
+    article.appendChild(h('h2', { class: 'kb-h2', text: 'Project documents' }));
+    article.appendChild(h('p', { class: 'kb-h2-sub', text: index.counts.pages + ' Markdown files indexed from this repository.' }));
+    const cards = h('div', { class: 'kb-cards' });
+    for (const entry of projectSections) {
+      const all = entry.pages.concat(...entry.groups.map((group) => group.pages));
+      if (!all.length) continue;
+      cards.appendChild(kbCard({ icon: entry.meta.icon, title: entry.meta.title, text: entry.meta.text || all.slice(0, 3).map(kbPageTitle).join(', '),
+        foot: all.length + ' ' + plural(all.length, 'page') + ' →', onClick: () => openPage(all[0].path) }));
+    }
+    article.appendChild(cards);
+  }
+
+  const spaces = ((state.handbook && state.handbook.spaces) || []);
+  if (spaces.length) {
+    article.appendChild(h('h2', { class: 'kb-h2', text: 'Learn the dashboard' }));
+    const cards = h('div', { class: 'kb-cards' });
+    for (const space of spaces) {
+      for (const section of space.sections || []) {
+        const pages = section.pages || [];
+        if (!pages.length) continue;
+        cards.appendChild(kbCard({ title: section.title, text: pages.slice(0, 4).map((page) => page.title).join(' · '),
+          foot: space.title + ' · ' + pages.length + ' ' + plural(pages.length, 'page') + ' →',
+          onClick: () => openPage('polier:' + pages[0].id) }));
+      }
+    }
+    article.appendChild(cards);
+  }
+
+  const recent = (index.pages || []).slice().sort((a, b) => String(b.updated || '').localeCompare(String(a.updated || ''))).slice(0, 5);
+  if (recent.length) {
+    article.appendChild(h('h2', { class: 'kb-h2', text: 'Recently updated' }));
+    article.appendChild(kbPageList(recent.map((page) => ({ page: page, side: relTime(page.updated) }))));
+  }
+  return article;
+}
+
+function kbPageList(rows) {
+  const list = h('div', { class: 'kb-list' });
+  for (const row of rows) {
+    const page = row.page;
+    list.appendChild(h('button', {
+      class: 'kb-list-item', type: 'button', title: page.handbook ? page.title : page.path,
+      on: { click: () => openPage(page.path) }
+    },
+      h('span', { class: 'kb-list-main' },
+        h('span', { class: 'kb-list-title', text: kbPageTitle(page) }),
+        row.snippet || page.excerpt ? h('span', { class: 'kb-list-sub', text: row.snippet || page.excerpt }) : null,
+        h('span', { class: 'kb-list-path', text: page.handbook ? page.spaceTitle + ' › ' + page.section : page.path })),
+      row.side ? h('span', { class: 'kb-list-side', text: row.side }) : null));
+  }
+  return list;
+}
+
+function renderPagesSearch(query) {
+  const article = h('div', { class: 'kb-article' });
+  article.appendChild(h('div', { class: 'kb-crumbs' },
+    h('button', { type: 'button', text: 'Knowledge', on: { click: () => { state.pagesSearch = ''; openPage(null); } } }),
+    h('span', { class: 'kb-crumb-sep', text: '›' }), h('span', { text: 'Search' })));
+  article.appendChild(h('h1', { class: 'kb-title', text: 'Results for “' + query + '”' }));
+  if (state.pagesSearching) { article.appendChild(h('div', { class: 'reader-loading' }, loadingRow('Searching…'))); return article; }
+  if (state.pagesSearchError) article.appendChild(errorCallout(state.pagesSearchError));
+  const results = state.pagesResults || [];
+  article.appendChild(h('p', { class: 'kb-lead', text: results.length
+    ? results.length + ' ' + plural(results.length, 'page') + ' match, best first.'
+    : 'No page matches. Try fewer or different words.' }));
+  if (results.length) {
+    article.appendChild(kbPageList(results.map((result) => {
+      const page = pageByPath(result.path) || { path: result.path, title: result.title };
+      return {
+        page: page,
+        snippet: result.snippet,
+        side: page.handbook ? page.spaceTitle : (page.collection ? kbSectionOf({ id: pageCollectionId(page) }).title : '')
+      };
+    })));
+  }
+  return article;
+}
+
+/* Headings of the rendered article: ids for anchors, entries for the TOC.
+   The first heading repeats the page title and is dropped from the body. */
+function kbPrepareHeadings(content, title) {
+  const first = content.firstElementChild;
+  if (first && /^H[1-3]$/.test(first.tagName) && first.textContent.trim() === String(title || '').trim()) first.remove();
+  const used = new Set();
+  const nodes = Array.from(content.querySelectorAll('h2, h3, h4.md-endpoint'));
+  const top = Math.min(...nodes.filter((node) => !node.classList.contains('md-endpoint')).map((node) => Number(node.tagName.charAt(1))), 9);
+  const entries = [];
+  for (const node of nodes) {
+    let id = slugify(node.textContent) || 'section';
+    while (used.has(id)) id += '-x';
+    used.add(id);
+    node.id = 'kb-' + id;
+    const endpoint = node.classList.contains('md-endpoint');
+    entries.push({
+      id: node.id,
+      text: endpoint ? node.textContent.replace(/^(GET|POST|PUT|PATCH|DELETE)/, '$1 ') : node.textContent,
+      sub: endpoint || Number(node.tagName.charAt(1)) > top,
+      endpoint: endpoint
+    });
+  }
+  return entries;
+}
+
+function renderPagesToc(toc, entries) {
+  toc.appendChild(h('div', { class: 'kb-toc-title', text: 'On this page' }));
+  if (!entries.length) {
+    toc.appendChild(h('div', { class: 'kb-toc-empty', text: 'No sections.' }));
+    return;
+  }
+  const list = h('nav', { class: 'kb-toc-list' });
+  for (const entry of entries) {
+    list.appendChild(h('a', {
+      class: 'kb-toc-link' + (entry.sub ? ' is-sub' : '') + (entry.endpoint ? ' is-endpoint' : ''), href: '#' + entry.id,
+      dataset: { target: entry.id },
       on: {
-        click: () => {
-          state.pagesCollapsed[collection.id] = !collapsed;
-          renderView();
+        click: (event) => {
+          event.preventDefault();
+          const target = document.getElementById(entry.id);
+          if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
       }
-    },
-      h('span', { class: 'tree-caret', text: collapsed ? '▸' : '▾' }),
-      h('span', { class: 'truncate', text: label }),
-      h('span', { class: 'collection-count', text: String(collection.pages.length) })));
-    if (!collapsed) {
-      const pagesHost = h('div', { class: 'tree-pages' });
-      for (const entry of collection.pages) {
-        pagesHost.appendChild(h('button', {
-          class: 'tree-page' + (state.pagesSelected === entry.path ? ' is-active' : ''),
-          type: 'button', title: entry.path,
-          on: { click: () => openPage(entry.path) }
-        },
-          h('span', { class: 'truncate', text: entry.title }),
-          entry.favorite ? h('span', { class: 'page-star is-on', 'aria-hidden': 'true', text: '★' }) : null));
-      }
-      wrapper.appendChild(pagesHost);
-    }
-    sidebar.appendChild(wrapper);
+    }, entry.text));
   }
-  return sidebar;
+  toc.appendChild(list);
+  toc.appendChild(h('button', {
+    class: 'kb-top', type: 'button', text: '↑ Back to top',
+    on: { click: () => window.scrollTo({ top: 0, behavior: 'smooth' }) }
+  }));
+  window.requestAnimationFrame(updatePagesTocActive);
 }
 
-function renderPagesList(searching, searchQuery) {
-  const pane = h('section', { class: 'pages-listpane', 'aria-label': 'Page list' });
-  const index = state.pages;
-
-  if (searching) {
-    pane.appendChild(h('div', { class: 'pages-list-head' },
-      h('span', { class: 'pages-list-title', text: 'Search results' }),
-      h('span', { class: 'collection-count', text: state.pagesResults.length + ' hits' })));
-    if (state.pagesSearching) {
-      pane.appendChild(h('div', { class: 'reader-loading' }, loadingRow('Searching…')));
-      return pane;
-    }
-    if (state.pagesSearchError) {
-      pane.appendChild(h('div', { class: 'reader-loading' }, errorCallout(state.pagesSearchError)));
-      return pane;
-    }
-    if (!state.pagesResults.length) {
-      pane.appendChild(h('div', { class: 'pages-empty', text: 'No page matches "' + searchQuery + '".' }));
-      return pane;
-    }
-    for (const result of state.pagesResults) {
-      pane.appendChild(h('button', {
-        class: 'page-list-item' + (state.pagesSelected === result.path ? ' is-active' : ''),
-        type: 'button', title: result.path,
-        on: { click: () => openPage(result.path) }
-      },
-        h('div', { class: 'page-list-title-row' },
-          h('span', { class: 'page-list-name', text: result.title }),
-          h('span', { class: 'page-result-score', text: 'score ' + result.score }),
-          result.favorite ? h('span', { class: 'page-star is-on', 'aria-hidden': 'true', text: '★' }) : null),
-        h('div', { class: 'page-list-path', text: result.path }),
-        result.snippet ? h('div', { class: 'page-result-snippet', text: result.snippet }) : null));
-    }
-    return pane;
+/* Scroll spy: the last heading above the fold is the active TOC entry. */
+function updatePagesTocActive() {
+  const links = document.querySelectorAll('.kb-toc-link');
+  if (!links.length) return;
+  const offset = 110;
+  let active = links[0].dataset.target;
+  for (const link of links) {
+    const target = document.getElementById(link.dataset.target);
+    if (target && target.getBoundingClientRect().top - offset <= 0) active = link.dataset.target;
   }
-
-  const selectedPage = state.pagesSelected ? pageByPath(state.pagesSelected) : null;
-  const collectionId = selectedPage ? pageCollectionId(selectedPage) : (index.collections[0] || {}).id;
-  const collection = (index.collections || []).find((entry) => entry.id === collectionId) || index.collections[0];
-  if (!collection) {
-    pane.appendChild(h('div', { class: 'pages-empty', text: 'No collection selected.' }));
-    return pane;
-  }
-  pane.appendChild(h('div', { class: 'pages-list-head' },
-    h('span', { class: 'pages-list-title', text: collection.title + (collection.sub ? ' / ' + collection.sub : '') }),
-    h('span', { class: 'collection-count', text: collection.pages.length + ' pages' })));
-  for (const entry of collection.pages) {
-    pane.appendChild(h('button', {
-      class: 'page-list-item' + (state.pagesSelected === entry.path ? ' is-active' : ''),
-      type: 'button', title: entry.path,
-      on: { click: () => openPage(entry.path) }
-    },
-      h('div', { class: 'page-list-title-row' },
-        h('span', { class: 'page-list-name', text: entry.title }),
-        entry.favorite ? h('span', { class: 'page-star is-on', 'aria-hidden': 'true', text: '★' }) : null),
-      h('div', { class: 'page-list-path', text: entry.path })));
-  }
-  return pane;
+  for (const link of links) link.classList.toggle('is-active', link.dataset.target === active);
 }
 
-function renderPagesReader() {
-  const pane = h('article', { class: 'pages-reader', 'aria-label': 'Page reader' });
+function renderPagesReader(toc) {
+  const article = h('article', { class: 'kb-article', 'aria-label': 'Page' });
   const path = state.pagesSelected;
+  const page = state.pageDetail && state.pageDetail.path === path ? state.pageDetail : null;
+  const indexed = pageByPath(path);
+  const handbook = isHandbookPath(path);
 
-  if (!path) {
-    pane.appendChild(h('div', { class: 'pages-empty', text: 'Select a page from the list.' }));
-    return pane;
+  const space = kbSpace();
+  const flat = kbFlatPages(space);
+  const position = flat.findIndex((entry) => entry.page.path === path);
+  const here = position !== -1 ? flat[position] : null;
+  const crumbs = h('div', { class: 'kb-crumbs' },
+    h('button', { type: 'button', text: 'Knowledge', on: { click: () => { state.kbSpace = 'project'; openPage(null); } } }));
+  if (handbook && indexed) {
+    append(crumbs, [h('span', { class: 'kb-crumb-sep', text: '›' }),
+      h('button', { type: 'button', text: indexed.spaceTitle, on: { click: () => openKbSpace(indexed.space) } })]);
   }
-  if (state.pageLoading && !state.pageDetail) {
-    pane.appendChild(h('div', { class: 'reader-loading' }, loadingRow('Loading the page…')));
-    return pane;
+  if (here) {
+    append(crumbs, [h('span', { class: 'kb-crumb-sep', text: '›' }),
+      h('button', { type: 'button', text: here.section.meta.title, on: { click: () => openPage((here.section.pages[0] || here.page).path) } })]);
+    if (here.group) append(crumbs, [h('span', { class: 'kb-crumb-sep', text: '›' }), h('span', { text: capitalize(here.group.title) })]);
   }
-  if (state.pageError && !state.pageDetail) {
-    pane.appendChild(h('div', { class: 'reader-loading' }, errorCallout(state.pageError)));
-    pane.appendChild(h('div', { style: { padding: '0 16px 16px' } },
-      h('button', { class: 'btn', type: 'button', text: 'Retry', on: { click: () => loadPage(path, state.pagesRef).then(() => renderView()) } })));
-    return pane;
-  }
-  const page = state.pageDetail;
+  article.appendChild(crumbs);
+
   if (!page) {
-    pane.appendChild(h('div', { class: 'pages-empty', text: 'This page could not be loaded.' }));
-    return pane;
+    if (state.pageError && !state.pageLoading) {
+      article.appendChild(errorCallout(state.pageError));
+      article.appendChild(h('div', { style: { marginTop: '10px' } },
+        h('button', { class: 'btn', type: 'button', text: 'Retry', on: { click: () => loadPage(path, state.pagesRef).then(() => renderView()) } })));
+    } else {
+      article.appendChild(h('h1', { class: 'kb-title', text: indexed ? kbPageTitle(indexed) : path }));
+      article.appendChild(h('div', { class: 'reader-loading' }, loadingRow('Loading the page…')));
+    }
+    return article;
   }
 
   const favorite = (state.pageFavorites || []).indexOf(page.path) !== -1;
-  pane.appendChild(h('div', { class: 'reader-head' },
-    h('div', { class: 'reader-title-row' },
-      h('h2', { class: 'reader-title', text: page.title || page.path }),
-      h('button', {
-        class: 'page-star' + (favorite ? ' is-on' : ''),
-        type: 'button',
-        disabled: !canWrite(),
-        title: canWrite() ? (favorite ? 'Remove from favorites' : 'Add to favorites') : 'The dashboard is read-only',
-        'aria-label': favorite ? 'Remove from favorites' : 'Add to favorites',
-        text: favorite ? '★' : '☆',
-        on: { click: () => togglePageFavorite(page.path) }
-      })),
-    h('div', { class: 'reader-meta' },
-      h('span', { class: 'reader-path', text: page.path }),
-      pageKindChip(page.kind),
-      h('span', { class: 'chip', text: page.collection_title + (page.subcollection ? ' / ' + page.subcollection : '') }),
-      h('span', { text: page.words + ' words' }),
-      h('span', { text: 'updated ' + relTime(page.updated) }),
-      page.favorite ? h('span', { class: 'badge bg-amber st-amber', text: 'favorite' }) : null)));
+  article.appendChild(h('div', { class: 'kb-title-row' },
+    h('h1', { class: 'kb-title', text: kbPageTitle(Object.assign({}, indexed || {}, page)) }),
+    handbook ? null : h('button', {
+      class: 'kb-fav' + (favorite ? ' is-on' : ''), type: 'button',
+      disabled: !canWrite(),
+      title: canWrite() ? (favorite ? 'Remove from favorites' : 'Add to favorites') : 'The dashboard is read-only',
+      'aria-pressed': favorite ? 'true' : 'false',
+      on: { click: () => togglePageFavorite(page.path) }
+    }, h('span', { text: favorite ? '★' : '☆' }), h('span', { text: favorite ? 'Favorite' : 'Add to favorites' }))));
+  const minutes = Math.max(1, Math.round((Number(page.words) || 0) / 220));
+  const version = state.handbook && state.config && state.config.version ? state.config.version : '';
+  article.appendChild(h('div', { class: 'kb-meta' },
+    handbook ? h('span', { text: 'Dashboard handbook' + (version ? ' · ' + version : '') }) : h('span', { class: 'mono', text: page.path }),
+    h('span', { text: minutes + ' min read' }),
+    handbook ? null : h('span', { text: 'updated ' + relTime(page.updated) })));
 
   if (page.ref) {
-    pane.appendChild(h('div', { class: 'revision-banner' },
-      h('span', { text: 'Viewing old revision ' + page.ref + ' — the working copy may differ.' }),
-      h('button', {
-        class: 'btn btn-sm', type: 'button', text: 'Back to current',
-        on: { click: () => openPage(page.path, null) }
-      })));
+    article.appendChild(h('div', { class: 'revision-banner' },
+      h('span', { text: 'You are reading revision ' + page.ref + '; the working copy may differ.' }),
+      h('button', { class: 'btn btn-sm', type: 'button', text: 'Back to current', on: { click: () => openPage(page.path, null) } })));
   }
 
-  const body = h('div', { class: 'reader-body' });
-  const content = h('div', { class: 'md' }, mdFragment(page.text || '', { linkBase: page.path }));
+  const content = h('div', { class: 'md kb-body' }, mdFragment(page.text || '', { linkBase: handbook ? '' : page.path }));
   content.addEventListener('click', (event) => {
     const target = event.target && event.target.closest ? event.target.closest('a[data-page-link]') : null;
     if (!target) return;
     event.preventDefault();
     openPage(target.getAttribute('data-page-link'));
   });
-  body.appendChild(content);
+  const headings = kbPrepareHeadings(content, page.title);
+  article.appendChild(content);
+  if (toc) renderPagesToc(toc, headings);
 
-  /* History */
+  /* referenced by */
+  const backlinks = page.backlinks || [];
+  if (backlinks.length) {
+    const chips = h('div', { class: 'backlink-chips' });
+    for (const link of backlinks) {
+      if (link.kind === 'task') {
+        chips.appendChild(h('button', {
+          class: 'chip chip-link', type: 'button', title: 'Open task ' + link.id,
+          on: { click: () => openTask(link.id) }
+        }, statusDot(link.status), h('span', { class: 'mono', text: link.id })));
+      } else {
+        chips.appendChild(h('button', {
+          class: 'chip chip-link', type: 'button', title: link.path,
+          on: { click: () => openPage(link.path) }
+        }, kbPageTitle(pageByPath(link.path) || link)));
+      }
+    }
+    article.appendChild(h('section', { class: 'kb-panel' },
+      h('div', { class: 'kb-panel-title', text: 'Referenced by ' + backlinks.length + ' ' + plural(backlinks.length, 'page or task', 'pages and tasks') }),
+      chips));
+  }
+
+  /* history */
   const history = page.history || [];
-  const historySection = h('section', { class: 'reader-section' },
-    h('div', { class: 'reader-section-title' },
-      h('span', { text: 'History' }),
-      page.ref ? h('button', {
-        class: 'btn btn-sm btn-ghost', type: 'button', text: 'Current',
-        on: { click: () => openPage(page.path, null) }
-      }) : h('span', { class: 'hint', text: history.length + ' revision(s)' })));
-  if (!history.length) {
-    historySection.appendChild(h('div', { class: 'hint', text: 'No git history for this page (not committed yet).' }));
-  } else {
+  if (history.length) {
+    const historyPanel = h('details', { class: 'kb-panel', open: Boolean(page.ref) },
+      h('summary', {},
+        h('span', { class: 'kb-panel-title', text: 'Page history' }),
+        h('span', { class: 'hint', text: history.length + ' ' + plural(history.length, 'revision') })));
     for (const entry of history) {
-      historySection.appendChild(h('button', {
+      historyPanel.appendChild(h('button', {
         class: 'history-row' + (page.ref === entry.hash ? ' is-current' : ''),
         type: 'button', title: entry.subject,
         on: { click: () => openPage(page.path, entry.hash) }
@@ -7951,41 +8404,26 @@ function renderPagesReader() {
         h('span', { class: 'truncate', style: { flex: '1 1 auto' }, text: entry.subject }),
         h('span', { class: 'hint', text: entry.author })));
     }
+    article.appendChild(historyPanel);
   }
-  body.appendChild(historySection);
 
-  /* Backlinks */
-  const backlinks = page.backlinks || [];
-  const backlinkSection = h('section', { class: 'reader-section' },
-    h('div', { class: 'reader-section-title' },
-      h('span', { text: 'Backlinks' }),
-      h('span', { class: 'hint', text: backlinks.length + ' reference(s)' })));
-  if (!backlinks.length) {
-    backlinkSection.appendChild(h('div', { class: 'hint', text: 'No page or task references this page yet.' }));
-  } else {
-    const chips = h('div', { class: 'backlink-chips' });
-    for (const link of backlinks) {
-      if (link.kind === 'task') {
-        chips.appendChild(h('button', {
-          class: 'chip chip-link req-task-chip', type: 'button',
-          title: 'Open task ' + link.id,
-          on: { click: () => openTask(link.id) }
-        },
-          statusDot(link.status),
-          h('span', { class: 'mono', text: link.id })));
-      } else {
-        chips.appendChild(h('button', {
-          class: 'chip chip-link', type: 'button', title: link.path,
-          on: { click: () => openPage(link.path) }
-        }, link.title || link.path));
-      }
-    }
-    backlinkSection.appendChild(chips);
+  /* previous / next in reading order */
+  if (position !== -1) {
+    const prev = flat[position - 1];
+    const next = flat[position + 1];
+    const pager = h('nav', { class: 'kb-pager', 'aria-label': 'Previous and next page' });
+    if (prev) pager.appendChild(h('button', { class: 'kb-pager-link', type: 'button', on: { click: () => openPage(prev.page.path) } },
+      h('span', { class: 'kb-pager-dir', text: '← Previous' }), h('span', { class: 'kb-pager-title', text: kbPageTitle(prev.page) })));
+    if (next) pager.appendChild(h('button', { class: 'kb-pager-link is-next', type: 'button', on: { click: () => openPage(next.page.path) } },
+      h('span', { class: 'kb-pager-dir', text: 'Next →' }), h('span', { class: 'kb-pager-title', text: kbPageTitle(next.page) })));
+    if (prev || next) article.appendChild(pager);
   }
-  body.appendChild(backlinkSection);
-
-  pane.appendChild(body);
-  return pane;
+  article.appendChild(h('div', { class: 'kb-foot' },
+    handbook
+      ? h('span', { text: 'Shipped with the dashboard in server/handbook/' + page.id + '.md' })
+      : h('span', { text: 'Last updated ' + fullDay(String(page.updated || '').slice(0, 10)) }),
+    h('span', { text: handbook ? 'Something unclear? Ask the assistant with Ctrl/Cmd+K.' : 'Edit the file in the repository; this view is read-only.' })));
+  return article;
 }
 
 /* =========================================================================

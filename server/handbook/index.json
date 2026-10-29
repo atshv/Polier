@@ -1,0 +1,88 @@
+{
+  "version": 1,
+  "spaces": [
+    {
+      "id": "guides",
+      "title": "Guides",
+      "summary": "Learn the workflow: from the first plan to a reviewed, done task.",
+      "sections": [
+        {
+          "title": "Getting started",
+          "pages": [
+            "introduction",
+            "quickstart",
+            "concepts"
+          ]
+        },
+        {
+          "title": "Using the dashboard",
+          "pages": [
+            "feature-board",
+            "feature-your-work",
+            "feature-task-drawer",
+            "feature-planning",
+            "feature-tracking",
+            "feature-knowledge",
+            "feature-agents",
+            "feature-settings"
+          ]
+        },
+        {
+          "title": "Tutorials",
+          "pages": [
+            "plan-a-project",
+            "run-a-task",
+            "agent-sessions",
+            "reviews-and-approvals",
+            "intake-and-templates",
+            "organise-work",
+            "plan-in-time",
+            "automations",
+            "connect-claude-code"
+          ]
+        },
+        {
+          "title": "Reference",
+          "pages": [
+            "shortcuts",
+            "project-files",
+            "cli",
+            "troubleshooting"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "api",
+      "title": "API reference",
+      "summary": "The local JSON API behind the dashboard, with examples in cURL, Python and JavaScript.",
+      "sections": [
+        {
+          "title": "Basics",
+          "pages": [
+            "api-introduction",
+            "api-authentication",
+            "api-errors",
+            "api-events"
+          ]
+        },
+        {
+          "title": "Endpoints",
+          "pages": [
+            "api-project",
+            "api-tasks",
+            "api-jobs",
+            "api-sessions",
+            "api-approvals",
+            "api-plan",
+            "api-settings",
+            "api-work",
+            "api-planning",
+            "api-knowledge",
+            "api-intelligence"
+          ]
+        }
+      ]
+    }
+  ]
+}

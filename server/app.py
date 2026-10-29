@@ -45,6 +45,7 @@ from core import cycles as cycles_mod
 from core import dashboard as dashboard_mod
 from core import filters as filters_mod
 from core import github as github_mod
+from core import handbook as handbook_mod
 from core import inbox as inbox_mod
 from core import intake as intake_mod
 from core import modules as modules_mod
@@ -801,6 +802,11 @@ class DashboardApp:
         if path == "/api/bulk" and method == "POST":
             return 200, self._bulk(self._json(body))
         # pages, intake and task templates (2.3) ---------------------------
+        if path == "/api/handbook" and method == "GET":
+            try:
+                return 200, handbook_mod.load(self.package_root)
+            except PolierError as exc:
+                raise ApiError(500, str(exc))
         if path == "/api/pages" and method == "GET":
             return 200, pages_mod.index(self.root)
         if path == "/api/pages/search" and method == "GET":
