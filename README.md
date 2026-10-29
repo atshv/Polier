@@ -13,13 +13,14 @@
 <p align="center">
   <a href="#install"><b>Install</b></a> ·
   <a href="#start">Start</a> ·
+  <a href="#the-dashboard">Dashboard</a> ·
   <a href="examples/monorepo-mini/">Example project</a> ·
   <a href="#faq">FAQ</a> ·
   <a href="CHANGELOG.md">Changelog</a> ·
   <a href="https://github.com/atshv/Polier/releases">Releases</a>
 </p>
 
-Polier works with [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) as a plugin and with Claude Code as hooks. It interviews you, writes a one-page architecture and a task plan, and sets up the project after your approval. While agents build, it blocks writes outside the current task, accepts only recorded test runs as proof, and commits a record of every attempt, approval and review round.
+Polier works with [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) as a plugin and with Claude Code as hooks. It interviews you, writes a one-page architecture and a task plan, and sets up the project after your approval. While agents build, it blocks writes outside the current task, accepts only recorded test runs as proof, and commits a record of every attempt, approval and review round. 2.0 adds an optional local dashboard: board, plan, approvals, gate logs and headless agent sessions in one page — still no dependencies, still files on disk.
 
 <p align="center"><img src="docs/images/demo.gif" alt="A recorded session: a task with an open dependency is refused, ENG-01 starts, and review is refused until every gate has a passing record" width="100%"></p>
 
@@ -66,6 +67,21 @@ Every screen is real output from the reference project [`examples/monorepo-mini`
 The status page shows the whole project at a glance: stages, every task with attempts, gate records, review verdict and tokens against the budget (the counts in the picture are example values). `render_status.py --html` writes it as one self-contained file without a server, and 1.4 adds four read-only views: a Kanban board, a dependency graph drawn as inline SVG with the critical path highlighted and cycles flagged as a warning instead of crashing, an activity timeline built from run events, usage records and approvals, and a token history with a total line, one line per stage and the budget line from `budget.max_tokens_per_task`. Stage, package and owner filters above the table and the CSS table/Kanban switch need no build step, and without JavaScript everything is still visible; the page itself is read-only, and only `tools/state.py` writes a status. `--watch [--interval 2]` polls `board.json`, `runs/`, `reviews/` and `policy.json`, rewrites both pages atomically and adds a 5-second meta refresh only while watching.
 
 <img src="docs/images/status-page.png" alt="STATUS.html with summary tiles, stages, a task table with token bars, blocked tasks and a pending approval" width="100%">
+
+## The dashboard
+
+`tools/serve.py` starts a local control plane for a project — one page, one small JSON API, Python standard library only:
+
+```bash
+python3 tools/serve.py /path/to/project --port 8765 --open
+```
+
+It shows the plan as a board (Kanban and table), opens every task with its brief, gates, evidence and events, runs gates and checks with live logs, shows approvals and dispatch, and can start a headless agent session for a task (Claude Code by default, with the shipped hooks and scope guard) while streaming its transcript and recording tokens. The interview wizard collects the Phase-A answers, starts a generator session and lets you approve the plan; for existing projects the Plan view edits tasks, dependencies and scopes with the same validation as the CLI. `tools/mcp.py` exposes the board to any MCP host, so an interactive Claude Code session can read the plan and call lead-only actions as tools.
+
+It binds to `127.0.0.1` by default, needs the `X-Polier-Action: 1` header for writes, rejects cross-origin actions, can require a bearer token (`--token`/`POLIER_DASHBOARD_TOKEN`) and runs read-only with `--read-only`. Everything the page does goes through the same `core` functions as the CLI; the CLI never needs the server, and nothing of the dashboard is committed (transcripts and logs live in `<git-common-dir>/polier/dashboard/`). Details: [`docs/dashboard.md`](docs/dashboard.md).
+
+<img src="docs/images/dashboard.png" alt="Polier dashboard: board with kanban columns, filters, stage progress, project header and the tasks of the example project" width="100%">
+<img src="docs/images/dashboard-detail.png" alt="Polier dashboard: task drawer with status transitions, CLI commands, brief, gates, run, review, evidence and session tabs" width="100%">
 
 ## Install
 
@@ -146,7 +162,7 @@ my-project/
 ## What Polier is not
 
 - **Not an agent.** It does not write code. It plans the work and keeps the agent you already use within it.
-- **Not a server.** Everything is files in your repository and a few Python scripts. Nothing runs in the background and nothing needs a database or an account.
+- **Not a server (by default).** Everything is files in your repository and a few Python scripts; nothing runs in the background and nothing needs a database or an account. The optional dashboard is a local server you start yourself, and it only reads and writes the same files.
 - **Not a sandbox.** The guard stops honest mistakes, not an attacker; the list below names its gaps.
 - **Not telemetry.** Polier sends nothing anywhere. The only network calls are the registry lookups of `research.py versions --lookup`, and only when you run them.
 
@@ -194,10 +210,11 @@ For hard limits, run workers in a sandbox or a container with write access to th
 
 | Folder | What it holds |
 |---|---|
-| `core/` | all rules: board, write guard, stop check, gates, claims, slots, locks, boundaries, policy, runs, approvals, state, dispatch, audit; tests in `core/tests/` |
+| `core/` | all rules: board, write guard, stop check, gates, claims, slots, locks, boundaries, policy, runs, approvals, state, dispatch, audit, plus the dashboard data models, plan editor, streaming jobs and session runner; tests in `core/tests/` |
+| `server/` | the optional local dashboard: HTTP + SSE app, headless sessions, and the self-contained web UI in `server/assets/` |
 | `adapters/dsh/` | the DeepSeek Harness plugin; see [`adapters/README.md`](adapters/README.md) |
 | `adapters/claude-code/` | Claude Code hooks (`PreToolUse`, `Stop`) |
-| `tools/` | the command-line tools above |
+| `tools/` | the command-line tools above, plus `serve.py` (dashboard), `session.py` (headless sessions) and `mcp.py` (MCP stdio server) |
 | `templates/` | board schema, policy, AGENTS, briefs, orchestration, research note, versions, contracts, release, gates |
 | `prompt/` | the process ([`generator.md`](prompt/generator.md)), the orchestration model, the rubric, the DeepSeek Harness mapping |
 | `guide/` | the [step-by-step checklist](guide/cheatsheet.md) |
@@ -207,7 +224,7 @@ Run all tests with `npm test`; the core alone with `python3 -m unittest discover
 
 ## What's new
 
-**1.4** adds four read-only views to the status page (Kanban, dependency graph, activity and token history), stage/package/owner filters and `--watch`. **1.3** adds a token budget per task (`tools/usage.py`, recorded automatically in Claude Code) and the status page `STATUS.html`. **1.2** added `tools/research.py`, a checkpoint that holds a task until its dependencies are done, and automatic releases. **1.1** added orchestration: `policy.json`, checkpoints, run records, approvals, dispatch and audit. **1.0** added board schema 1.0, runtime slots, exclusive gates, claims, worktrees and profile L.
+**2.0** adds the optional dashboard: `tools/serve.py` (local HTTP + SSE, no dependencies), a self-contained Kanban/table/detail UI, streaming gate and check jobs, the interview wizard with plan editing, headless agent sessions with transcripts and token records, and `tools/mcp.py` for connecting Claude Code over MCP. **1.4** adds four read-only views to the status page (Kanban, dependency graph, activity and token history), stage/package/owner filters and `--watch`. **1.3** adds a token budget per task (`tools/usage.py`, recorded automatically in Claude Code) and the status page `STATUS.html`. **1.2** added `tools/research.py`, a checkpoint that holds a task until its dependencies are done, and automatic releases. **1.1** added orchestration: `policy.json`, checkpoints, run records, approvals, dispatch and audit. **1.0** added board schema 1.0, runtime slots, exclusive gates, claims, worktrees and profile L.
 
 Details and migration steps: [`CHANGELOG.md`](CHANGELOG.md) and [Releases](https://github.com/atshv/Polier/releases).
 

@@ -88,8 +88,8 @@ def git_common_dir(root) -> Path:
         raise PolierError(f"not a git repository: {root}")
     path = Path(value)
     if not path.is_absolute():
-        top = _git(root, "rev-parse", "--show-toplevel")
-        path = (Path(top) if top else Path(root)) / path
+        # `git rev-parse` reports this path relative to the folder it ran in (`root`).
+        path = Path(root) / path
     return path.resolve()
 
 

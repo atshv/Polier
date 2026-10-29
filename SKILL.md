@@ -31,6 +31,9 @@ python3 <skill-folder>/tools/dispatch.py --root <project>
 python3 <skill-folder>/tools/audit.py --root <project>
 python3 <skill-folder>/tools/state.py show --root <project>
 python3 <skill-folder>/tools/approve.py list --root <project>
+# optional 2.0 dashboard (local, no dependencies) and MCP host bridge
+python3 <skill-folder>/tools/serve.py <project> --port 8765
+python3 <skill-folder>/tools/mcp.py --root <project>
 # profile L only
 python3 <skill-folder>/tools/boundaries.py <project>
 python3 <skill-folder>/tools/contracts.py check --root <project>
