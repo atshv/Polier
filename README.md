@@ -9,7 +9,7 @@
   <img alt="python" src="https://img.shields.io/badge/python-3.9%2B-1f5f8b?style=flat-square">
 </p>
 
-Polier (German for site foreman) is a plugin for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) with hooks for Claude Code. It interviews you, writes a one-page architecture and a task plan, and sets up the project after your approval. While agents build, it blocks writes outside the current task, accepts only recorded test runs as proof, and commits a record of every attempt, approval and review round.
+Polier is a plugin for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) with hooks for Claude Code. It interviews you, writes a one-page architecture and a task plan, and sets up the project after your approval. While agents build, it blocks writes outside the current task, accepts only recorded test runs as proof, and commits a record of every attempt, approval and review round.
 
 ## How it works
 

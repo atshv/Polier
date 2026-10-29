@@ -10,7 +10,7 @@ name: release
 on:
   push:
     branches: [main]
-    paths: [VERSION]
+    paths: [VERSION, .github/workflows/release.yml]
   workflow_dispatch:
 
 permissions:
@@ -99,6 +99,8 @@ jobs:
         run: |
           set -euo pipefail
           TAG="${{ steps.meta.outputs.tag }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
             echo "Tag $TAG exists; it is not moved."
           else
