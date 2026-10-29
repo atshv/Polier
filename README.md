@@ -2,10 +2,10 @@
 
 Plan an AI coding project before the first line of code, then keep the agents to the plan.
 
-![version](https://img.shields.io/badge/version-1.1.0-blue?style=flat-square)
+[![release](https://img.shields.io/github/v/release/atshv/Polier?style=flat-square)](https://github.com/atshv/Polier/releases)
 ![license](https://img.shields.io/badge/license-MIT-green?style=flat-square)
 
-A plugin for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness), with hooks for Claude Code. It interviews you, writes a one-page architecture and a task plan, and after your approval sets up the project. While agents build, it blocks writes outside the current task, records test results as proof, and keeps a committed record of every attempt, approval and review round.
+A plugin for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness), with hooks for Claude Code. Polier (German for site foreman) interviews you, writes a one-page architecture and a task plan, and sets up the project after your approval. While agents build, it blocks writes outside the current task, accepts only recorded test runs as proof, and commits a record of every attempt, approval and review round.
 
 ## Install
 
@@ -28,22 +28,13 @@ Open a new session in an empty folder and write:
 
 Polier asks its questions, shows the plan for approval, writes the project files and gives you the prompt for the first task. Once the project has a `policy.json`, every task moves through checkpoints instead of a hand-edited board.
 
-## What's new in 1.1
+## What's new
 
-1.1 turns the planner into an orchestration control plane. The board stays the plan; three new stores carry what the plan cannot:
+**1.1** adds orchestration on top of the plan: `policy.json` (limits, protected paths, approvals, denied commands), checkpoints through `tools/state.py`, run records in `runs/`, approvals in `reviews/approvals/`, plus `dispatch.py` and `audit.py`. Projects without `policy.json` keep the 1.0 behaviour.
 
-- **Policy as code** — `policy.json`: limits (attempts per task, tasks in progress, review rounds), protected paths, dependency manifests that need an approval, denied and lead-only commands, and which done-checks are on. Checked mechanically; a project without the file keeps the 1.0 behaviour.
-- **Checkpoints** — `tools/state.py` is the only writer of a task's status. It enforces gates before review, review before done, an open attempt before verifying, the attempt cap before another try, a free review round before a rework, and an approval before reopening a done task. A refused transition names what is missing and the command that records it.
-- **Run records** — `runs/<ID>.json` per task: attempt counter, append-only gate/state/review/approval events, last result. Committed with the task; the audit trail a chat history cannot be.
-- **Approvals** — `reviews/approvals/AP-NNN.json`: request, grant and deny records for new dependencies, protected paths, merges to the base branch, releases, reopening and forced transitions. The tools read every record, and the write guard checks the dependency approval before a manifest write.
-- **Dispatch** — `tools/dispatch.py` turns the board into an execution plan: waves of tasks that may run in parallel, blocked tasks with the command that records the block, scope conflicts and pending approvals.
-- **Audit** — `tools/audit.py` prints one compliance view per task: board status against the run record, attempts used, gates, review verdict, handoff, approvals. For a `done` task every check the policy turns on is an error; without `policy.json` the findings are warnings and the exit code stays 0.
-- **The model on one page** — [`prompt/orchestration.md`](prompt/orchestration.md), and generated projects get `docs/orchestration.md`: the task loop, the stage loop, checkpoints, approvals, escalation and what is not covered.
-- **Guard** — a dependency manifest is refused without a granted `new_dependency` approval, a protected path is refused to every session except a lead, denied commands are refused for every role and lead-only commands for worker and reviewer sessions (DeepSeek Harness and Claude Code).
-- **STATUS.md** — still generated, never hand-edited, now from `board.json`, `runs/` and `policy.json`: a new "Orchestration" section shows limits, next wave, running attempts, blocked tasks with reasons and pending approvals. Run `tools/render_status.py` after every state change.
-- **Compatibility** — 0.9 and 1.0 projects are unchanged: without `policy.json` the new checks warn instead of failing and the guard adds no policy denials. The transition table, the note rules and the `reopen_done`/`state_override` approvals still apply; the gate, review, attempt and concurrency checks degrade to warnings and the dependency approval is not checked. Board schema stays 1.0; the new state lives outside `board.json`.
+**1.0** added board schema 1.0, runtime slots, exclusive gates, claims across harnesses, worktrees, profile L and release and smoke checks.
 
-1.0 added board schema 1.0 (stages, packages, runtime resources, budgets, contracts), runtime slots, exclusive gates, cross-harness claims, worktrees, profile L and the release and smoke checks.
+Details and migration steps for every version: [`CHANGELOG.md`](CHANGELOG.md) and [Releases](https://github.com/atshv/Polier/releases).
 
 ## What it does
 
@@ -74,6 +65,7 @@ In DeepSeek Harness (Claude Code uses `POLIER_ROLE` and `POLIER_TASK` instead, s
 | `/pl lead` | this session may write everything (planning, board, merge) |
 | `/pl worker` | back to the current task's files (default) |
 | `/pl reviewer` | this session writes only under `reviews/` |
+| `/pl off` | switch the guard off for this session |
 | `/pl task M03` | bind this session to one task and claim it; `/pl task` releases the claim |
 | `/pl status` | show role, task and allowed files |
 | `/pl render` | regenerate `STATUS.md` (lead only) |
@@ -165,6 +157,16 @@ An adapter for git hooks is planned. Run all tests with `npm test`; the core alo
 - Example projects: [`examples/minimal-cli`](examples/minimal-cli/) (profile S, the 0.9 compatibility reference) and [`examples/monorepo-mini`](examples/monorepo-mini/) (profile L, the 1.1 reference)
 - Changes and updates: [`CHANGELOG.md`](CHANGELOG.md)
 - Skill only, without the plugin: `./install.sh`
+
+## Releasing
+
+Releases are automatic. To publish a new version:
+
+1. Set the new number in `VERSION` (for example `1.2.0`).
+2. Add a section `## 1.2.0` at the top of `CHANGELOG.md` with what changed and how to migrate.
+3. Push or upload both to `main`.
+
+The workflow [`.github/workflows/release.yml`](.github/workflows/release.yml) then syncs `package.json` and `tools/manifest.json`, creates the tag `v1.2.0` and publishes a GitHub Release with the changelog section as its notes. It stops with a clear message when the changelog section is missing. A release that already exists is never overwritten.
 
 ## License
 
