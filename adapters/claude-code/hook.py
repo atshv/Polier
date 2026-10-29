@@ -19,7 +19,9 @@ Reads the hook event as JSON on stdin and answers in Claude Code's hook format:
 - stop: the git diff is compared with the running task (core.scope.check_stop);
   violations block the stop once per reminder, at most POLIER_MAX_STOP_REMINDERS
   times in a row. Changed files inside another live claim's scope are listed as
-  foreign changes and never block (PL-05).
+  foreign changes and never block (PL-05). Before that, the session's token use
+  for the bound task is read from the transcript and stored in runs/<ID>.json;
+  at the budget of policy.json the agent is told to stop and report.
 
 Settings come from the environment, which the agent cannot change for the hook:
     POLIER_ROLE                 worker (default) | reviewer | lead | off
@@ -28,12 +30,14 @@ Settings come from the environment, which the agent cannot change for the hook:
     POLIER_STOP_CHECK           1 (default) | 0
     POLIER_MAX_STOP_REMINDERS   2 (default)
     POLIER_BASH                 1 (default) | 0: check Bash commands too
+    POLIER_USAGE                1 (default) | 0: record token use from the transcript
 
 Any internal error lets the call through (exit 0, note on stderr): the hook
 never blocks work because of its own failure. No external dependencies.
 """
 from __future__ import annotations
 
+import datetime as dt
 import json
 import os
 import re
@@ -50,8 +54,9 @@ from core.board import active_tasks, find_root, load_board  # noqa: E402
 from core.claims import ClaimConflict, take as claim_take  # noqa: E402
 from core.errors import PolierError  # noqa: E402
 from core.paths import inside, outside, relative, resolve  # noqa: E402
+from core import runs  # noqa: E402
 from core.policy import (  # noqa: E402
-    approver, command_denial, enabled as policy_enabled, load_policy, manifest_match, protected_match,
+    approver, budget, command_denial, enabled as policy_enabled, load_policy, manifest_match, protected_match,
 )
 from core.scope import ROLES, changed_files, check_stop, check_write, is_tracked, stop_message, write_denial  # noqa: E402
 from core.shell import process_kills, write_targets  # noqa: E402
@@ -79,6 +84,7 @@ def settings(env: Mapping[str, str]) -> dict:
         "stop_check": env.get("POLIER_STOP_CHECK", "1").strip() not in ("0", "false", "no", "off"),
         "max_reminders": reminders,
         "bash": env.get("POLIER_BASH", "1").strip() not in ("0", "false", "no", "off"),
+        "usage": env.get("POLIER_USAGE", "1").strip() not in ("0", "false", "no", "off"),
     }
 
 
@@ -309,8 +315,102 @@ def _write_count(path: Optional[Path], count: int) -> None:
         pass
 
 
+def _parse_time(value) -> Optional[dt.datetime]:
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        moment = dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return moment if moment.tzinfo else moment.replace(tzinfo=dt.timezone.utc)
+
+
+def transcript_tokens(path, since: Optional[dt.datetime] = None) -> int:
+    """Tokens of the assistant messages in a Claude Code transcript (JSONL).
+
+    Counts input, output and cache-creation tokens; cache reads are left out,
+    they are billed at a fraction and would dwarf the rest. A message that
+    appears in several lines (streamed parts share one id) counts once, with
+    its last usage. With `since`, earlier messages are skipped.
+    """
+    per_message: dict = {}
+    try:
+        lines = Path(path).read_text(encoding="utf-8", errors="replace").splitlines()
+    except (OSError, TypeError):
+        return 0
+    for index, line in enumerate(lines):
+        try:
+            entry = json.loads(line)
+        except ValueError:
+            continue
+        message = entry.get("message") if isinstance(entry, dict) else None
+        usage = message.get("usage") if isinstance(message, dict) else None
+        if not isinstance(usage, dict):
+            continue
+        if since is not None:
+            moment = _parse_time(entry.get("timestamp"))
+            if moment is not None and moment < since:
+                continue
+        total = 0
+        for key in ("input_tokens", "output_tokens", "cache_creation_input_tokens"):
+            value = usage.get(key)
+            if isinstance(value, int) and not isinstance(value, bool) and value > 0:
+                total += value
+        per_message[message.get("id") or f"line-{index}"] = total
+    return sum(per_message.values())
+
+
+def _record_usage(event: dict, info: dict) -> Optional[str]:
+    """Store this session's tokens for the bound task; a note when the budget is near or used."""
+    path = event.get("transcript_path")
+    session_id = str(event.get("session_id") or "").strip()
+    if not path or not session_id:
+        return None
+    task_id = info["tasks"][0].get("id")
+    record = runs.load_run(info["root"], task_id)
+    started = [_parse_time(item.get("started")) for item in record["attempts"]]
+    started = [moment for moment in started if moment is not None]
+    tokens = transcript_tokens(path, since=min(started) if started else None)
+    if tokens <= 0:
+        return None
+    runs.record_usage(info["root"], task_id, tokens, session=session_id, source="claude-code")
+    plan = budget(info["policy"])
+    limit = plan["max_tokens_per_task"]
+    if not limit:
+        return None
+    used = runs.usage_total(info["root"], task_id)
+    if used >= limit:
+        return (f"Polier: {task_id} used its token budget ({used:,}/{limit:,}). Stop working on "
+                f"it, summarise the state and report it under open_questions; the lead "
+                f"escalates with tools/state.py set {task_id} blocked.")
+    if used >= limit * plan["warn_at"]:
+        return f"Polier: {task_id} has used {used:,} of {limit:,} tokens ({used * 100 // limit} %)."
+    return None
+
+
 def stop(event: dict, env: Mapping[str, str]) -> Optional[dict]:
     cfg = settings(env)
+    note = None
+    if cfg["usage"]:
+        try:
+            info = session(event, env)
+            if info is not None and info["role"] == "worker" and len(info["tasks"]) == 1:
+                note = _record_usage(event, info)
+        except Exception as exc:  # noqa: BLE001  usage is best effort, never a reason to block
+            print(f"polier hook: usage not recorded ({type(exc).__name__}: {exc})", file=sys.stderr)
+    result = _stop_check(event, env, cfg)
+    if not note:
+        return result
+    if result is None:
+        return {"systemMessage": note}
+    if "reason" in result:
+        result["reason"] += "\n\n" + note
+    else:
+        result["systemMessage"] = (result.get("systemMessage", "") + "\n" + note).strip()
+    return result
+
+
+def _stop_check(event: dict, env: Mapping[str, str], cfg: dict) -> Optional[dict]:
     if not cfg["stop_check"]:
         return None
     info = session(event, env)

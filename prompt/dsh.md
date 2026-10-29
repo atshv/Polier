@@ -76,7 +76,7 @@ python3 <package>/tools/state.py set M03 done --note "review pass, gates green"
 python3 <package>/tools/render_status.py .          # STATUS.md from board + runs + policy
 ```
 
-The lead records every transition (`pl_state set` and `state.py set` are lead-only; `show` works everywhere). Checkpoints, attempts, rounds, approvals and the behaviour without `policy.json` are described once, in `prompt/orchestration.md`.
+The lead records every transition (`pl_state set` and `state.py set` are lead-only; `show` works everywhere). Checkpoints, attempts, rounds, approvals, the token budget and the behaviour without `policy.json` are described once, in `prompt/orchestration.md`. DSH does not hand its token counts to plugins, so with a budget the lead records them per task with `python3 <package>/tools/usage.py record <ID> --tokens N --session <name>`.
 
 ### S — one writer, one reviewer
 

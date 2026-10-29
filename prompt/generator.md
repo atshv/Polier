@@ -275,7 +275,7 @@ Briefs for the next 3–5 tasks only, from `templates/task-brief.md`, 400–900 
 ├── board.json           # mandatory; schema_version 1.0 when 1.0 fields are used
 ├── policy.json          # 1.1: limits, approvals, protected paths, denied commands
 ├── runs/                # 1.1: one execution record per started task
-├── .gitignore           # mandatory: OS, editor, caches, secrets, language, .polier-slot
+├── .gitignore           # mandatory: OS, editor, caches, secrets, language, .polier-slot, STATUS.html
 ├── README.md            # optional: purpose, quickstart, file map
 ├── tasks/               # mandatory: next 3–5 briefs
 ├── reviews/             # reviews/<ID>.md and evidence/*.json; approvals/AP-NNN.json (1.1)
@@ -299,7 +299,7 @@ Briefs for the next 3–5 tasks only, from `templates/task-brief.md`, 400–900 
 ```
 
 - `AGENTS.md`: commands, deviations from the standard, rules (git, scope, layers, claims, worktrees, runtime, release, link to `docs/module-map.md` and `docs/orchestration.md`). No architecture, no progress. The gate rule names `pl_gate` when the plugin is installed, otherwise `tools/gate.py` with the real package path; gate names are the ones in `board.json`. Take the 1.1 rules from `templates/AGENTS.template.md`: state changes only with `tools/state.py`, gates only with `tools/gate.py`, approvals only with `tools/approve.py`; run `tools/dispatch.py` before starting a task; never edit `board.json`, `runs/` or `reviews/approvals/` by hand, and commit `runs/` and `policy.json` with the task. Include the runtime rules: read ports/DB/bucket only from `.polier-slot`, never hard-code ports, never touch slot 0's data, never `kill`/`pkill`/`killall` processes you did not start. At L also: imports only per `may_import`; agents never publish.
-- `policy.json`: from `templates/policy.json`, limits from phase A3, the project's own manifests and protected paths (phase D). Committed.
+- `policy.json`: from `templates/policy.json`, limits from phase A3, the project's own manifests and protected paths (phase D), and `budget.max_tokens_per_task` from the input's token budget (`null` for "no limit"). Committed.
 - `docs/orchestration.md`: from `templates/orchestration.md`, with the real package path and the project's approval actions. `AGENTS.md` and `README.md` name `policy.json`, `runs/` and this file; `check.py` warns when they are missing while the policy is enabled.
 - `runs/` and `reviews/approvals/`: tool-owned output folders. They stay empty until `tools/state.py` starts the first attempt and `tools/approve.py` writes the first record, which are committed with the task — no placeholder files.
 - `STATUS.md`: never edited by hand. Change the state with `tools/state.py`, then run `tools/render_status.py` (it renders `board.json`, `runs/` and `policy.json`); its "Ready now" list names the tasks that can start, "Stages" shows exit gates and the owner decision per stage, and "Orchestration" shows limits, the next wave, running attempts and pending approvals.

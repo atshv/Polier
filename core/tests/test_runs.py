@@ -30,7 +30,7 @@ class Storage(unittest.TestCase):
         root = project([task()], repo=False)
         skeleton = runs.load_run(root, "M01")
         self.assertEqual(skeleton, {"task": "M01", "state": "idle", "attempt": 0,
-                                    "attempts": [], "events": [], "updated": None})
+                                    "attempts": [], "events": [], "usage": {}, "updated": None})
         self.assertFalse(runs.run_path(root, "M01").exists())
         self.assertFalse(runs.enabled(root))
 

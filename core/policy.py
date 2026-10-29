@@ -76,7 +76,14 @@ DEFAULTS: Dict[str, object] = {
         "run_record": True,
         "disjoint_scopes": True,
     },
+    "budget": {
+        "max_tokens_per_task": None,
+        "warn_at": 0.8,
+    },
 }
+
+TOKEN_RANGE = (1_000, 1_000_000_000)
+WARN_RANGE = (0.1, 1.0)
 
 LIMIT_RANGES = {
     "max_attempts_per_task": (1, 10),
@@ -91,9 +98,10 @@ _SECTIONS = {
     "approvals": set(DEFAULTS["approvals"]),
     "commands": set(DEFAULTS["commands"]),
     "checks": set(DEFAULTS["checks"]),
+    "budget": set(DEFAULTS["budget"]),
 }
 _TOP_KEYS = frozenset({"version", "limits", "scope", "dependencies", "approvals",
-                       "commands", "checks", "enabled"})
+                       "commands", "checks", "budget", "enabled"})
 
 
 # ---------------------------------------------------------------------------
@@ -190,7 +198,7 @@ def policy_errors(policy) -> List[str]:
     if not _is_int(version) or version != 1:
         errors.append(f"policy.json: version must be 1 (is {version!r})")
 
-    for key in ("limits", "scope", "dependencies", "approvals", "commands", "checks"):
+    for key in ("limits", "scope", "dependencies", "approvals", "commands", "checks", "budget"):
         _section_problems(key, policy.get(key), key, errors)
 
     limits = policy.get("limits") if isinstance(policy.get("limits"), dict) else {}
@@ -201,6 +209,18 @@ def policy_errors(policy) -> List[str]:
         if not _is_int(value) or not low <= value <= high:
             errors.append(
                 f"policy.json: limits.{key} must be an integer {low}–{high} (is {value!r})")
+
+    budget_raw = policy.get("budget") if isinstance(policy.get("budget"), dict) else {}
+    tokens = budget_raw.get("max_tokens_per_task")
+    low, high = TOKEN_RANGE
+    if tokens is not None and (not _is_int(tokens) or not low <= tokens <= high):
+        errors.append(f"policy.json: budget.max_tokens_per_task must be null or an integer "
+                      f"{low}–{high} (is {tokens!r})")
+    warn = budget_raw.get("warn_at", DEFAULTS["budget"]["warn_at"])
+    if isinstance(warn, bool) or not isinstance(warn, (int, float)) \
+            or not WARN_RANGE[0] <= warn <= WARN_RANGE[1]:
+        errors.append(f"policy.json: budget.warn_at must be a number "
+                      f"{WARN_RANGE[0]}–{WARN_RANGE[1]} (is {warn!r})")
 
     scope = policy.get("scope") if isinstance(policy.get("scope"), dict) else {}
     if "protected_paths" in scope:
@@ -265,6 +285,26 @@ def limits(policy) -> Dict[str, int]:
         value = raw.get(key)
         if _is_int(value):
             out[key] = value
+    return out
+
+
+def budget(policy) -> Dict[str, object]:
+    """The token budget: ``max_tokens_per_task`` (None = off) and ``warn_at`` (0.1–1.0).
+
+    Off without an enabled policy and for invalid values, so a broken budget
+    never blocks a task.
+    """
+    out: Dict[str, object] = {"max_tokens_per_task": None, "warn_at": DEFAULTS["budget"]["warn_at"]}
+    if not enabled(policy):
+        return out
+    raw = _raw_section(policy, "budget")
+    tokens = raw.get("max_tokens_per_task")
+    if _is_int(tokens) and TOKEN_RANGE[0] <= tokens <= TOKEN_RANGE[1]:
+        out["max_tokens_per_task"] = tokens
+    warn = raw.get("warn_at")
+    if isinstance(warn, (int, float)) and not isinstance(warn, bool) \
+            and WARN_RANGE[0] <= warn <= WARN_RANGE[1]:
+        out["warn_at"] = float(warn)
     return out
 
 

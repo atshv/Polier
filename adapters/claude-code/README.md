@@ -44,6 +44,7 @@ block of a settings file the agent may not edit.
 | `POLIER_STOP_CHECK` | `1` · `0` | `1` |
 | `POLIER_MAX_STOP_REMINDERS` | integer | `2` |
 | `POLIER_BASH` | `1` · `0` (check `Bash` commands) | `1` |
+| `POLIER_USAGE` | `1` · `0` (record the session's token use for the bound task from the transcript; at the policy budget the agent is told to stop) | `1` |
 
 Which tasks bind a session: `POLIER_TASK`, else the `in_progress` task whose
 `worktree` contains the session directory, else every `in_progress` task. No

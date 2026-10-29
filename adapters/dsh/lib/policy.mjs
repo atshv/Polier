@@ -56,6 +56,7 @@ export const DEFAULTS = {
     warn: ['*kill*', '*pkill*', 'killall*'],
   },
   checks: { review_before_done: true, handoff_before_done: true, run_record: true, disjoint_scopes: true },
+  budget: { max_tokens_per_task: null, warn_at: 0.8 },
 }
 
 /** Every approval action core.approvals knows; the policy lists the required ones. */
@@ -69,6 +70,7 @@ const SECTIONS = {
   approvals: ['actions', 'approver'],
   commands: ['deny', 'lead_only', 'warn'],
   checks: ['review_before_done', 'handoff_before_done', 'run_record', 'disjoint_scopes'],
+  budget: ['max_tokens_per_task', 'warn_at'],
 }
 const LIMIT_RANGES = {
   max_attempts_per_task: [1, 10],
@@ -162,6 +164,16 @@ export function policyErrors(policy) {
   }
   if (policy.approvals && (typeof policy.approvals.approver !== 'string' || !policy.approvals.approver.trim())) {
     errors.push('policy.json: approvals.approver must be a non-empty string')
+  }
+  if (isObject(policy.budget)) {
+    const tokens = policy.budget.max_tokens_per_task
+    if (tokens !== null && tokens !== undefined && (!Number.isInteger(tokens) || tokens < 1000 || tokens > 1000000000)) {
+      errors.push('policy.json: budget.max_tokens_per_task must be null or an integer between 1000 and 1000000000')
+    }
+    const warn = policy.budget.warn_at
+    if (warn !== undefined && (typeof warn !== 'number' || warn < 0.1 || warn > 1)) {
+      errors.push('policy.json: budget.warn_at must be a number between 0.1 and 1')
+    }
   }
   if (isObject(policy.checks)) {
     for (const name of SECTIONS.checks) {

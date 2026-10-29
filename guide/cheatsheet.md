@@ -53,7 +53,7 @@ Every status change goes through `tools/state.py set <ID> <status>` in a lead se
 ## Stage end
 
 - [ ] Every task in the stage is `done` with evidence; `tools/audit.py` reports no errors for it.
-- [ ] Every stage `exit_gates` name has at least one passing record. `render_status.py` shows the missing ones.
+- [ ] Every stage `exit_gates` name has at least one passing record. `render_status.py` shows the missing ones; `render_status.py . --html` writes the same state with tokens and evidence per task as `STATUS.html` (not committed).
 - [ ] `exit_criteria` are checked by a human or reviewer, not by a gate.
 - [ ] The owner decision is on the board: `owner_decision: "continue"` (or `"stop"`). While it is `pending`, the next stage is not ready and `check.py` errors on any of its tasks that is `in_progress`.
 - [ ] For a `stop`: write down what stopped it, leave the tasks pending, commit the board.
