@@ -61,7 +61,9 @@ Every screen is real output from the reference project [`examples/monorepo-mini`
 
 <img src="docs/images/research.png" alt="research.py versions --lookup confirms versions and lists open VERIFY markers" width="100%">
 
-**The status page** shows the whole project at a glance: stages, every task with attempts, gate records, review verdict and tokens against the budget. `render_status.py --html` writes it as one file without a server. The token counts in this picture are example values.
+## The status page
+
+The status page shows the whole project at a glance: stages, every task with attempts, gate records, review verdict and tokens against the budget (the counts in the picture are example values). `render_status.py --html` writes it as one self-contained file without a server, and 1.4 adds four read-only views: a Kanban board, a dependency graph drawn as inline SVG with the critical path highlighted and cycles flagged as a warning instead of crashing, an activity timeline built from run events, usage records and approvals, and a token history with a total line, one line per stage and the budget line from `budget.max_tokens_per_task`. Stage, package and owner filters above the table and the CSS table/Kanban switch need no build step, and without JavaScript everything is still visible; the page itself is read-only, and only `tools/state.py` writes a status. `--watch [--interval 2]` polls `board.json`, `runs/`, `reviews/` and `policy.json`, rewrites both pages atomically and adds a 5-second meta refresh only while watching.
 
 <img src="docs/images/status-page.png" alt="STATUS.html with summary tiles, stages, a task table with token bars, blocked tasks and a pending approval" width="100%">
 
@@ -118,7 +120,7 @@ The plugin also gives agents the tools `pl_status`, `pl_gate`, `pl_scope_check`,
 | `tools/audit.py` | compliance view of every task against policy, runs, gates and reviews |
 | `tools/research.py` | dependencies, versions checked against npm and PyPI, research notes with sources |
 | `tools/usage.py` | token use per task against `budget.max_tokens_per_task` |
-| `tools/render_status.py` | regenerate `STATUS.md`; with `--html` also the status page `STATUS.html` |
+| `tools/render_status.py` | regenerate `STATUS.md`; with `--html` also the status page `STATUS.html`, `--watch [--interval N]` re-renders both on change |
 | `tools/scope_check.py` | changed files against the task's scope, with foreign-change detection |
 | `tools/claim.py` · `slot.py` · `worktree.py` | one live session per task, ports and test databases per worktree, task checkouts |
 | `tools/boundaries.py` · `contracts.py` | import boundaries and contract schemas (profile L) |
@@ -205,7 +207,7 @@ Run all tests with `npm test`; the core alone with `python3 -m unittest discover
 
 ## What's new
 
-**1.3** adds a token budget per task (`tools/usage.py`, recorded automatically in Claude Code) and the status page `STATUS.html`. **1.2** added `tools/research.py`, a checkpoint that holds a task until its dependencies are done, and automatic releases. **1.1** added orchestration: `policy.json`, checkpoints, run records, approvals, dispatch and audit. **1.0** added board schema 1.0, runtime slots, exclusive gates, claims, worktrees and profile L.
+**1.4** adds four read-only views to the status page (Kanban, dependency graph, activity and token history), stage/package/owner filters and `--watch`. **1.3** adds a token budget per task (`tools/usage.py`, recorded automatically in Claude Code) and the status page `STATUS.html`. **1.2** added `tools/research.py`, a checkpoint that holds a task until its dependencies are done, and automatic releases. **1.1** added orchestration: `policy.json`, checkpoints, run records, approvals, dispatch and audit. **1.0** added board schema 1.0, runtime slots, exclusive gates, claims, worktrees and profile L.
 
 Details and migration steps: [`CHANGELOG.md`](CHANGELOG.md) and [Releases](https://github.com/atshv/Polier/releases).
 

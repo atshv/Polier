@@ -2,6 +2,31 @@
 
 Each release lists what a running project must do to adopt it. Update between stages, never during a task (see `guide/cheatsheet.md`). The current version is in `VERSION`; projects record theirs in `board.json` → `generator_version`.
 
+## 1.4.0
+
+**Read-only views on the status page.** The page from 1.3 had the facts but only one way to read them. 1.4 adds four read-only views to `STATUS.html` — a Kanban board, a dependency graph, an activity timeline and a token history — with stage, package and owner filters and a table/Kanban switch. The page is still one self-contained file, nothing on it changes a status, and `tools/state.py` stays the only writer.
+
+**The four views.**
+- Kanban board: `pending`, `in_progress` (claimed included), `verifying`, `review`, `rework`, `blocked`/`failed` and `done`; a card shows ID, title, stage, owner, gates passed out of total and a token bar.
+- Dependency graph: inline SVG built by the renderer from `depends_on`. The column is the DAG depth and the rows are grouped by stage; the node is coloured by status, the critical path of unfinished tasks is highlighted, and a dependency cycle is marked in the graph and reported as a warning instead of crashing the render.
+- Activity timeline: run-record events plus recorded usage and approval request/decision records, newest first, the last 50, with failed gates and failed reviews in red.
+- Token history: cumulative tokens over time as an inline SVG with a total line and one line per stage, plus a horizontal budget line from `budget.max_tokens_per_task` when a budget is set. The section is omitted when there is no usage data.
+
+**Base page, filters and fallback.**
+- The 1.3 page stays: summary tiles, stages, the task table with attempts, gate records, review verdict, tokens and findings, the next wave, blocked tasks and pending approvals.
+- Stage, package and owner filters above the table narrow the table and the Kanban. The Table/Kanban switch is a CSS radio toggle. Neither needs a build step.
+- The filters use one small inline script; without JavaScript everything stays visible and the CSS switch still works. The page loads no external CSS, script or CDN, has no buttons or write paths, and changes nothing.
+
+**`--watch` and `--interval`.**
+- `tools/render_status.py <project> --html --watch [--interval N]` polls the mtimes of `board.json`, `runs/`, `reviews/` and `policy.json` and rewrites `STATUS.html` and `STATUS.md` atomically when one changes. The default interval is 2 seconds; `--watch` implies `--html`.
+- A 5-second meta refresh is written only in watch mode; a plain `--html` page is not reloaded by the browser. Ctrl+C stops the watch and exits 0.
+
+**Tests.** New `tests/test_render_status.py` covers every view for `examples/monorepo-mini`, the Kanban card count and dependency edges, a cycle that warns instead of crashing, a title with markup escaped, the token history with and without usage data, the watch snapshot helpers and the CLI output with and without the meta refresh. `tests/test_status_html.py` now allows the one inline filter script but still rejects external scripts and stylesheets.
+
+**Compatibility.** Additive and read-only. `STATUS.md` is unchanged byte for byte and `board.json` keeps its schema; no field is added. The token history reuses the 1.3 budget (`budget.max_tokens_per_task`) and is omitted when a project has no usage data. Existing sections of the page, `--html`, the tools, plugin tools and `/pl` commands behave as before, and `--watch` is opt-in.
+
+**Migration:** set `generator_version` to `1.4.0`. No other change is needed; projects that already ignore `STATUS.html` keep doing so. Plugin users: `git pull`, `dsh plugin --profile <name> add ./polier` again, restart. Claude Code users: replace the package copy. Skill-only users: `./update.sh`.
+
 ## 1.3.0
 
 **Token budget and status page.**

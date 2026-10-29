@@ -27,7 +27,12 @@ class StatusPage(unittest.TestCase):
         self.assertIn("2/8", page)                       # tasks done
         self.assertIn("AP-001", page)                     # pending approval
         self.assertIn("waits for ENG-01", page)          # blocked with reason
-        self.assertNotIn("<script", page)                # static, nothing to run
+        self.assertNotIn("<script src", page)             # no external script
+        self.assertNotIn("<link", page)                   # no external stylesheet
+        self.assertEqual(page.count("<script"), 1)        # only the small filter script
+        self.assertIn('id="kanban"', page)
+        self.assertIn('id="graph"', page)
+        self.assertIn('id="activity"', page)
         self.assertTrue((self.root / "STATUS.md").is_file())
 
     def test_tokens_and_budget_are_shown(self):
