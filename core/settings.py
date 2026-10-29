@@ -48,6 +48,9 @@ FEATURES: Dict[str, bool] = {
     "pages": True,
     "intake": True,
     "assistant": True,
+    "agents": True,
+    "skills": True,
+    "mcp": True,
     "automations": True,
     "github": True,
 }

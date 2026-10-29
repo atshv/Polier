@@ -74,11 +74,12 @@ The five views are controlled by `dashboard.json` → `features` (default on). `
 
 ## Knowledge and intake (2.3)
 
-- **Pages** — a read-only browser for the project's Markdown: root documents (`README`, `AGENTS`, `ARCHITECTURE`, `STATUS`, `CHANGELOG`, …), `docs/**` (with subcollections such as `docs/adr`, `docs/gates`, `docs/research`), `tasks/*.md` briefs, `reviews/*.md`, and the package/service/app/tool README/ARCHITECTURE files. A page shows its rendered content, safe relative links, backlinks (pages and tasks that reference it), the git history and old revisions (`?ref=<commit>`), plus local favorites. Full-text search covers every indexed page. Nothing is written — documents are edited by the agents through the normal write guard. `GET /api/pages`, `/api/page?path=&ref=`, `/api/page/history`, `/api/pages/search`, `/api/pages/favorites`; MCP `polier_pages`, `polier_page`, `polier_pages_search`; CLI `tools/pages.py list|search|show|history|favorite|favorites`.
+- **Pages** — since 2.6 a documentation-style reader (navigation tree, breadcrumbs, "On this page", previous/next, an overview at `#/pages`) with three areas: the project documents, the **Guides** and the **API reference** that ship with the dashboard in `server/handbook/` (`GET /api/handbook`). Tables, callouts (`> [!NOTE]`), tabbed code examples and copy buttons are rendered for every page. The project part is a read-only browser for the project's Markdown: root documents (`README`, `AGENTS`, `ARCHITECTURE`, `STATUS`, `CHANGELOG`, …), `docs/**` (with subcollections such as `docs/adr`, `docs/gates`, `docs/research`), `tasks/*.md` briefs, `reviews/*.md`, and the package/service/app/tool README/ARCHITECTURE files. A page shows its rendered content, safe relative links, backlinks (pages and tasks that reference it), the git history and old revisions (`?ref=<commit>`), plus local favorites. Full-text search covers every indexed page. Nothing is written — documents are edited by the agents through the normal write guard. `GET /api/pages`, `/api/page?path=&ref=`, `/api/page/history`, `/api/pages/search`, `/api/pages/favorites`; MCP `polier_pages`, `polier_page`, `polier_pages_search`; CLI `tools/pages.py list|search|show|history|favorite|favorites`.
 - **Intake** — proposals as committed `intake/<id>.json` files in a small lifecycle: `proposed` → `accepted` (creates a pending board task through the validated plan editor and links back) or `rejected` (with a reason). Kind (`idea`/`issue`/`request`/`question`), priority, source (`owner`/`agent`/`cli`/`mcp`/`web`) and links are part of the record. Accept an entry from the intake view, the CLI (`tools/intake.py accept`) or the API; a task template can provide the structure. `GET/POST /api/intake`, `PATCH /api/intake/<id>`, `POST /api/intake/<id>/accept|reject`; MCP `polier_intake`, `polier_intake_add`.
 - **Task templates** — committed `templates/tasks/<id>.json` files with the reusable shape of a task (title/goal optional, scope, acceptance, gates, complexity, labels, estimate, owner, package, exclusive). Create them by hand, save one from an existing task ("save as template"), and use them as defaults in the plan editor, the intake accept form, `POST /api/plan/tasks` (`template: <id>`) and the CLI (`tools/templates.py`). They never bypass validation. `GET/POST /api/task-templates`, `DELETE /api/task-templates/<id>`; MCP `polier_templates`.
 
-![Pages](images/dashboard-pages.png)
+![Knowledge overview](images/dashboard-knowledge.png)
+![Pages: API reference](images/dashboard-pages.png)
 ![Intake](images/dashboard-intake.png)
 
 The pages view and intake are controlled by `dashboard.json` → `features.pages` / `features.intake` (default on). Favorites are local; intake entries and templates are committed.
@@ -96,6 +97,18 @@ The pages view and intake are controlled by `dashboard.json` → `features.pages
 ![GitHub](images/dashboard-github.png)
 
 All three features are controlled by `dashboard.json` → `features.assistant` / `features.automations` / `features.github` (default on). Assistant conversations are local runtime files; automation rules are committed; the GitHub panel is read-only.
+
+## AI, MCP and GitHub (2.6)
+
+- **Agents** (`agents.json`, committed) — profiles with role, model, instructions, skills and connectors; *Assign to a task* starts a headless session with them. Built-in Builder, Reviewer and Lead until the file exists.
+- **Skills** (`.claude/skills/<id>/SKILL.md`, committed) — reusable instructions with a "when to use" description; inlined into the prompts of the agents that list them and discovered by interactive Claude Code. Examples ship in `templates/skills/`.
+- **MCP** — the Polier MCP server (`tools/mcp.py`) with copy-paste setup for Claude Code, Claude Desktop, Cursor and VS Code and a handshake test; **connectors** are other MCP servers (stdio or HTTP) that sessions and the assistant may use, configured per machine in the runtime config with masked secrets and passed to Claude Code via `--mcp-config`.
+- **GitHub login** — *Connect GitHub* signs the `gh` CLI in with the device flow or a token; *Disconnect* signs it out. Polier stores no credential.
+
+The handbook in Pages (*Guides → AI and MCP*, *API reference → AI and integrations*) documents every screen and route.
+
+![Agents](images/dashboard-agents.png)
+![MCP](images/dashboard-mcp.png)
 
 Reading the page without live updates: add `?noevents=1` (static mode) and
 `?theme=light|dark` to freeze the theme; deep links are `#/board`, `#/table`,
@@ -219,6 +232,10 @@ the `errors`/`actions` the CLI would print.
 | `GET /api/coverage` | requirement definitions, task links, evidence and gaps |
 | `GET /api/analytics` | throughput, cycle time, gate pass rate, rework, effort and tokens |
 | `GET /api/pages`, `/api/page?path=&ref=`, `/api/page/history`, `/api/pages/search`, `PUT /api/pages/favorites` | Markdown knowledge layer: collections, content, revisions, search, favorites |
+| `GET /api/handbook` | the shipped guides and API reference (spaces, sections, pages with Markdown) |
+| `GET/PUT /api/agents`, `GET /api/skills`, `PUT/DELETE /api/skills/<id>`, `POST /api/skills/examples` | agent profiles and skills |
+| `GET /api/mcp`, `PUT/DELETE /api/mcp/connectors/<name>`, `POST /api/mcp/connectors/<name>/test` | MCP server setup and connectors |
+| `GET /api/github/auth`, `POST /api/github/login`, `/api/github/login/cancel`, `/api/github/logout` | GitHub account connection through gh |
 | `GET/POST /api/intake`, `PATCH /api/intake/<id>`, `POST /api/intake/<id>/accept\|reject` | intake proposals and triage into validated tasks |
 | `GET/POST /api/task-templates`, `DELETE /api/task-templates/<id>` | reusable task templates |
 | `GET/POST /api/assistant`, `/api/assistant/chat`, `/api/assistant/<id>`, `/api/assistant/apply` | read-only assistant conversations and validated proposal application |
@@ -244,13 +261,16 @@ page falls back to `.polier-dashboard/`):
 | `intake/<id>.json` (project root, committed) | intake proposals and their decisions |
 | `templates/tasks/<id>.json` (project root, committed) | reusable task templates |
 | `automations.json` (project root, committed) | deterministic automation rules (evaluated as a dry run) |
-| `config.json` (runtime) | provider command/settings, gate-command overrides, UI preferences |
+| `agents.json` (project root, committed) | agent profiles |
+| `.claude/skills/<id>/SKILL.md` (committed) | skills |
+| `config.json` (runtime) | provider command/settings, gate-command overrides, MCP connectors (`mcp_servers`, `polier_mcp`), UI preferences |
 | `plan.json`, `plan/` | interview answers and the last generator prompt |
 | `jobs/<id>.log` | full output of gate/check/audit jobs |
 | `sessions/<id>/` | prompt, generated Claude settings, transcript, session log, meta |
 | `inbox.json` | read state of the inbox items |
 | `pages.json` | local page favorites |
 | `assistant/<id>.json` | local assistant conversations |
+| `sessions/<id>/mcp.json` | the MCP connectors a session got (contains secrets; machine-local) |
 
 Deleting the folder loses transcripts, job logs and read marks only; `dashboard.json` and `views/` are project files and survive.
 

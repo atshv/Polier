@@ -22,6 +22,7 @@ import json
 import os
 import re
 import secrets
+import sys
 import socket
 import threading
 import time
@@ -44,7 +45,11 @@ from core import coverage as coverage_mod
 from core import cycles as cycles_mod
 from core import dashboard as dashboard_mod
 from core import filters as filters_mod
+from core import agents as agents_mod
 from core import github as github_mod
+from core import handbook as handbook_mod
+from core import mcp_connectors as connectors_mod
+from core import skills as skills_mod
 from core import inbox as inbox_mod
 from core import intake as intake_mod
 from core import modules as modules_mod
@@ -66,7 +71,7 @@ from core.jobs import JobManager
 from .assistant import AssistantManager
 from .sessions import SessionManager
 
-VERSION = "2.5.0"
+VERSION = "2.6.0"
 CONFIG = "config.json"
 MAX_BODY = 1_500_000
 # POST endpoints that only read/compute; safe in read-only mode and without the
@@ -117,6 +122,10 @@ class DashboardApp:
         self.watcher = _Watcher(self)
         self.jobs = JobManager(self.root, self.bus, self.package_root)
         self.sessions = SessionManager(self.root, self.bus, self._config().get("session"), self.package_root)
+        self.sessions.connector_source = lambda role, only=None: connectors_mod.for_session(
+            self._config(), role, self.package_root, self.root, only)
+        self.github_login = github_mod.DeviceLogin(
+            on_change=lambda state: self.bus.publish("github", {"login": state}))
         self.assistant = AssistantManager(self.root, self.sessions, self.bus)
         self._cache: Optional[Dict[str, Any]] = None
         self._cache_sig: Optional[str] = None
@@ -150,7 +159,8 @@ class DashboardApp:
             "gate_commands": {**suggest_gate_commands(self.root), **config.get("gate_commands", {})},
             "session": self.sessions.settings(),
             "ui": config.get("ui", {}),
-            "polier": {"root": str(self.package_root), "version": self.package_version()},
+            "polier": {"root": str(self.package_root), "version": self.package_version(),
+                       "python": sys.executable},
         }
 
     def package_version(self) -> Optional[str]:
@@ -450,12 +460,20 @@ class DashboardApp:
         if path == "/api/sessions" and method == "POST":
             payload = self._json(body)
             role = str(payload.get("role") or "worker")
+            options: Dict[str, Any] = {}
+            if payload.get("agent"):
+                options = self._agent_options(str(payload["agent"]), payload.get("note") or None)
+                role = options["role"]
             try:
                 session = self.sessions.start(
                     task=payload.get("task") or None, role=role,
-                    prompt=payload.get("prompt") or None, note=payload.get("note") or None,
-                    worktree=bool(payload.get("worktree")), model=payload.get("model") or None,
-                    extra_env=payload.get("env") if isinstance(payload.get("env"), dict) else None)
+                    prompt=payload.get("prompt") or None,
+                    note=None if options else (payload.get("note") or None),
+                    worktree=bool(payload["worktree"]) if "worktree" in payload else bool(options.get("worktree")),
+                    model=payload.get("model") or options.get("model") or None,
+                    extra_env=payload.get("env") if isinstance(payload.get("env"), dict) else None,
+                    addendum=options.get("note"), agent=options.get("id"),
+                    connectors=options.get("connectors"))
             except PolierError as exc:
                 raise ApiError(400, str(exc))
             self.bus.publish("session", session)
@@ -801,6 +819,115 @@ class DashboardApp:
         if path == "/api/bulk" and method == "POST":
             return 200, self._bulk(self._json(body))
         # pages, intake and task templates (2.3) ---------------------------
+        # AI: agents, skills, MCP (2.6) -----------------------------------
+        if path == "/api/agents" and method == "GET":
+            value = agents_mod.load(self.root)
+            available = {skill["id"] for skill in skills_mod.load_all(self.root)} | \
+                {skill["id"] for skill in skills_mod.examples(self.package_root)}
+            connectors = {entry["name"] for entry in connectors_mod.view(
+                self._config(), self.package_root, self.root)["connectors"]}
+            for agent in value["agents"]:
+                agent["missing_skills"] = [skill for skill in agent["skills"] if skill not in available]
+                agent["missing_connectors"] = [name for name in agent["connectors"] if name not in connectors]
+            value["roles"] = list(agents_mod.ROLES)
+            return 200, value
+        if path == "/api/agents" and method in ("PUT", "POST"):
+            payload = self._json(body)
+            try:
+                value = agents_mod.save(self.root, payload.get("agents"))
+            except PolierError as exc:
+                raise ApiError(400, str(exc))
+            self.bus.publish("agents", {"count": len(value["agents"])})
+            return 200, value
+        if path == "/api/skills" and method == "GET":
+            installed = skills_mod.load_all(self.root)
+            ids = {skill["id"] for skill in installed}
+            examples = [{**skill, "installed": skill["id"] in ids, "path": None}
+                        for skill in skills_mod.examples(self.package_root)]
+            return 200, {"skills": installed, "examples": examples, "folder": str(skills_mod.DIR)}
+        if path == "/api/skills/examples" and method == "POST":
+            payload = self._json(body)
+            ids = payload.get("ids") if isinstance(payload.get("ids"), list) else None
+            installed = skills_mod.install_examples(self.root, self.package_root, ids)
+            self.bus.publish("skills", {"installed": installed})
+            return 200, {"installed": installed, "skills": skills_mod.load_all(self.root)}
+        match = re.fullmatch(r"/api/skills/([a-z][a-z0-9-]{0,40})", path)
+        if match and method == "GET":
+            try:
+                return 200, skills_mod.get(self.root, match.group(1))
+            except KeyError:
+                raise ApiError(404, "unknown skill")
+        if match and method in ("PUT", "POST"):
+            try:
+                skill = skills_mod.save(self.root, match.group(1), self._json(body))
+            except PolierError as exc:
+                raise ApiError(400, str(exc))
+            self.bus.publish("skills", {"skill": skill["id"]})
+            return 200, skill
+        if match and method == "DELETE":
+            try:
+                result = skills_mod.delete(self.root, match.group(1))
+            except KeyError:
+                raise ApiError(404, "unknown skill")
+            self.bus.publish("skills", result)
+            return 200, result
+        if path == "/api/mcp" and method == "GET":
+            return 200, {**connectors_mod.view(self._config(), self.package_root, self.root),
+                         "server": {"tools": self._mcp_tools(), "python": sys.executable,
+                                    "script": str(self.package_root / "tools" / "mcp.py"),
+                                    "root": str(self.root)}}
+        match = re.fullmatch(r"/api/mcp/connectors/([a-z][a-z0-9_-]{0,40})", path)
+        if match and method in ("PUT", "POST"):
+            config = self._config()
+            try:
+                config = connectors_mod.upsert(config, match.group(1), self._json(body))
+            except PolierError as exc:
+                raise ApiError(400, str(exc))
+            self._save_config(config)
+            self.bus.publish("mcp", {"connector": match.group(1)})
+            return 200, connectors_mod.view(config, self.package_root, self.root)
+        if match and method == "DELETE":
+            config = self._config()
+            try:
+                config = connectors_mod.remove(config, match.group(1))
+            except KeyError:
+                raise ApiError(404, "unknown connector")
+            self._save_config(config)
+            self.bus.publish("mcp", {"deleted": match.group(1)})
+            return 200, connectors_mod.view(config, self.package_root, self.root)
+        match = re.fullmatch(r"/api/mcp/connectors/([a-z][a-z0-9_-]{0,40})/test", path)
+        if match and method == "POST":
+            try:
+                return 200, connectors_mod.test(self._config(), match.group(1), self.package_root, self.root)
+            except KeyError:
+                raise ApiError(404, "unknown connector")
+        # GitHub account connection (2.6) ----------------------------------
+        if path == "/api/github/auth" and method == "GET":
+            return 200, {"auth": github_mod.auth_status(), "login": self.github_login.view()}
+        if path == "/api/github/login" and method == "POST":
+            payload = self._json(body)
+            try:
+                if payload.get("token"):
+                    return 200, {"auth": github_mod.login_with_token(str(payload["token"])),
+                                 "login": {"status": "done"}}
+                login = self.github_login.start()
+            except PolierError as exc:
+                raise ApiError(400, str(exc))
+            return 200, {"auth": github_mod.auth_status(), "login": login}
+        if path == "/api/github/login/cancel" and method == "POST":
+            return 200, {"login": self.github_login.cancel()}
+        if path == "/api/github/logout" and method == "POST":
+            try:
+                auth = github_mod.logout()
+            except PolierError as exc:
+                raise ApiError(400, str(exc))
+            self.bus.publish("github", {"auth": auth})
+            return 200, {"auth": auth}
+        if path == "/api/handbook" and method == "GET":
+            try:
+                return 200, handbook_mod.load(self.package_root)
+            except PolierError as exc:
+                raise ApiError(500, str(exc))
         if path == "/api/pages" and method == "GET":
             return 200, pages_mod.index(self.root)
         if path == "/api/pages/search" and method == "GET":
@@ -938,6 +1065,37 @@ class DashboardApp:
         if path == "/api/audit" and method == "GET":
             return 200, audit_mod.audit(self.root)
         raise ApiError(404, f"no route for {method} {path}")
+
+    # -- 2.6 helpers -------------------------------------------------------
+    def _agent_options(self, agent_id: str, note: Optional[str]) -> Dict[str, Any]:
+        """Role, model, worktree, prompt add-on and connectors of an agent profile."""
+        try:
+            agent = agents_mod.get(self.root, agent_id)
+        except KeyError:
+            raise ApiError(404, f"unknown agent {agent_id}")
+        project = {skill["id"]: skill for skill in skills_mod.load_all(self.root)}
+        examples = {skill["id"]: skill for skill in skills_mod.examples(self.package_root)}
+        chosen = [project.get(skill_id) or examples.get(skill_id) for skill_id in agent["skills"]]
+        options = agents_mod.session_options(agent, [skill for skill in chosen if skill], note)
+        options["id"] = agent["id"]
+        options["connectors"] = connectors_mod.for_session(
+            self._config(), agent["role"], self.package_root, self.root, agent["connectors"] or None)
+        return options
+
+    def _mcp_tools(self) -> List[Dict[str, str]]:
+        """Name and description of every tool of Polier's own MCP server."""
+        import importlib.util
+
+        script = self.package_root / "tools" / "mcp.py"
+        try:
+            spec = importlib.util.spec_from_file_location("polier_mcp_tools", script)
+            module = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
+            spec.loader.exec_module(module)  # type: ignore[union-attr]
+            tools = module.Server(self.root, read_only=False).tools()
+        except Exception:  # noqa: BLE001 - the page still shows the connection snippets
+            return []
+        return [{"name": str(tool.get("name")), "description": str(tool.get("description") or "")}
+                for tool in tools]
 
     # -- 2.4 helpers -------------------------------------------------------
     def _apply_proposal(self, proposal: Dict[str, Any]) -> Dict[str, Any]:
