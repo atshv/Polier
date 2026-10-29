@@ -21,8 +21,8 @@ Tools (JSON-RPC ``tools/call``):
     polier_gate       run one gate and return its record summary
     polier_claim      take the claim for a task
     polier_release    release the claim of a task
-    polier_agents     agent profiles (2.5)
-    polier_skills     project skills, or one skill with ?id (2.5)
+    polier_agents     agent profiles (2.6)
+    polier_skills     project skills, or one skill with ?id (2.6)
 
 The server speaks newline-delimited JSON-RPC 2.0 on stdio (MCP stdio
 transport), runs on the Python standard library only, and writes nothing but
@@ -66,7 +66,7 @@ from core.errors import PolierError  # noqa: E402
 from core.gates import suggest_gate_commands  # noqa: E402
 
 PROTOCOL = "2024-11-05"
-SERVER = {"name": "polier", "version": "2.5.0"}
+SERVER = {"name": "polier", "version": "2.6.0"}
 
 
 def _text(value: Any) -> str:

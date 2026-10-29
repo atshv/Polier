@@ -71,7 +71,7 @@ from core.jobs import JobManager
 from .assistant import AssistantManager
 from .sessions import SessionManager
 
-VERSION = "2.5.0"
+VERSION = "2.6.0"
 CONFIG = "config.json"
 MAX_BODY = 1_500_000
 # POST endpoints that only read/compute; safe in read-only mode and without the
@@ -819,7 +819,7 @@ class DashboardApp:
         if path == "/api/bulk" and method == "POST":
             return 200, self._bulk(self._json(body))
         # pages, intake and task templates (2.3) ---------------------------
-        # AI: agents, skills, MCP (2.5) -----------------------------------
+        # AI: agents, skills, MCP (2.6) -----------------------------------
         if path == "/api/agents" and method == "GET":
             value = agents_mod.load(self.root)
             available = {skill["id"] for skill in skills_mod.load_all(self.root)} | \
@@ -901,7 +901,7 @@ class DashboardApp:
                 return 200, connectors_mod.test(self._config(), match.group(1), self.package_root, self.root)
             except KeyError:
                 raise ApiError(404, "unknown connector")
-        # GitHub account connection (2.5) ----------------------------------
+        # GitHub account connection (2.6) ----------------------------------
         if path == "/api/github/auth" and method == "GET":
             return 200, {"auth": github_mod.auth_status(), "login": self.github_login.view()}
         if path == "/api/github/login" and method == "POST":
@@ -1066,7 +1066,7 @@ class DashboardApp:
             return 200, audit_mod.audit(self.root)
         raise ApiError(404, f"no route for {method} {path}")
 
-    # -- 2.5 helpers -------------------------------------------------------
+    # -- 2.6 helpers -------------------------------------------------------
     def _agent_options(self, agent_id: str, note: Optional[str]) -> Dict[str, Any]:
         """Role, model, worktree, prompt add-on and connectors of an agent profile."""
         try:

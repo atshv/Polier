@@ -170,7 +170,7 @@ def status(root, *, force: bool = False) -> Dict[str, Any]:
     return value
 
 
-# -- account connection (2.5) -------------------------------------------------
+# -- account connection (2.6) -------------------------------------------------
 #
 # "Connect GitHub" signs the gh CLI in — with the device flow or a token — so
 # the panel, the task PR/CI mapping and agent sessions that use gh all work.

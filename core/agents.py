@@ -1,4 +1,4 @@
-"""Agent profiles (2.5): named, reusable setups for headless sessions.
+"""Agent profiles (2.6): named, reusable setups for headless sessions.
 
 An agent is what you assign to a task: a role (worker, reviewer or lead), an
 optional model, standing instructions, the skills it follows and the MCP

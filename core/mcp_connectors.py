@@ -1,4 +1,4 @@
-"""MCP connectors (2.5): external MCP servers that agent sessions may use.
+"""MCP connectors (2.6): external MCP servers that agent sessions may use.
 
 A connector is one MCP server — a local command (stdio) or a remote endpoint
 (streamable HTTP) — that headless sessions and the assistant get as tools. They
@@ -218,7 +218,7 @@ def _rpc(method: str, request_id: Optional[int], params: Optional[dict] = None) 
 
 
 INIT_PARAMS = {"protocolVersion": PROTOCOL, "capabilities": {},
-               "clientInfo": {"name": "polier-dashboard", "version": "2.5"}}
+               "clientInfo": {"name": "polier-dashboard", "version": "2.6"}}
 
 
 def _test_stdio(entry: Dict[str, Any], timeout: float) -> Dict[str, Any]:

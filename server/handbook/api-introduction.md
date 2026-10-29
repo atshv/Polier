@@ -41,7 +41,7 @@ console.log(await res.json());
 ```json
 {
   "ok": true,
-  "version": "2.5.0",
+  "version": "2.6.0",
   "role": "lead",
   "board_present": true,
   "root": "/home/me/canvas-mini",

@@ -296,7 +296,8 @@ For hard limits, run workers in a sandbox or a container with write access to th
 
 | Version | Highlights |
 |---|---|
-| **2.5** | calmer dashboard (sidebar, one-row toolbar, select mode), docs-style knowledge with built-in guides and API reference, agents, skills, MCP server setup and connectors, GitHub login |
+| **2.6** | docs-style knowledge with built-in guides and API reference, agents, skills, MCP server setup and connectors, GitHub login |
+| **2.5** | calmer dashboard: sidebar, one-row toolbar, select mode, every Kanban column on screen |
 | **2.4** | assistant with confirmed proposals, automations (dry run), bulk actions, command palette, GitHub/CI panel |
 | **2.3** | pages (Markdown knowledge with search, backlinks, history), intake with triage, task templates |
 | **2.2** | timeline, cycles, modules, requirement coverage, analytics |
@@ -310,11 +311,11 @@ Details and migration steps: [`CHANGELOG.md`](CHANGELOG.md) and [Releases](https
 
 Releases are automatic:
 
-1. Set the new number in `VERSION` (for example `2.6.0`).
-2. Add a section `## 2.6.0` at the top of `CHANGELOG.md` with what changed and how to migrate.
+1. Set the new number in `VERSION` (for example `2.7.0`).
+2. Add a section `## 2.7.0` at the top of `CHANGELOG.md` with what changed and how to migrate.
 3. Merge to `main`.
 
-The [release workflow](.github/workflows/release.yml) syncs `package.json` and `tools/manifest.json`, runs the tests, tags `v2.6.0` and publishes a GitHub Release with the changelog section. It stops with a clear message when the section is missing and never overwrites an existing release.
+The [release workflow](.github/workflows/release.yml) syncs `package.json` and `tools/manifest.json`, runs the tests, tags `v2.7.0` and publishes a GitHub Release with the changelog section. It stops with a clear message when the section is missing and never overwrites an existing release.
 
 ## License
 

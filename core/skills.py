@@ -1,4 +1,4 @@
-"""Skills (2.5): reusable instructions for agents, stored in the project.
+"""Skills (2.6): reusable instructions for agents, stored in the project.
 
 A skill is a Markdown file in the Agent Skills layout that Claude Code reads
 natively: ``.claude/skills/<id>/SKILL.md`` with a small front matter::
