@@ -48,6 +48,14 @@ The human's operating manual. The generator drafts and writes; you approve, star
 - **Task templates:** committed `templates/tasks/<id>.json` (scope, acceptance, gates, complexity, labels, estimate). Save one from an existing task (`tools/templates.py save --from-task <ID> --id <id>`), use it in the plan editor, intake accept or `POST /api/plan/tasks` with `template`.
 - **Pages and intake** are feature-flagged in `dashboard.json` (default on). Nothing in the page viewer writes; templates and intake are validated project files.
 
+## Intelligence (2.4)
+
+- **Assistant:** `tools/assistant.py ask "…" --root <project>`; conversations are local. The dashboard chat shows the answer plus proposals (state/plan/gate/session/note); applying is explicit and validated. The assistant cannot write.
+- **Automations:** committed `automations.json` rules; `tools/automations.py init|validate|run` (dry run) prints matches and suggestions. Kinds: gate_failed, task_blocked, budget_over, review_ready, session_failed, intake_proposed, stage_decision_pending, task_ready. Nothing runs in the background.
+- **Bulk:** select tasks in Board/Table → state, claim, release, labels or estimate; per-task results tell you which transitions were refused.
+- **Command palette:** Cmd/Ctrl+K for views, tasks and quick actions.
+- **GitHub/CI:** `tools/github.py status` (or the GitHub view) reads PRs and workflow runs via `gh`; unavailable without a GitHub remote/login, never blocking.
+
 ## The dashboard (2.0)
 
 - Start it with `python3 tools/serve.py <project> [--port 8765] [--open] [--token …] [--read-only]`; stop it with Ctrl+C. It needs no dependencies and writes only runtime files under `<git-common-dir>/polier/dashboard/`.

@@ -2002,3 +2002,161 @@ table.table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
 }
 
 .intake { display: block; min-width: 0; }
+/* =========================================================================
+   Polier 2.4 — Assistant, Automations, GitHub, bulk operations, palette
+   ========================================================================= */
+
+/* ---------- Assistant ---------- */
+.assistant { display: grid; grid-template-columns: 264px minmax(0, 1fr); gap: 12px; align-items: start; min-height: 480px; }
+.assistant-sidebar { display: flex; flex-direction: column; gap: 8px; }
+.assistant-side-card { display: flex; flex-direction: column; min-height: 0; }
+.assistant-conv-list { display: flex; flex-direction: column; max-height: 56vh; overflow: auto; padding: 6px; }
+.assistant-conv {
+  display: flex; flex-direction: column; gap: 2px; width: 100%; padding: 7px 8px;
+  border: 0; border-radius: var(--radius-sm); background: none; color: inherit; text-align: left; cursor: pointer;
+}
+.assistant-conv:hover { background: var(--surface-2); }
+.assistant-conv.is-active { background: var(--accent-soft); }
+.assistant-conv-title { font-size: 12px; font-weight: 550; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.assistant-conv-meta { font-size: 10px; color: var(--faint); display: flex; gap: 6px; align-items: center; }
+.assistant-main { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow-1); min-width: 0; }
+.assistant-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 12px; border-bottom: 1px solid var(--border); background: var(--surface-2); }
+.assistant-head .panel-title { flex: 1 1 auto; }
+.assistant-transcript { display: flex; flex-direction: column; gap: 12px; padding: 14px; max-height: 58vh; overflow: auto; }
+.assistant-empty { padding: 34px 18px; text-align: center; color: var(--muted); }
+.assistant-bubble {
+  max-width: 92%;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.assistant-bubble.is-user { align-self: flex-end; background: var(--accent-soft); border-color: transparent; color: var(--text); }
+.assistant-bubble.is-assistant { align-self: flex-start; background: var(--surface); }
+.assistant-bubble .md { font-size: 13px; }
+.assistant-bubble-meta { display: flex; gap: 8px; font-size: 10px; color: var(--faint); margin-top: 5px; }
+.assistant-proposals { display: flex; flex-direction: column; gap: 8px; margin-top: 9px; }
+.proposal-card { display: flex; flex-direction: column; gap: 7px; padding: 10px 11px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-2); }
+.proposal-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.proposal-title { font-size: 12.5px; font-weight: 600; }
+.proposal-reason { font-size: 11.5px; color: var(--muted); line-height: 1.5; }
+.proposal-payload { margin: 0; padding: 7px 9px; border: 1px solid var(--border); border-radius: var(--radius-xs); background: var(--surface); font-family: var(--mono); font-size: 10.5px; line-height: 1.5; max-height: 130px; overflow: auto; white-space: pre-wrap; }
+.proposal-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.assistant-pending { align-self: flex-start; display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px dashed var(--border-strong); border-radius: var(--radius-sm); color: var(--muted); font-size: 12px; }
+.assistant-composer { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px 12px; border-top: 1px solid var(--border); }
+.assistant-composer textarea { min-height: 62px; }
+.assistant-composer-foot { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.assistant-composer-foot .hint { margin-right: auto; }
+.assistant-error { padding: 8px 12px; border-top: 1px solid var(--border); }
+.assistant-apply-result { padding: 8px 12px; border-top: 1px solid var(--border); font-size: 12px; color: var(--text-2); }
+
+/* ---------- Automations ---------- */
+.automations { display: flex; flex-direction: column; gap: 14px; }
+.rule-list { display: flex; flex-direction: column; gap: 8px; }
+.rule-card { display: flex; flex-direction: column; gap: 7px; padding: 11px 13px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); }
+.rule-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.rule-name { font-size: 13px; font-weight: 600; }
+.rule-id { font-family: var(--mono); font-size: 10px; color: var(--faint); }
+.rule-desc { font-size: 11.5px; color: var(--muted); line-height: 1.5; }
+.rule-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.automation-editor textarea {
+  width: 100%;
+  min-height: 260px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-family: var(--mono);
+  font-size: 11.5px;
+  line-height: 1.55;
+  resize: vertical;
+  tab-size: 2;
+}
+.automation-editor textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.match-group { display: flex; flex-direction: column; gap: 8px; padding: 11px 13px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); }
+.match-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.match-event { font-size: 11.5px; color: var(--muted); overflow-wrap: anywhere; }
+.match-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.dry-run-note { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 11.5px; color: var(--muted); }
+
+/* ---------- GitHub ---------- */
+.github { display: flex; flex-direction: column; gap: 14px; }
+.github-unavailable { display: flex; flex-direction: column; gap: 10px; }
+.github-hints { display: flex; flex-direction: column; gap: 6px; }
+.github-hint { display: flex; gap: 6px; align-items: baseline; font-size: 11.5px; color: var(--muted); }
+.github-hint code { font-size: 11px; }
+.pr-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 10px; }
+.pr-card { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); }
+.pr-title { font-size: 13px; font-weight: 600; line-height: 1.4; }
+.pr-meta { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; font-size: 10.5px; color: var(--muted); }
+.ci-badge { display: inline-flex; align-items: center; gap: 4px; padding: 1px 7px; border-radius: 999px; font-size: 10px; font-weight: 650; }
+.ci-pass { background: var(--ok-soft); color: var(--ok); }
+.ci-fail { background: var(--danger-soft); color: var(--danger); }
+.ci-pending { background: var(--warn-soft); color: var(--warn); }
+.ci-none { background: var(--surface-3); color: var(--muted); }
+.task-map { display: flex; flex-wrap: wrap; gap: 4px; }
+.github-runs { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+.github-runs th { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--border); color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap; }
+.github-runs td { padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.github-runs tr:last-child td { border-bottom: 0; }
+
+/* ---------- bulk selection ---------- */
+.bulk-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  margin-bottom: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+}
+.bulk-bar.is-active { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.bulk-count { font-size: 11.5px; font-weight: 600; color: var(--text-2); }
+.bulk-group { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.bulk-group .select, .bulk-group .input { width: auto; height: 27px; font-size: 12px; }
+.bulk-group .input.is-note { min-width: 150px; }
+.bulk-group .input.is-estimate { width: 92px; }
+.bulk-divider { width: 1px; height: 20px; background: var(--border); }
+.bulk-check { width: 13px; height: 13px; accent-color: var(--accent); margin: 0; flex: 0 0 auto; cursor: pointer; }
+.task-card .bulk-check { margin-left: auto; }
+.task-card-check-row { display: flex; align-items: center; gap: 6px; }
+.table .cell-check { width: 30px; }
+.table .cell-check input { cursor: pointer; }
+
+/* ---------- command palette ---------- */
+.palette { display: flex; flex-direction: column; gap: 8px; }
+.palette-list { display: flex; flex-direction: column; max-height: 52vh; overflow: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.palette-group { padding: 6px 10px 3px; font-size: 9.5px; font-weight: 650; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); background: var(--surface-2); position: sticky; top: 0; }
+.palette-item {
+  display: flex; align-items: center; gap: 8px; width: 100%; padding: 7px 10px;
+  border: 0; border-bottom: 1px solid var(--border); background: var(--surface); color: inherit; text-align: left; cursor: pointer;
+}
+.palette-item:last-child { border-bottom: 0; }
+.palette-item:hover, .palette-item.is-active { background: var(--accent-soft); }
+.palette-label { flex: 1 1 auto; min-width: 0; font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.palette-sub { font-size: 10px; color: var(--muted); font-family: var(--mono); }
+.palette-hint { display: flex; gap: 8px; flex-wrap: wrap; font-size: 10.5px; color: var(--muted); }
+.palette-empty { padding: 18px; text-align: center; color: var(--muted); font-size: 12px; }
+.palette kbd { font-family: var(--mono); }
+
+/* ---------- responsive 2.4 ---------- */
+@media (max-width: 1100px) {
+  .assistant { grid-template-columns: 220px minmax(0, 1fr); }
+}
+@media (max-width: 900px) {
+  .assistant { grid-template-columns: minmax(0, 1fr); }
+  .assistant-conv-list { max-height: 190px; }
+  .assistant-transcript { max-height: none; }
+  .pr-grid { grid-template-columns: minmax(0, 1fr); }
+  .bulk-bar .bulk-divider { display: none; }
+  .github-runs { display: block; overflow-x: auto; }
+}
+
+.assistant-view { display: block; min-width: 0; }

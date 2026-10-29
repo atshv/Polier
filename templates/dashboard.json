@@ -12,7 +12,9 @@
     "analytics": true,
     "pages": true,
     "intake": true,
-    "assistant": false
+    "assistant": true,
+    "automations": true,
+    "github": true
   },
   "labels": [
     {

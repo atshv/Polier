@@ -28,6 +28,9 @@ const VIEWS = [
   { key: 'sessions', label: 'Sessions' },
   { key: 'pages', label: 'Pages', feature: 'pages' },
   { key: 'intake', label: 'Intake', feature: 'intake' },
+  { key: 'assistant', label: 'Assistant', feature: 'assistant' },
+  { key: 'automations', label: 'Automations', feature: 'automations' },
+  { key: 'github', label: 'GitHub', feature: 'github' },
   { key: 'plan', label: 'Plan' },
   { key: 'settings', label: 'Settings' }
 ];
@@ -619,7 +622,9 @@ const FEATURE_NOTES = {
   analytics: 'Throughput, cycle time, gate results and effort charts.',
   pages: 'The project Markdown as a browsable wiki with search, history and backlinks.',
   intake: 'Proposals that become tasks after an accept decision.',
-  assistant: 'A chat surface for the project assistant.'
+  assistant: 'Ask the project questions; conversations are local to this machine.',
+  automations: 'Committed rules that suggest actions; dry run only, nothing executes.',
+  github: 'Read-only pull request and CI status through the gh CLI.'
 };
 const FEATURE_LABELS = {
   inbox: 'Your Work and Inbox',
@@ -633,7 +638,9 @@ const FEATURE_LABELS = {
   analytics: 'Analytics',
   pages: 'Pages',
   intake: 'Intake',
-  assistant: 'Assistant'
+  assistant: 'Assistant',
+  automations: 'Automations',
+  github: 'GitHub'
 };
 
 const FIELD_LABELS = {
@@ -1647,6 +1654,429 @@ function templateChips(template) {
 }
 
 /* =========================================================================
+   2.4 — Assistant, Automations, GitHub: loaders and helpers
+   ========================================================================= */
+
+/* ---------- assistant ---------- */
+
+function assistantConversations() {
+  return state.assistantConversations || [];
+}
+
+function assistantConversationById(conversationId) {
+  return assistantConversations().find((conversation) => conversation.id === conversationId) || null;
+}
+
+function activeAssistantDetail() {
+  return state.assistantDetail || null;
+}
+
+async function loadAssistantList() {
+  try {
+    const result = await api('/api/assistant');
+    state.assistantConversations = Array.isArray(result.conversations) ? result.conversations : [];
+    state.assistantLoaded = true;
+    state.assistantError = null;
+  } catch (err) {
+    state.assistantError = err;
+  }
+}
+
+async function loadAssistantConversation(conversationId, quiet) {
+  if (!conversationId) { state.assistantDetail = null; return; }
+  if (!quiet) state.assistantLoading = true;
+  try {
+    const conversation = await api('/api/assistant/' + encodeURIComponent(conversationId));
+    if (state.assistantActive !== conversationId) return;
+    state.assistantDetail = conversation;
+    state.assistantError = null;
+  } catch (err) {
+    if (state.assistantActive !== conversationId) return;
+    state.assistantError = err;
+    state.assistantDetail = null;
+  }
+  state.assistantLoading = false;
+}
+
+function ensureAssistantActive() {
+  const conversations = assistantConversations();
+  if (state.assistantActive && conversations.some((conversation) => conversation.id === state.assistantActive)) {
+    return state.assistantActive;
+  }
+  state.assistantActive = conversations.length ? conversations[0].id : null;
+  state.assistantDetail = null;
+  return state.assistantActive;
+}
+
+async function openAssistantConversation(conversationId) {
+  state.assistantActive = conversationId;
+  state.assistantError = null;
+  await loadAssistantConversation(conversationId, false);
+  renderView();
+}
+
+function assistantDraft() {
+  return state.assistantDraft || '';
+}
+
+async function sendAssistantMessage(text) {
+  const message = String(text === null || text === undefined ? state.assistantDraft : text).trim();
+  if (message.length < 2) {
+    state.assistantError = new ApiError('Write a question first (at least 2 characters).', 400, null);
+    renderView();
+    return;
+  }
+  state.assistantSending = true;
+  state.assistantError = null;
+  state.assistantDraft = '';
+  renderView();
+  try {
+    const conversation = await api('/api/assistant/chat', {
+      method: 'POST',
+      body: { message: message, conversation_id: state.assistantActive || undefined }
+    });
+    state.assistantActive = conversation.id;
+    state.assistantDetail = conversation;
+    await loadAssistantList();
+    renderView();
+    if (state.route.view === 'assistant') startViewTimers();
+  } catch (err) {
+    state.assistantError = err;
+    state.assistantDraft = message;
+    renderView();
+  } finally {
+    state.assistantSending = false;
+  }
+}
+
+async function pollAssistantConversation() {
+  const detail = state.assistantDetail;
+  if (!detail || !detail.id || !detail.pending) return;
+  if (state.assistantPolling) return;
+  state.assistantPolling = true;
+  try {
+    const conversation = await api('/api/assistant/' + encodeURIComponent(detail.id));
+    if (state.assistantActive !== conversation.id) return;
+    const previousMessages = (detail.messages || []).length;
+    state.assistantDetail = conversation;
+    if (!conversation.pending) await loadAssistantList();
+    if (!conversation.pending || (conversation.messages || []).length !== previousMessages) renderView();
+  } catch (err) {
+    state.assistantError = err;
+  } finally {
+    state.assistantPolling = false;
+  }
+}
+
+async function cancelAssistantAnswer() {
+  const detail = state.assistantDetail;
+  if (!detail) return;
+  try {
+    const conversation = await api('/api/assistant/' + encodeURIComponent(detail.id) + '/cancel', { method: 'POST', body: {} });
+    state.assistantDetail = conversation;
+    await loadAssistantList();
+    renderView();
+    toast('Answer cancelled', 'ok', 2000);
+  } catch (err) {
+    toast('Cancel failed: ' + describeError(err), 'error');
+  }
+}
+
+async function deleteAssistantConversation(conversationId) {
+  const conversation = assistantConversationById(conversationId);
+  const confirmed = await confirmDialog({
+    title: 'Delete conversation?',
+    message: 'The conversation "' + ((conversation && conversation.title) || conversationId) + '" is removed from the local runtime folder.',
+    confirmLabel: 'Delete conversation'
+  });
+  if (!confirmed) return;
+  try {
+    await api('/api/assistant/' + encodeURIComponent(conversationId), { method: 'DELETE' });
+    if (state.assistantActive === conversationId) {
+      state.assistantActive = null;
+      state.assistantDetail = null;
+    }
+    await loadAssistantList();
+    ensureAssistantActive();
+    if (state.assistantActive) await loadAssistantConversation(state.assistantActive, true);
+    renderView();
+    toast('Conversation deleted', 'ok');
+  } catch (err) {
+    toast('Delete failed: ' + describeError(err), 'error');
+  }
+}
+
+function assistantProposalKey(messageIndex, proposalIndex) {
+  return (state.assistantActive || 'none') + ':' + messageIndex + ':' + proposalIndex;
+}
+
+function proposalDismissed(messageIndex, proposalIndex) {
+  return Boolean(state.assistantDismissed && state.assistantDismissed[assistantProposalKey(messageIndex, proposalIndex)]);
+}
+
+function dismissAssistantProposal(messageIndex, proposalIndex) {
+  if (!state.assistantDismissed) state.assistantDismissed = {};
+  state.assistantDismissed[assistantProposalKey(messageIndex, proposalIndex)] = true;
+  renderView();
+}
+
+function assistantProposalKindTone(kind) {
+  return {
+    state: 'blue', plan_task: 'violet', gate: 'green', session: 'amber', note: 'neutral'
+  }[kind] || 'neutral';
+}
+
+async function applyAssistantProposal(proposal, messageIndex, proposalIndex) {
+  if (!proposal || !canWrite()) return;
+  const confirmed = await confirmDialog({
+    title: 'Apply proposal?',
+    message: (proposal.title || proposal.kind) + (proposal.reason ? '\n\n' + proposal.reason : '') + '\n\nThis runs the normal validated action. You can revert it through the usual tools.',
+    confirmLabel: 'Apply proposal'
+  });
+  if (!confirmed) return;
+  state.assistantApplying = assistantProposalKey(messageIndex, proposalIndex);
+  state.assistantApplyResult = null;
+  state.assistantError = null;
+  renderView();
+  try {
+    const result = await api('/api/assistant/apply', {
+      method: 'POST',
+      body: { conversation_id: state.assistantActive || undefined, proposal: proposal }
+    });
+    state.assistantApplyResult = {
+      proposal: proposal,
+      result: result && result.result ? result.result : result,
+      at: new Date().toISOString()
+    };
+    if (state.assistantActive) await loadAssistantConversation(state.assistantActive, true);
+    await Promise.all([loadAssistantList(), loadSnapshot()]);
+    renderHeader();
+    renderView();
+    toast('Applied: ' + (proposal.title || proposal.kind), 'ok');
+  } catch (err) {
+    state.assistantError = err;
+    renderView();
+  } finally {
+    state.assistantApplying = null;
+  }
+}
+
+/* ---------- automations ---------- */
+
+function loadExampleAutomations() {
+  return {
+    version: 1,
+    rules: [
+      {
+        id: 'gate-failed', name: 'A failed gate needs attention', enabled: true,
+        when: { kind: 'gate_failed' },
+        actions: [
+          { type: 'state', status: 'blocked', note: 'A gate failed; fix it before continuing.' },
+          { type: 'open' }
+        ]
+      },
+      {
+        id: 'review-waiting', name: 'A task waits for review', enabled: true,
+        when: { kind: 'review_ready' },
+        actions: [{ type: 'session', role: 'reviewer', note: 'Review the diff, acceptance criteria and gate records.' }]
+      },
+      {
+        id: 'stage-decision', name: 'A stage is ready for the owner decision', enabled: true,
+        when: { kind: 'stage_decision_pending' },
+        actions: [{ type: 'open' }]
+      }
+    ]
+  };
+}
+
+async function loadAutomations() {
+  state.automationsLoading = true;
+  try {
+    const result = await api('/api/automations');
+    state.automations = result;
+    state.automationsLoaded = true;
+    state.automationsEditor = JSON.stringify(result.automations || { version: 1, rules: [] }, null, 2);
+    state.automationsError = null;
+  } catch (err) {
+    state.automationsError = err;
+  }
+  state.automationsLoading = false;
+}
+
+async function saveAutomations(value) {
+  try {
+    const result = await api('/api/automations', { method: 'PUT', body: value });
+    state.automations = Object.assign({}, state.automations || {}, {
+      automations: result.automations,
+      errors: result.errors || []
+    });
+    state.automationsEditor = JSON.stringify(result.automations || value, null, 2);
+    state.automationsEditorError = null;
+    state.automationsError = null;
+    await loadSnapshot();
+    renderView();
+    toast('Automations saved', 'ok');
+    return true;
+  } catch (err) {
+    state.automationsError = err;
+    renderView();
+    return false;
+  }
+}
+
+function automationRuleList() {
+  return (state.automations && state.automations.automations && state.automations.automations.rules) || [];
+}
+
+function automationKinds() {
+  return (state.automations && state.automations.kinds) || [];
+}
+
+async function toggleAutomationRule(ruleId, enabled) {
+  const current = state.automations && state.automations.automations;
+  if (!current) return;
+  const value = JSON.parse(JSON.stringify(current));
+  const rule = (value.rules || []).find((entry) => entry.id === ruleId);
+  if (!rule) return;
+  rule.enabled = Boolean(enabled);
+  await saveAutomations(value);
+}
+
+async function runAutomations() {
+  state.automationsRunning = true;
+  state.automationsError = null;
+  renderView();
+  try {
+    const run = canWrite()
+      ? await api('/api/automations/run', { method: 'POST', body: {} })
+      : await api('/api/automations/run');
+    state.automationsRun = run;
+  } catch (err) {
+    state.automationsError = err;
+  }
+  state.automationsRunning = false;
+  renderView();
+}
+
+async function saveAutomationsEditor(text) {
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch (err) {
+    state.automationsEditorError = new ApiError('automations.json is not valid JSON: ' + err.message, 400, null);
+    state.automationsEditor = text;
+    renderView();
+    return;
+  }
+  state.automationsEditor = text;
+  await saveAutomations(parsed);
+}
+
+function automationEventText(event) {
+  if (!event) return 'event';
+  const parts = [event.kind];
+  if (event.task) parts.push('task ' + event.task);
+  if (event.gate) parts.push('gate ' + event.gate);
+  if (event.stage) parts.push('stage ' + event.stage);
+  if (event.intake) parts.push('intake ' + event.intake);
+  if (event.session) parts.push('session ' + event.session);
+  if (event.days !== null && event.days !== undefined) parts.push(event.days + ' day(s)');
+  if (event.detail) parts.push('— ' + event.detail);
+  return parts.join(' · ');
+}
+
+function automationOpenTarget(match) {
+  const event = (match && match.event) || {};
+  if (event.task) { openTask(event.task); return; }
+  if (event.intake) { navigate('intake'); return; }
+  if (event.stage) { navigate('plan'); return; }
+  if (event.session) { navigate('sessions'); return; }
+  navigate('board');
+}
+
+async function applyAutomationAction(match, action) {
+  if (!canWrite() || !action) return;
+  if (action.type === 'open') { automationOpenTarget(match); return; }
+  if (action.type === 'note') {
+    copyText(action.text || (match && match.name) || '');
+    return;
+  }
+  const taskId = match && match.event ? match.event.task : null;
+  if (!taskId) { toast('This match has no task to act on', 'warn'); return; }
+  if (action.type === 'state') {
+    const confirmed = await confirmDialog({
+      title: 'Set ' + taskId + ' to ' + (action.status || '?') + '?',
+      message: 'Suggested by rule "' + (match.name || match.rule) + '". This runs POST /api/tasks/' + taskId + '/state.',
+      confirmLabel: 'Apply transition'
+    });
+    if (!confirmed) return;
+    try {
+      await api('/api/tasks/' + encodeURIComponent(taskId) + '/state', {
+        method: 'POST',
+        body: { status: action.status, note: action.note || 'automation: ' + (match.rule || '') }
+      });
+      await Promise.all([loadSnapshot(), runAutomations()]);
+      renderHeader();
+      renderView();
+      toast(taskId + ' → ' + action.status, 'ok');
+    } catch (err) {
+      toast('Automation action failed: ' + describeError(err), 'error');
+    }
+    return;
+  }
+  if (action.type === 'session') {
+    const confirmed = await confirmDialog({
+      title: 'Start a ' + (action.role || 'worker') + ' session for ' + taskId + '?',
+      message: 'Suggested by rule "' + (match.name || match.rule) + '". This starts a headless session through POST /api/sessions.',
+      confirmLabel: 'Start session'
+    });
+    if (!confirmed) return;
+    try {
+      await api('/api/sessions', {
+        method: 'POST',
+        body: { task: taskId, role: action.role || 'worker', note: action.note || '' }
+      });
+      await Promise.all([loadSessions({ quiet: true })]);
+      renderView();
+      toast('Session started', 'ok');
+    } catch (err) {
+      toast('Session failed: ' + describeError(err), 'error');
+    }
+  }
+}
+
+/* ---------- GitHub ---------- */
+
+async function loadGithub(force) {
+  state.githubLoading = true;
+  state.githubError = null;
+  renderView();
+  try {
+    state.github = await api('/api/github' + (force ? '?force=1' : ''));
+    state.githubLoaded = true;
+  } catch (err) {
+    state.githubError = err;
+  }
+  state.githubLoading = false;
+  renderView();
+}
+
+function githubCheckBadge(checks) {
+  const value = checks || 'none';
+  const label = { pass: 'checks pass', fail: 'checks fail', pending: 'checks pending', none: 'no checks' }[value] || value;
+  return h('span', { class: 'ci-badge ci-' + value, text: label });
+}
+
+function githubRunTone(run) {
+  if (!run) return 'none';
+  if (String(run.status) !== 'completed') return 'pending';
+  const conclusion = String(run.conclusion || '').toLowerCase();
+  if (conclusion === 'success') return 'pass';
+  if (conclusion) return 'fail';
+  return 'none';
+}
+
+/* =========================================================================
    9. Application state
    ========================================================================= */
 
@@ -1791,7 +2221,36 @@ const state = {
   intakeBusy: null,
   templates: null,
   templatesLoaded: false,
-  templatesError: null
+  templatesError: null,
+
+  /* 2.4 assistant, automations, GitHub, bulk and palette */
+  assistantConversations: [],
+  assistantLoaded: false,
+  assistantActive: null,
+  assistantDetail: null,
+  assistantLoading: false,
+  assistantSending: false,
+  assistantPolling: false,
+  assistantApplying: null,
+  assistantDraft: '',
+  assistantDismissed: {},
+  assistantApplyResult: null,
+  assistantError: null,
+  assistantApplyError: null,
+  focusAssistantInput: false,
+  automations: null,
+  automationsLoaded: false,
+  automationsLoading: false,
+  automationsError: null,
+  automationsEditor: '',
+  automationsEditorError: null,
+  automationsRunning: false,
+  automationsRun: null,
+  github: null,
+  githubLoaded: false,
+  githubLoading: false,
+  githubError: null,
+  bulk: { selected: [], status: 'blocked', note: '', labels: [], estimate: '', labelsOpen: false, busy: false }
 };
 
 const dom = {
@@ -2018,6 +2477,9 @@ function startViewTimers() {
       if (state.route.view === 'yourwork') renderView();
     }, 30000);
   }
+  if (state.route.view === 'assistant') {
+    setViewInterval(() => pollAssistantConversation(), 1000);
+  }
 }
 
 /* =========================================================================
@@ -2189,6 +2651,18 @@ function connectEvents() {
   source.addEventListener('templates', () => {
     loadTaskTemplates().then(() => {
       if (state.route.view === 'settings' || state.route.view === 'plan' || state.route.view === 'intake') renderView();
+    });
+  });
+  source.addEventListener('automations', () => {
+    if (state.route.view === 'automations') loadAutomations().then(() => { if (state.route.view === 'automations') renderView(); });
+  });
+  source.addEventListener('assistant', () => {
+    if (state.route.view !== 'assistant') return;
+    loadAssistantList().then(() => {
+      ensureAssistantActive();
+      if (state.assistantActive) loadAssistantConversation(state.assistantActive, true).then(() => {
+        if (state.route.view === 'assistant') renderView();
+      });
     });
   });
   source.addEventListener('job', () => { loadJobs(); });
@@ -2417,6 +2891,11 @@ async function refreshAll() {
     ensurePagesSelection();
     if (state.pagesSelected) await loadPage(state.pagesSelected, state.pagesRef);
   } else if (view === 'intake') await Promise.all([loadIntake(), loadTaskTemplates()]);
+  else if (view === 'assistant') {
+    await loadAssistantList();
+    ensureAssistantActive();
+    if (state.assistantActive) await loadAssistantConversation(state.assistantActive, true);
+  } else if (view === 'automations') await loadAutomations();
   if ((view === 'board' || view === 'table') && feature('worklog')) await loadWorklog();
   renderView();
   renderJobsTray();
@@ -2461,6 +2940,21 @@ async function loadViewData(view) {
   }
   if (view === 'intake') {
     await Promise.all([loadSnapshot(), loadIntake(), loadTaskTemplates()]);
+    return rerender();
+  }
+  if (view === 'assistant') {
+    await loadSnapshot();
+    await loadAssistantList();
+    ensureAssistantActive();
+    if (state.assistantActive) await loadAssistantConversation(state.assistantActive, true);
+    return rerender();
+  }
+  if (view === 'automations') {
+    await Promise.all([loadSnapshot(), loadAutomations()]);
+    return rerender();
+  }
+  if (view === 'github') {
+    await Promise.all([loadSnapshot(), loadGithub(false)]);
     return rerender();
   }
 
@@ -2541,6 +3035,9 @@ function renderView() {
     case 'sessions': renderSessions(); break;
     case 'pages': renderPages(); break;
     case 'intake': renderIntake(); break;
+    case 'assistant': renderAssistant(); break;
+    case 'automations': renderAutomations(); break;
+    case 'github': renderGithub(); break;
     default: renderBoard();
   }
   restoreFocus(focus);
@@ -3628,6 +4125,7 @@ async function boot() {
   initTheme();
   restorePreferences();
   bindStatic();
+  bindPaletteShortcut();
   renderTabs();
   renderHeader();
 
@@ -3649,7 +4147,6 @@ async function boot() {
     const active = currentView();
     let startView = 'board';
     if (!state.config || state.config.board_present === false || state.noBoard) startView = 'plan';
-    else if (!feature('inbox') && state.route.view === 'yourwork') startView = 'board';
     else if (active && active.kind === 'table') startView = 'table';
     try { history.replaceState(null, '', '#/' + startView); } catch (err) { location.hash = '#/' + startView; }
   }
@@ -3693,6 +4190,7 @@ function renderBoard() {
       }))));
 
   view.appendChild(renderFilters());
+  if (canWrite()) view.appendChild(renderBulkBar());
 
   if (!tasks.length) {
     view.appendChild(emptyState('No tasks on the board',
@@ -3822,13 +4320,16 @@ function renderTaskCard(task) {
     }
   });
 
-  card.appendChild(h('div', { class: 'task-card-top' },
+  const topRow = h('div', { class: 'task-card-top' },
     h('span', { class: 'task-card-id', text: task.id }),
     h('span', { class: 'badge bg-' + meta.color + ' st-' + meta.color }, h('span', { class: 'dot' }), meta.label),
     claim ? h('span', {
       class: 'claim-badge',
       title: 'Claimed by ' + (claim.harness || 'session') + (claim.session ? ' · ' + claim.session : '')
-    }, h('span', { class: 'dot' }), 'claimed') : null));
+    }, h('span', { class: 'dot' }), 'claimed') : null);
+  const selector = bulkCheckbox(task);
+  if (selector) topRow.appendChild(selector);
+  card.appendChild(topRow);
 
   card.appendChild(h('div', { class: 'task-card-title', text: task.title || '(untitled)' }));
   if (labels.length) card.appendChild(labelChips(labels, 3));
@@ -3934,6 +4435,7 @@ function renderTable() {
       h('button', { class: 'btn btn-sm', type: 'button', text: 'Refresh', on: { click: () => refreshSnapshotButton() } }))));
 
   view.appendChild(renderFilters());
+  if (canWrite()) view.appendChild(renderBulkBar());
 
   if (!tasks.length) {
     view.appendChild(emptyState('No tasks on the board', 'Add tasks in the Plan view.', null));
@@ -3968,10 +4470,22 @@ function renderTable() {
     { key: 'deps', label: 'Depends on' },
     { key: 'package', label: 'Package' }
   ];
+  const withSelection = canWrite();
+  const columnCount = columns.length + (withSelection ? 1 : 0);
+  const visibleIds = filtered.map((task) => task.id);
+  const allSelected = visibleIds.length > 0 && visibleIds.every((taskId) => bulkIsSelected(taskId));
 
   const table = h('table', { class: 'table' });
   const thead = h('thead');
   const headRow = h('tr');
+  if (withSelection) {
+    headRow.appendChild(h('th', { class: 'cell-check' },
+      h('input', {
+        class: 'bulk-check', type: 'checkbox', checked: allSelected,
+        'aria-label': 'Select all visible tasks',
+        on: { change: (event) => selectAllVisibleBulk(event.target.checked) }
+      })));
+  }
   for (const column of columns) headRow.appendChild(h('th', { text: column.label }));
   thead.appendChild(headRow);
   table.appendChild(thead);
@@ -3981,18 +4495,18 @@ function renderTable() {
   for (const group of groups) {
     if (showGroups) {
       tbody.appendChild(h('tr', { class: 'group-row' },
-        h('td', { colspan: String(columns.length) },
+        h('td', { colspan: String(columnCount) },
           h('span', { text: group.label }),
           h('span', { class: 'group-count', text: String(group.tasks.length) }))));
     }
-    for (const task of group.tasks) tbody.appendChild(renderTableRow(task, columns.length));
+    for (const task of group.tasks) tbody.appendChild(renderTableRow(task, columnCount));
   }
   table.appendChild(tbody);
 
   view.appendChild(h('div', { class: 'table-wrap' }, table));
   view.appendChild(h('p', {
     class: 'hint', style: { marginTop: '8px' },
-    text: 'Click a row to open the task drawer. Effort compares the estimate with the time Polier recorded from runs and sessions.'
+    text: 'Click a row to open the task drawer. Tick rows for bulk actions; Ctrl/Cmd+K opens the command palette.'
   }));
 }
 
@@ -4014,6 +4528,8 @@ function renderTableRow(task, columnCount) {
       }
     }
   });
+
+  if (canWrite()) row.appendChild(h('td', { class: 'cell-check' }, bulkCheckbox(task)));
 
   row.appendChild(h('td', { class: 'cell-task' },
     h('div', { class: 'cell-task-title', text: task.title || '(untitled)' }),
@@ -5634,7 +6150,7 @@ function renderInboxPanel() {
    ========================================================================= */
 
 const FEATURE_ORDER = ['inbox', 'worklog', 'views', 'labels', 'timeline', 'cycles',
-  'modules', 'coverage', 'analytics', 'pages', 'intake', 'assistant'];
+  'modules', 'coverage', 'analytics', 'pages', 'intake', 'assistant', 'automations', 'github'];
 
 function settingsUI() {
   if (!state.settingsUI) {
@@ -8161,6 +8677,976 @@ async function deleteTemplate(templateId) {
   } catch (err) {
     toast('Delete failed: ' + describeError(err), 'error');
   }
+}
+
+/* =========================================================================
+   2.4 — Assistant view
+   ========================================================================= */
+
+function renderAssistant() {
+  const wrapper = h('div', { class: 'assistant-view' });
+  dom.view.appendChild(wrapper);
+  const conversations = assistantConversations();
+  const active = state.assistantActive;
+  const detail = activeAssistantDetail();
+
+  wrapper.appendChild(h('div', { class: 'view-head' },
+    h('div', {},
+      h('h1', { class: 'view-title', text: 'Assistant' }),
+      h('p', { class: 'view-sub', text: conversations.length + ' conversation(s) · questions are answered by the configured provider in the background' })),
+    h('div', { class: 'view-actions' },
+      canWrite() ? h('button', {
+        class: 'btn btn-sm btn-primary', type: 'button', text: 'New conversation',
+        on: {
+          click: () => {
+            state.assistantActive = null;
+            state.assistantDetail = null;
+            state.assistantDraft = '';
+            state.assistantError = null;
+            state.assistantApplyResult = null;
+            renderView();
+            focusAssistantInput();
+          }
+        }
+      }) : null,
+      h('button', {
+        class: 'btn btn-sm', type: 'button', text: 'Refresh',
+        on: {
+          click: async () => {
+            await loadAssistantList();
+            ensureAssistantActive();
+            if (state.assistantActive) await loadAssistantConversation(state.assistantActive, true);
+            renderView();
+          }
+        }
+      }))));
+
+  const grid = h('div', { class: 'assistant' });
+  wrapper.appendChild(grid);
+
+  /* sidebar */
+  const sidebar = h('aside', { class: 'assistant-sidebar' });
+  const listCard = h('section', { class: 'card-panel assistant-side-card' },
+    h('div', { class: 'panel-head' },
+      h('span', { class: 'panel-title', text: 'Conversations' }),
+      h('span', { class: 'pill', text: String(conversations.length) })),
+    h('div', { class: 'assistant-conv-list' }));
+  const listHost = listCard.querySelector('.assistant-conv-list');
+  if (!state.assistantLoaded && !conversations.length) {
+    listHost.appendChild(loadingRow('Loading conversations…'));
+  } else if (!conversations.length) {
+    listHost.appendChild(h('div', { class: 'hint', style: { padding: '8px' }, text: 'No conversations yet. Ask the first question.' }));
+  } else {
+    for (const conversation of conversations) {
+      const pending = Boolean(conversation.pending);
+      listHost.appendChild(h('div', { class: 'assistant-conv' + (conversation.id === active ? ' is-active' : '') },
+        h('button', {
+          class: 'assistant-conv', type: 'button',
+          style: { padding: '0', background: 'none' },
+          title: conversation.title,
+          on: { click: () => openAssistantConversation(conversation.id) }
+        },
+          h('span', { class: 'assistant-conv-title', text: conversation.title || conversation.id }),
+          h('span', { class: 'assistant-conv-meta' },
+            h('span', { text: (conversation.messages || 0) + ' msg' }),
+            h('span', { text: relTime(conversation.updated) }),
+            pending ? h('span', { class: 'badge bg-blue st-blue', text: 'thinking' }) : null)),
+        h('div', { class: 'row', style: { gap: '2px', marginTop: '2px' } },
+          h('button', {
+            class: 'btn btn-sm btn-ghost', type: 'button', text: 'Delete',
+            disabled: !canWrite(),
+            on: {
+              click: (event) => {
+                event.stopPropagation();
+                deleteAssistantConversation(conversation.id);
+              }
+            }
+          }))));
+    }
+  }
+  sidebar.appendChild(listCard);
+  grid.appendChild(sidebar);
+
+  /* main */
+  const main = h('section', { class: 'assistant-main' });
+  grid.appendChild(main);
+
+  if (state.assistantError) {
+    main.appendChild(h('div', { class: 'assistant-error' }, errorCallout(state.assistantError)));
+  }
+
+  if (!active) {
+    main.appendChild(h('div', { class: 'assistant-head' },
+      h('span', { class: 'panel-title', text: 'New conversation' })));
+    main.appendChild(h('div', { class: 'assistant-empty' },
+      emptyState('Ask the project a question',
+        'The assistant reads the board, runs, reviews and docs, then answers in the configured provider session. It never writes by itself — proposals need your confirmation.',
+        null)));
+    main.appendChild(renderAssistantComposer());
+    return;
+  }
+
+  main.appendChild(h('div', { class: 'assistant-head' },
+    h('span', { class: 'panel-title', text: (detail && detail.title) || 'Conversation' }),
+    h('span', { class: 'session-id', text: active }),
+    detail && detail.updated ? h('span', { class: 'hint', text: 'updated ' + relTime(detail.updated) }) : null,
+    h('div', { style: { marginLeft: 'auto', display: 'flex', gap: '4px' } },
+      canWrite() ? h('button', {
+        class: 'btn btn-sm btn-danger', type: 'button', text: 'Delete',
+        on: { click: () => deleteAssistantConversation(active) }
+      }) : null)));
+
+  if (state.assistantLoading && !detail) {
+    main.appendChild(h('div', { class: 'assistant-empty' }, loadingRow('Loading the conversation…')));
+    return;
+  }
+
+  const transcript = h('div', { class: 'assistant-transcript' });
+  const messages = (detail && detail.messages) || [];
+  if (!messages.length) {
+    transcript.appendChild(h('div', { class: 'assistant-empty', text: 'Ask the first question below.' }));
+  }
+  messages.forEach((message, messageIndex) => {
+    const isUser = message.role === 'user';
+    const bubble = h('div', { class: 'assistant-bubble ' + (isUser ? 'is-user' : 'is-assistant') });
+    if (!isUser) {
+      bubble.appendChild(h('div', { class: 'md' }, mdFragment(message.content || '', { linkBase: '' })));
+      const proposals = (message.proposals || []).filter((proposal, proposalIndex) => !proposalDismissed(messageIndex, proposalIndex));
+      if (proposals.length) {
+        const host = h('div', { class: 'assistant-proposals' });
+        (message.proposals || []).forEach((proposal, proposalIndex) => {
+          if (proposalDismissed(messageIndex, proposalIndex)) return;
+          const tone = assistantProposalKindTone(proposal.kind);
+          host.appendChild(h('div', { class: 'proposal-card' },
+            h('div', { class: 'proposal-head' },
+              h('span', { class: 'badge bg-' + tone + ' st-' + tone }, h('span', { class: 'dot' }), proposal.kind),
+              h('span', { class: 'proposal-title', text: proposal.title || '' })),
+            proposal.reason ? h('div', { class: 'proposal-reason', text: proposal.reason }) : null,
+            h('pre', { class: 'proposal-payload', text: JSON.stringify(proposal.payload || {}, null, 2) }),
+            h('div', { class: 'proposal-actions' },
+              h('button', {
+                class: 'btn btn-sm btn-primary', type: 'button', text: 'Apply',
+                disabled: !canWrite() || Boolean(state.assistantApplying),
+                on: { click: () => applyAssistantProposal(proposal, messageIndex, proposalIndex) }
+              }),
+              h('button', {
+                class: 'btn btn-sm btn-ghost', type: 'button', text: 'Dismiss',
+                on: { click: () => dismissAssistantProposal(messageIndex, proposalIndex) }
+              }))));
+        });
+        bubble.appendChild(host);
+      }
+    } else {
+      bubble.appendChild(h('div', { class: 'md' }, mdFragment(message.content || '', { linkBase: '' })));
+    }
+    bubble.appendChild(h('div', { class: 'assistant-bubble-meta' },
+      h('span', { text: message.role }),
+      h('span', { text: relTime(message.at) }),
+      message.status ? h('span', { class: 'chip', text: message.status }) : null));
+    transcript.appendChild(bubble);
+  });
+
+  if (detail && detail.pending) {
+    const pending = detail.pending;
+    transcript.appendChild(h('div', { class: 'assistant-pending' },
+      h('span', { class: 'spinner' }),
+      h('span', { text: 'Thinking… (' + (pending.status || 'running') + ')' }),
+      h('span', { class: 'session-id', text: pending.session || '' }),
+      canWrite() ? h('button', {
+        class: 'btn btn-sm btn-ghost', type: 'button', text: 'Cancel',
+        on: { click: () => cancelAssistantAnswer() }
+      }) : null));
+  }
+
+  main.appendChild(transcript);
+
+  if (state.assistantApplyResult) {
+    const applied = state.assistantApplyResult;
+    main.appendChild(h('div', { class: 'assistant-apply-result' },
+      h('span', { class: 'badge bg-green st-green', text: 'applied' }),
+      ' ' + ((applied.proposal && (applied.proposal.title || applied.proposal.kind)) || 'proposal'),
+      h('span', { class: 'hint', text: ' at ' + relTime(applied.at) })));
+  }
+
+  main.appendChild(renderAssistantComposer());
+
+  focusSoonIfRequested();
+  if (transcript) {
+    window.setTimeout(() => { transcript.scrollTop = transcript.scrollHeight; }, 0);
+  }
+}
+
+function renderAssistantComposer() {
+  const detail = activeAssistantDetail();
+  const pending = detail && detail.pending;
+  const readOnly = !canWrite();
+  const input = h('textarea', {
+    class: 'textarea', rows: '3',
+    placeholder: readOnly ? 'The dashboard is read-only.' : 'Ask about tasks, gates, reviews, docs… (Ctrl/Cmd+Enter sends)',
+    value: assistantDraft(),
+    disabled: readOnly || Boolean(pending) || state.assistantSending,
+    'data-fkey': 'assistant-input',
+    'aria-label': 'Question for the assistant',
+    on: {
+      input: (event) => { state.assistantDraft = event.target.value; },
+      keydown: (event) => {
+        if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+          event.preventDefault();
+          sendAssistantMessage(event.target.value);
+        }
+      }
+    }
+  });
+  const composer = h('div', { class: 'assistant-composer' }, input);
+  const foot = h('div', { class: 'assistant-composer-foot' },
+    h('span', { class: 'hint', text: readOnly
+      ? 'Read-only dashboard: questions are disabled.'
+      : 'Enter adds a newline · Ctrl/Cmd+Enter sends · conversations stay in the local runtime folder.' }),
+    h('button', {
+      class: 'btn btn-primary', type: 'button',
+      text: state.assistantSending ? 'Sending…' : 'Send',
+      disabled: readOnly || Boolean(pending) || state.assistantSending,
+      on: { click: () => sendAssistantMessage(input.value) }
+    }));
+  composer.appendChild(foot);
+  return composer;
+}
+
+function focusAssistantInput() {
+  state.focusAssistantInput = true;
+  renderView();
+}
+
+function focusSoonIfRequested() {
+  if (!state.focusAssistantInput) return;
+  state.focusAssistantInput = false;
+  const input = document.querySelector('[data-fkey="assistant-input"]');
+  focusSoon(input);
+}
+
+/* =========================================================================
+   2.4 — Automations view
+   ========================================================================= */
+
+function automationActionLabel(action) {
+  if (!action) return 'Action';
+  if (action.type === 'state') return 'Set ' + (action.status || 'status');
+  if (action.type === 'session') return 'Start ' + (action.role || 'worker') + ' session';
+  if (action.type === 'open') return 'Open';
+  if (action.type === 'note') return 'Copy note';
+  return action.type;
+}
+
+function automationActionChip(action) {
+  const type = action && action.type;
+  if (type === 'state') return 'state → ' + (action.status || '?');
+  if (type === 'session') return 'session → ' + (action.role || 'worker');
+  if (type === 'open') return 'open';
+  if (type === 'note') return 'note';
+  return type;
+}
+
+function renderAutomations() {
+  const view = h('div', { class: 'automations' });
+  dom.view.appendChild(view);
+  const automations = state.automations;
+  const rules = automationRuleList();
+  const enabledCount = rules.filter((rule) => rule.enabled !== false).length;
+
+  view.appendChild(h('div', { class: 'view-head' },
+    h('div', {},
+      h('h1', { class: 'view-title', text: 'Automations' }),
+      h('p', { class: 'view-sub', text: rules.length + ' rule(s) · ' + enabledCount + ' enabled · dry run only, nothing executes automatically' })),
+    h('div', { class: 'view-actions' },
+      h('button', {
+        class: 'btn btn-sm btn-primary', type: 'button',
+        text: state.automationsRunning ? 'Running…' : 'Run dry run',
+        disabled: state.automationsRunning || Boolean(state.automationsError && !automations),
+        on: { click: () => runAutomations() }
+      }),
+      rules.length === 0 ? h('button', {
+        class: 'btn btn-sm', type: 'button', text: 'Load example',
+        disabled: !canWrite(),
+        on: { click: () => saveAutomations(loadExampleAutomations()) }
+      }) : null,
+      h('button', {
+        class: 'btn btn-sm', type: 'button', text: 'Refresh',
+        on: { click: () => loadAutomations().then(() => renderView()) }
+      }))));
+
+  if (!state.automationsLoaded && !automations) {
+    if (state.automationsError) {
+      view.appendChild(errorCallout(state.automationsError));
+      view.appendChild(h('div', { style: { marginTop: '10px' } },
+        h('button', { class: 'btn', type: 'button', text: 'Retry', on: { click: () => loadAutomations().then(() => renderView()) } })));
+    } else {
+      view.appendChild(loadingRow('Reading automations.json…'));
+    }
+    return;
+  }
+  if (state.automationsError) view.appendChild(errorCallout(state.automationsError));
+  if (state.automationsEditorError) view.appendChild(errorCallout(state.automationsEditorError));
+  if (automations && (automations.errors || []).length) {
+    const box = h('div', { class: 'callout callout-warn' },
+      h('div', { class: 'callout-stack' },
+        h('div', { text: 'automations.json has validation problems (fix them in the editor):' }),
+        h('ul', {}, automations.errors.map((message) => h('li', { text: message })))));
+    view.appendChild(box);
+  }
+
+  /* rules */
+  const rulesCard = h('section', { class: 'card-panel' },
+    h('div', { class: 'panel-head' },
+      h('div', { class: 'row' },
+        h('span', { class: 'panel-title', text: 'Rules' }),
+        h('span', { class: 'pill', text: String(rules.length) })),
+      h('span', { class: 'hint', text: 'Committed in automations.json; toggling saves the file.' })),
+    h('div', { class: 'panel-body' }));
+  if (!rules.length) {
+    rulesCard.querySelector('.panel-body').appendChild(emptyState('No automation rules yet',
+      'Rules turn project state into suggestions. Load the example set or edit automations.json below.',
+      canWrite() ? h('button', {
+        class: 'btn btn-primary', type: 'button', text: 'Load example rules',
+        disabled: !canWrite(),
+        on: { click: () => saveAutomations(loadExampleAutomations()) }
+      }) : null));
+  } else {
+    const list = h('div', { class: 'rule-list' });
+    for (const rule of rules) {
+      const when = rule.when || {};
+      const actions = rule.actions || [];
+      list.appendChild(h('div', { class: 'rule-card' },
+        h('div', { class: 'rule-head' },
+          h('label', { class: 'switch', title: 'Enable or disable this rule' },
+            h('input', {
+              type: 'checkbox', checked: rule.enabled !== false,
+              disabled: !canWrite(),
+              'aria-label': 'Enable rule ' + (rule.name || rule.id),
+              on: { change: (event) => toggleAutomationRule(rule.id, event.target.checked) }
+            })),
+          h('span', { class: 'rule-name', text: rule.name || rule.id }),
+          h('span', { class: 'rule-id', text: rule.id }),
+          rule.description ? h('span', { class: 'hint', text: rule.description }) : null,
+          h('span', { class: 'pill', style: { marginLeft: 'auto' }, text: rule.enabled === false ? 'disabled' : 'enabled' })),
+        h('div', { class: 'rule-chips' },
+          h('span', { class: 'chip kind-idea', title: 'Event kind', text: 'when: ' + (when.kind || '?') }),
+          actions.map((action) => h('span', { class: 'chip', title: 'Action', text: '→ ' + automationActionChip(action) })))));
+    }
+    rulesCard.querySelector('.panel-body').appendChild(list);
+  }
+  view.appendChild(rulesCard);
+
+  /* dry-run results */
+  const run = state.automationsRun;
+  const resultsCard = h('section', { class: 'card-panel' },
+    h('div', { class: 'panel-head' },
+      h('div', { class: 'row' },
+        h('span', { class: 'panel-title', text: 'Dry run' }),
+        run ? h('span', { class: 'pill', text: run.total + ' match(es)' }) : null),
+      h('span', { class: 'hint', text: 'Suggestions only — apply one explicitly.' })),
+    h('div', { class: 'panel-body' }));
+  const resultsHost = resultsCard.querySelector('.panel-body');
+  if (!run) {
+    resultsHost.appendChild(h('p', { class: 'dry-run-note', text: 'Run the dry run to see which rules match right now. No action is executed.' }));
+  } else if (!run.matches || !run.matches.length) {
+    resultsHost.appendChild(h('div', { class: 'dry-run-note' },
+      h('span', { class: 'badge bg-green st-green', text: 'no matches' }),
+      h('span', { text: 'Nothing to do right now. Ran at ' + relTime(run.generated_at) + '.' })));
+  } else {
+    resultsHost.appendChild(h('p', { class: 'dry-run-note' },
+      h('span', { class: 'badge bg-amber st-amber', text: run.total + ' suggestion(s)' }),
+      h('span', { text: 'dry run at ' + relTime(run.generated_at) + ' · grouped by rule' })));
+    const byRule = new Map();
+    for (const match of run.matches) {
+      if (!byRule.has(match.rule)) byRule.set(match.rule, []);
+      byRule.get(match.rule).push(match);
+    }
+    for (const [ruleId, matches] of byRule) {
+      const group = h('div', { class: 'match-group', style: { marginTop: '8px' } },
+        h('div', { class: 'match-head' },
+          h('span', { class: 'rule-name', text: (matches[0] && matches[0].name) || ruleId }),
+          h('span', { class: 'rule-id', text: ruleId }),
+          h('span', { class: 'pill', text: matches.length + ' match(es)' }),
+          h('span', { class: 'hint', text: 'suggestions from actions[]' })));
+      for (const match of matches) {
+        const row = h('div', { class: 'queue-row', style: { alignItems: 'flex-start', cursor: 'default' } },
+          h('div', { class: 'queue-main' },
+            h('div', { class: 'queue-title', text: automationEventText(match.event) }),
+            h('div', { class: 'queue-sub', text: 'key: ' + match.key })));
+        const actions = h('div', { class: 'match-actions' });
+        for (const action of match.actions || []) {
+          actions.appendChild(h('button', {
+            class: 'btn btn-sm' + (action.type === 'state' ? ' btn-primary' : ''),
+            type: 'button', text: automationActionLabel(action),
+            disabled: !canWrite() && action.type !== 'open',
+            title: action.type === 'open' ? 'Open the related view' : 'Confirm, then run the existing API action',
+            on: { click: () => applyAutomationAction(match, action) }
+          }));
+        }
+        row.appendChild(actions);
+        group.appendChild(row);
+      }
+      resultsHost.appendChild(group);
+    }
+  }
+  view.appendChild(resultsCard);
+
+  /* JSON editor */
+  const editorCard = h('section', { class: 'card-panel automation-editor' },
+    h('div', { class: 'panel-head' },
+      h('div', { class: 'row' },
+        h('span', { class: 'panel-title', text: 'automations.json' }),
+        h('span', { class: 'pill mono', text: 'project file' })),
+      h('div', { class: 'row' },
+        h('button', {
+          class: 'btn btn-sm', type: 'button', text: 'Reset',
+          on: { click: () => { state.automationsEditor = JSON.stringify(automations && automations.automations ? automations.automations : { version: 1, rules: [] }, null, 2); state.automationsEditorError = null; renderView(); } }
+        }),
+        h('button', {
+          class: 'btn btn-sm btn-primary', type: 'button', text: 'Save',
+          disabled: !canWrite(),
+          on: {
+            click: (event) => {
+              const area = document.getElementById('automations-editor');
+              saveAutomationsEditor(area ? area.value : state.automationsEditor);
+            }
+          }
+        }))),
+    h('div', { class: 'panel-body' },
+      h('textarea', {
+        id: 'automations-editor', value: state.automationsEditor,
+        'aria-label': 'automations.json editor', spellcheck: 'false',
+        on: { input: (event) => { state.automationsEditor = event.target.value; } }
+      }),
+      h('p', { class: 'hint', style: { marginTop: '6px' },
+        text: 'The whole file is validated on save. Known kinds: ' + automationKinds().join(', ') + '.' })));
+  view.appendChild(editorCard);
+}
+
+/* =========================================================================
+   2.4 — GitHub view (read-only)
+   ========================================================================= */
+
+function renderGithub() {
+  const view = h('div', { class: 'github' });
+  dom.view.appendChild(view);
+  const data = state.github;
+
+  view.appendChild(h('div', { class: 'view-head' },
+    h('div', {},
+      h('h1', { class: 'view-title', text: 'GitHub' }),
+      h('p', { class: 'view-sub', text: data && data.available
+        ? (data.repo || 'repository') + ' · read-only via the gh CLI'
+        : 'Pull requests and CI, read-only via the gh CLI' })),
+    h('div', { class: 'view-actions' },
+      h('button', {
+        class: 'btn btn-sm', type: 'button', text: 'Refresh',
+        disabled: state.githubLoading,
+        title: 'GET /api/github?force=1',
+        on: { click: () => loadGithub(true) }
+      }))));
+
+  if (state.githubLoading && !data) {
+    view.appendChild(loadingRow('Asking gh for pull requests and runs…'));
+    return;
+  }
+  if (state.githubError) {
+    view.appendChild(errorCallout(state.githubError));
+    return;
+  }
+  if (!data) {
+    view.appendChild(loadingRow('Loading GitHub status…'));
+    return;
+  }
+
+  if (!data.available) {
+    const card = h('div', { class: 'card-panel panel-pad github-unavailable' });
+    card.appendChild(h('div', { class: 'row-wrap' },
+      h('span', { class: 'badge bg-neutral st-neutral', text: 'unavailable' }),
+      h('span', { class: 'text-sm muted', text: data.reason || 'GitHub is not configured for this project.' })));
+    card.appendChild(h('p', { class: 'hint', text: 'The panel is read-only and never changes the project. It becomes available when the repository has a GitHub remote and the gh CLI is installed and authenticated.' }));
+    const hints = h('div', { class: 'github-hints' });
+    hints.appendChild(h('div', { class: 'github-hint' },
+      h('span', { text: '1. Add a GitHub origin:' }),
+      h('code', { text: 'git remote add origin git@github.com:<owner>/<repo>.git' })));
+    hints.appendChild(h('div', { class: 'github-hint' },
+      h('span', { text: '2. Install the GitHub CLI:' }),
+      h('code', { text: 'brew install gh' })));
+    hints.appendChild(h('div', { class: 'github-hint' },
+      h('span', { text: '3. Authenticate:' }),
+      h('code', { text: 'gh auth login' })));
+    hints.appendChild(h('div', { class: 'github-hint' },
+      h('span', { text: '4. Refresh this panel.' })));
+    card.appendChild(hints);
+    card.appendChild(h('div', { class: 'row-wrap' },
+      h('button', { class: 'btn btn-sm', type: 'button', text: 'Refresh', on: { click: () => loadGithub(true) } }),
+      data.repo ? h('span', { class: 'hint', text: 'remote: ' + data.repo }) : null));
+    view.appendChild(card);
+    return;
+  }
+
+  const counts = data.counts || { prs: 0, runs: 0, failing_checks: 0 };
+  view.appendChild(h('div', { class: 'tile-row' },
+    statTile('Repository', data.repo || '—', { tone: 'tile-blue', sub: data.remote || '' }),
+    statTile('Open PRs', counts.prs || 0, { tone: 'tile-accent', sub: 'pull requests' }),
+    statTile('Failing checks', counts.failing_checks || 0, { tone: counts.failing_checks ? 'tile-red' : 'tile-green', sub: 'PRs with failing CI' }),
+    statTile('Recent runs', counts.runs || 0, { tone: 'tile-violet', sub: 'workflow runs' })));
+
+  /* PRs */
+  const prCard = h('section', { class: 'card-panel' },
+    h('div', { class: 'panel-head' },
+      h('div', { class: 'row' },
+        h('span', { class: 'panel-title', text: 'Open pull requests' }),
+        h('span', { class: 'pill', text: String((data.prs || []).length) })),
+      h('span', { class: 'hint', text: 'Checks come from GitHub’s status rollup.' })),
+    h('div', { class: 'panel-body' }));
+  const prs = data.prs || [];
+  if (!prs.length) {
+    prCard.querySelector('.panel-body').appendChild(h('div', { class: 'hint', text: 'No open pull requests.' }));
+  } else {
+    const grid = h('div', { class: 'pr-grid' });
+    for (const pr of prs) {
+      grid.appendChild(h('a', {
+        class: 'pr-card', href: pr.url || '#', target: '_blank', rel: 'noopener noreferrer',
+        title: pr.url || '',
+        style: { color: 'inherit', textDecoration: 'none' }
+      },
+        h('div', { class: 'row-wrap' },
+          h('span', { class: 'pr-title', text: '#' + pr.number + ' · ' + (pr.title || '') }),
+          pr.isDraft ? h('span', { class: 'pill', text: 'draft' }) : null),
+        h('div', { class: 'pr-meta' },
+          githubCheckBadge(pr.checks),
+          h('span', { class: 'mono', text: pr.headRefName || '' }),
+          pr.updatedAt ? h('span', { text: 'updated ' + relTime(pr.updatedAt) }) : null)));
+    }
+    prCard.querySelector('.panel-body').appendChild(grid);
+  }
+  view.appendChild(prCard);
+
+  /* runs */
+  const runsCard = h('section', { class: 'card-panel' },
+    h('div', { class: 'panel-head' },
+      h('div', { class: 'row' },
+        h('span', { class: 'panel-title', text: 'Recent workflow runs' }),
+        h('span', { class: 'pill', text: String((data.runs || []).length) })),
+      h('span', { class: 'hint', text: 'Read-only snapshot from gh run list.' })),
+    h('div', { class: 'panel-body' }));
+  const runs = data.runs || [];
+  if (!runs.length) {
+    runsCard.querySelector('.panel-body').appendChild(h('div', { class: 'hint', text: 'No workflow runs reported.' }));
+  } else {
+    const table = h('table', { class: 'github-runs' });
+    const head = h('tr');
+    for (const heading of ['Workflow', 'Status', 'Conclusion', 'Branch', 'Event', 'When', '']) head.appendChild(h('th', { text: heading }));
+    table.appendChild(h('thead', {}, head));
+    const body = h('tbody');
+    for (const run of runs) {
+      const tone = githubRunTone(run);
+      body.appendChild(h('tr', {},
+        h('td', { text: run.name || 'workflow' }),
+        h('td', { text: run.status || '—' }),
+        h('td', {}, h('span', { class: 'ci-badge ci-' + tone, text: run.conclusion || run.status || '—' })),
+        h('td', { class: 'mono', text: run.headBranch || '—' }),
+        h('td', { text: run.event || '—' }),
+        h('td', { text: run.createdAt ? relTime(run.createdAt) : '—' }),
+        h('td', {}, run.url ? h('a', { href: run.url, target: '_blank', rel: 'noopener noreferrer', text: 'Open' }) : null)));
+    }
+    table.appendChild(body);
+    runsCard.querySelector('.panel-body').appendChild(table);
+  }
+  view.appendChild(runsCard);
+
+  /* task mapping */
+  const mapped = Object.keys(data.tasks || {});
+  const taskCard = h('section', { class: 'card-panel' },
+    h('div', { class: 'panel-head' },
+      h('div', { class: 'row' },
+        h('span', { class: 'panel-title', text: 'Task mapping' }),
+        h('span', { class: 'pill', text: String(mapped.length) })),
+      h('span', { class: 'hint', text: 'Tasks with a branch, PR or CI run. Click a chip to open the task.' })),
+    h('div', { class: 'panel-body' }));
+  if (!mapped.length) {
+    taskCard.querySelector('.panel-body').appendChild(h('div', { class: 'hint', text: 'No task branch is linked to a pull request or run yet.' }));
+  } else {
+    const host = h('div', { class: 'task-map' });
+    for (const taskId of mapped) {
+      const entry = data.tasks[taskId];
+      const pr = entry.pr;
+      const ci = entry.ci;
+      host.appendChild(h('button', {
+        class: 'chip chip-link', type: 'button',
+        title: (entry.branch || '') + (pr ? ' · PR #' + pr.number : '') + (ci ? ' · CI ' + (ci.conclusion || ci.status) : ''),
+        on: { click: () => openTask(taskId) }
+      },
+        h('span', { class: 'mono', text: taskId }),
+        pr ? h('span', { class: 'ci-badge ci-' + (pr.checks || 'none'), text: 'PR #' + pr.number }) : null,
+        ci ? h('span', { class: 'ci-badge ci-' + githubRunTone(ci), text: 'CI ' + (ci.conclusion || ci.status || '') }) : null,
+        !pr && !ci ? h('span', { class: 'hint', text: 'branch only' }) : null));
+    }
+    taskCard.querySelector('.panel-body').appendChild(host);
+  }
+  view.appendChild(taskCard);
+  view.appendChild(h('p', { class: 'hint', style: { marginTop: '8px' }, text: 'GitHub is read-only: Polier never posts, merges or reruns anything.' }));
+}
+
+/* =========================================================================
+   2.4 — Bulk operations and the command palette
+   ========================================================================= */
+
+/* ---------- bulk selection ---------- */
+
+function bulkState() {
+  if (!state.bulk) state.bulk = { selected: [], status: 'blocked', note: '', labels: [], estimate: '', labelsOpen: false, busy: false };
+  return state.bulk;
+}
+
+function bulkSelected() {
+  return bulkState().selected;
+}
+
+function bulkIsSelected(taskId) {
+  return bulkSelected().indexOf(taskId) !== -1;
+}
+
+function toggleBulkTask(taskId, checked) {
+  const bulk = bulkState();
+  if (checked) {
+    if (bulk.selected.indexOf(taskId) === -1) bulk.selected.push(taskId);
+  } else {
+    bulk.selected = bulk.selected.filter((entry) => entry !== taskId);
+  }
+  renderView();
+}
+
+function selectAllVisibleBulk(checked) {
+  const bulk = bulkState();
+  if (checked) bulk.selected = visibleTasks().map((task) => task.id);
+  else bulk.selected = [];
+  renderView();
+}
+
+function clearBulkSelection() {
+  bulkState().selected = [];
+  renderView();
+}
+
+function bulkCheckbox(task) {
+  if (!canWrite()) return null;
+  return h('input', {
+    class: 'bulk-check', type: 'checkbox', checked: bulkIsSelected(task.id),
+    'aria-label': 'Select task ' + task.id,
+    title: 'Select ' + task.id + ' for a bulk action',
+    on: {
+      click: (event) => event.stopPropagation(),
+      change: (event) => { event.stopPropagation(); toggleBulkTask(task.id, event.target.checked); }
+    }
+  });
+}
+
+function renderBulkBar() {
+  if (!canWrite()) return null;
+  const bulk = bulkState();
+  const visible = visibleTasks();
+  const selected = bulk.selected.filter((taskId) => visible.some((task) => task.id === taskId));
+  const allSelected = visible.length > 0 && visible.every((task) => bulk.selected.indexOf(task.id) !== -1);
+  const disabled = !selected.length || bulk.busy;
+
+  const bar = h('div', { class: 'bulk-bar' + (selected.length ? ' is-active' : '') });
+  bar.appendChild(h('label', { class: 'checkbox', title: 'Select every task visible with the current filters' },
+    h('input', {
+      type: 'checkbox', checked: allSelected, 'aria-label': 'Select all visible tasks',
+      on: { change: (event) => selectAllVisibleBulk(event.target.checked) }
+    }),
+    h('span', { class: 'bulk-count', text: selected.length ? selected.length + ' selected' : 'Select tasks' })));
+  bar.appendChild(h('button', {
+    class: 'btn btn-sm btn-ghost', type: 'button', text: 'Clear',
+    disabled: !selected.length,
+    on: { click: () => clearBulkSelection() }
+  }));
+  bar.appendChild(h('span', { class: 'bulk-divider' }));
+
+  /* state */
+  const statusSelect = h('select', { class: 'select', 'aria-label': 'Bulk status', disabled: disabled }, statusOrder().map((status) => {
+    const option = h('option', { value: status, text: stMeta(status).label });
+    if (bulk.status === status) option.selected = true;
+    return option;
+  }));
+  statusSelect.value = bulk.status || 'blocked';
+  statusSelect.addEventListener('change', (event) => { bulkState().status = event.target.value; });
+  const noteInput = h('input', {
+    class: 'input is-note', type: 'text', placeholder: 'note (required for rework/blocked/failed)',
+    'aria-label': 'Bulk note', value: bulk.note || '',
+    on: { input: (event) => { bulkState().note = event.target.value; } }
+  });
+  bar.appendChild(h('div', { class: 'bulk-group' },
+    h('span', { class: 'hint', text: 'Status' }), statusSelect, noteInput,
+    h('button', {
+      class: 'btn btn-sm btn-primary', type: 'button', text: 'Apply',
+      disabled: disabled,
+      on: { click: () => runBulk('state', { status: bulkState().status, note: bulkState().note || undefined }) }
+    })));
+
+  bar.appendChild(h('span', { class: 'bulk-divider' }));
+  bar.appendChild(h('div', { class: 'bulk-group' },
+    h('button', {
+      class: 'btn btn-sm', type: 'button', text: 'Claim', disabled: disabled,
+      title: 'Claim the selected tasks', on: { click: () => runBulk('claim', {}) }
+    }),
+    h('button', {
+      class: 'btn btn-sm', type: 'button', text: 'Release', disabled: disabled,
+      title: 'Release the selected tasks', on: { click: () => runBulk('release', {}) }
+    })));
+
+  bar.appendChild(h('span', { class: 'bulk-divider' }));
+  const labelsButton = h('button', {
+    class: 'btn btn-sm', type: 'button',
+    text: 'Labels' + (bulk.labels && bulk.labels.length ? ' (' + bulk.labels.length + ')' : ''),
+    disabled: disabled,
+    on: { click: () => { bulkState().labelsOpen = !bulkState().labelsOpen; renderView(); } }
+  });
+  bar.appendChild(h('div', { class: 'bulk-group' },
+    labelsButton,
+    h('button', {
+      class: 'btn btn-sm', type: 'button', text: 'Apply labels', disabled: disabled,
+      on: { click: () => runBulk('labels', { labels: bulkState().labels || [] }) }
+    })));
+  if (bulk.labelsOpen) {
+    const labelHost = h('div', { class: 'bulk-group', style: { flexBasis: '100%' } });
+    const labels = settingsLabels();
+    if (!labels.length) labelHost.appendChild(h('span', { class: 'hint', text: 'No labels defined in Settings.' }));
+    for (const label of labels) {
+      labelHost.appendChild(h('label', { class: 'checkbox' },
+        h('input', {
+          type: 'checkbox', checked: (bulkState().labels || []).indexOf(label.id) !== -1,
+          on: {
+            change: (event) => {
+              const current = (bulkState().labels || []).slice();
+              const index = current.indexOf(label.id);
+              if (event.target.checked && index === -1) current.push(label.id);
+              if (!event.target.checked && index !== -1) current.splice(index, 1);
+              bulkState().labels = current;
+            }
+          }
+        }),
+        labelChip(label)));
+    }
+    bar.appendChild(labelHost);
+  }
+
+  bar.appendChild(h('span', { class: 'bulk-divider' }));
+  const estimateInput = h('input', {
+    class: 'input is-estimate', type: 'number', min: '0', max: '10000', step: '0.5', placeholder: 'hours',
+    'aria-label': 'Bulk estimate hours', value: bulk.estimate || '',
+    on: { input: (event) => { bulkState().estimate = event.target.value; } }
+  });
+  bar.appendChild(h('div', { class: 'bulk-group' },
+    estimateInput,
+    h('button', {
+      class: 'btn btn-sm', type: 'button', text: 'Apply estimate', disabled: disabled,
+      on: {
+        click: () => {
+          const text = String(bulkState().estimate || '').trim();
+          const value = text === '' ? null : Number(text);
+          if (expandedNumberInvalid(text, value)) { toast('Enter a number for the estimate', 'warn'); return; }
+          runBulk('estimate', { estimate_hours: value });
+        }
+      }
+    })));
+  if (bulk.busy) bar.appendChild(h('span', { class: 'hint', text: 'Working…' }));
+  return bar;
+}
+
+function expandedNumberInvalid(text, value) {
+  return text !== '' && (!isFinite(value) || value < 0);
+}
+
+async function runBulk(action, payload) {
+  const bulk = bulkState();
+  if (!bulk.selected.length) return;
+  bulk.busy = true;
+  renderView();
+  try {
+    const result = await api('/api/bulk', {
+      method: 'POST',
+      body: Object.assign({ action: action, tasks: bulk.selected.slice() }, payload || {})
+    });
+    const failures = (result.results || []).filter((entry) => !entry.ok);
+    const message = 'Bulk ' + action + ': ' + (result.ok_count || 0) + ' applied, ' + (result.failed_count || 0) + ' failed' +
+      (failures.length ? '\n' + failures.map((entry) => entry.task + ': ' + (entry.error || 'failed')).join('\n') : '');
+    toast(message, failures.length ? 'warn' : 'ok', failures.length ? 9000 : 4000);
+    bulk.selected = [];
+    bulk.labelsOpen = false;
+    await loadSnapshot();
+    if (feature('worklog')) loadWorklog();
+    renderHeader();
+    renderView();
+  } catch (err) {
+    toast('Bulk action failed: ' + describeError(err), 'error');
+  } finally {
+    bulk.busy = false;
+    renderView();
+  }
+}
+
+/* ---------- command palette ---------- */
+
+function paletteItems() {
+  const items = [];
+  for (const view of VIEWS) {
+    if (view.feature && !feature(view.feature)) continue;
+    items.push({
+      id: 'view-' + view.key, group: 'Views', label: view.label, sub: '#' + view.key,
+      run: () => navigate(view.key)
+    });
+  }
+  if (canWrite()) items.push({
+    id: 'action-new-task', group: 'Actions', label: 'New task', sub: 'plan editor',
+    run: async () => {
+      navigate('plan');
+      await loadViewData('plan');
+      await loadTaskTemplates();
+      openTaskEditor(null);
+    }
+  });
+  if (feature('intake') && canWrite()) {
+    items.push({
+      id: 'action-new-intake', group: 'Actions', label: 'New intake proposal', sub: 'intake',
+      run: async () => {
+        navigate('intake');
+        await loadIntake();
+        openNewIntakeModal();
+      }
+    });
+  }
+  if (feature('assistant') && canWrite()) {
+    items.push({
+      id: 'action-ask', group: 'Actions', label: 'Ask the assistant', sub: 'assistant',
+      run: () => {
+        navigate('assistant');
+        state.focusAssistantInput = true;
+        renderView();
+      }
+    });
+  }
+  if (feature('automations')) {
+    items.push({
+      id: 'action-automations', group: 'Actions', label: 'Run automations dry run', sub: 'automations',
+      run: async () => {
+        navigate('automations');
+        await loadViewData('automations');
+        runAutomations();
+      }
+    });
+  }
+  items.push({ id: 'action-refresh', group: 'Actions', label: 'Refresh everything', sub: 'snapshot + view', run: () => refreshAll() });
+  items.push({ id: 'action-settings', group: 'Actions', label: 'Open Settings', sub: 'settings', run: () => navigate('settings') });
+  const tasks = (state.snapshot && state.snapshot.tasks) || [];
+  if (tasks.length) {
+    items.push({ id: 'group-tasks', group: 'Tasks', label: '', sub: '', header: true });
+    for (const task of tasks) {
+      items.push({
+        id: 'task-' + task.id, group: 'Tasks',
+        label: task.id + ' · ' + (task.title || '(untitled)'),
+        sub: stMeta(task.status).label + (task.stage_title ? ' · ' + task.stage_title : ''),
+        run: () => openTask(task.id)
+      });
+    }
+  }
+  return items;
+}
+
+function openPalette() {
+  const input = h('input', {
+    class: 'input', type: 'search', placeholder: 'Search views, actions and tasks…',
+    'data-autofocus': '1', 'aria-label': 'Command palette search'
+  });
+  const list = h('div', { class: 'palette-list' });
+  const allItems = paletteItems();
+  let filtered = allItems.filter((item) => !item.header);
+  let activeIndex = 0;
+
+  const paint = () => {
+    clear(list);
+    if (!filtered.length) {
+      list.appendChild(h('div', { class: 'palette-empty', text: 'No matching command.' }));
+      return;
+    }
+    if (activeIndex >= filtered.length) activeIndex = filtered.length - 1;
+    let group = null;
+    filtered.forEach((item, index) => {
+      if (item.group !== group) {
+        group = item.group;
+        list.appendChild(h('div', { class: 'palette-group', text: group }));
+      }
+      list.appendChild(h('button', {
+        class: 'palette-item' + (index === activeIndex ? ' is-active' : ''),
+        type: 'button', title: item.label,
+        on: { click: () => runPaletteItem(item) }
+      },
+        h('span', { class: 'palette-label', text: item.label }),
+        item.sub ? h('span', { class: 'palette-sub', text: item.sub }) : null));
+    });
+    const active = list.querySelector('.palette-item.is-active');
+    if (active && active.scrollIntoView) active.scrollIntoView({ block: 'nearest' });
+  };
+
+  input.addEventListener('input', () => {
+    const query = input.value.trim().toLowerCase();
+    filtered = allItems.filter((item) => !item.header &&
+      (item.label + ' ' + (item.sub || '')).toLowerCase().indexOf(query) !== -1);
+    activeIndex = 0;
+    paint();
+  });
+  input.addEventListener('keydown', (event) => {
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      activeIndex = Math.min(filtered.length - 1, activeIndex + 1);
+      paint();
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      activeIndex = Math.max(0, activeIndex - 1);
+      paint();
+    } else if (event.key === 'Enter') {
+      event.preventDefault();
+      if (filtered[activeIndex]) runPaletteItem(filtered[activeIndex]);
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      closeModal();
+    }
+  });
+
+  const palette = h('div', { class: 'palette' }, input, list);
+  openModal({
+    title: 'Command palette',
+    body: palette,
+    footer: h('div', { class: 'palette-hint' },
+      h('span', {}, h('kbd', { class: 'kbd', text: '↑↓' }), ' navigate'),
+      h('span', {}, h('kbd', { class: 'kbd', text: '↵' }), ' run'),
+      h('span', {}, h('kbd', { class: 'kbd', text: 'esc' }), ' close'),
+      h('span', { style: { marginLeft: 'auto' }, text: 'Ctrl/Cmd+K' }))
+  });
+  paint();
+  focusSoon(input);
+}
+
+function runPaletteItem(item) {
+  if (!item) return;
+  closeModal();
+  try {
+    const result = item.run();
+    if (result && typeof result.catch === 'function') result.catch((err) => toast(describeError(err), 'error'));
+  } catch (err) {
+    toast(describeError(err), 'error');
+  }
+}
+
+function bindPaletteShortcut() {
+  document.addEventListener('keydown', (event) => {
+    if ((event.metaKey || event.ctrlKey) && (event.key === 'k' || event.key === 'K')) {
+      event.preventDefault();
+      openPalette();
+    }
+  });
 }
 
 /* =========================================================================

@@ -36,12 +36,15 @@ from urllib.parse import parse_qs, urlparse
 from core import analytics as analytics_mod
 from core import approvals as approvals_mod
 from core import audit as audit_mod
+from core import assistant as assistant_mod
+from core import automations as automations_mod
 from core import board as board_mod
 from core import claims as claims_mod
 from core import coverage as coverage_mod
 from core import cycles as cycles_mod
 from core import dashboard as dashboard_mod
 from core import filters as filters_mod
+from core import github as github_mod
 from core import inbox as inbox_mod
 from core import intake as intake_mod
 from core import modules as modules_mod
@@ -60,11 +63,15 @@ from core.errors import PolierError
 from core.gates import suggest_gate_commands
 from core.jobs import JobManager
 
+from .assistant import AssistantManager
 from .sessions import SessionManager
 
-VERSION = "2.3.0"
+VERSION = "2.4.0"
 CONFIG = "config.json"
 MAX_BODY = 1_500_000
+# POST endpoints that only read/compute; safe in read-only mode and without the
+# action header (the automations dry run is the only one today).
+READ_ONLY_POSTS = frozenset({"/api/automations/run"})
 ASSETS = Path(__file__).resolve().parent / "assets"
 
 
@@ -110,6 +117,7 @@ class DashboardApp:
         self.watcher = _Watcher(self)
         self.jobs = JobManager(self.root, self.bus, self.package_root)
         self.sessions = SessionManager(self.root, self.bus, self._config().get("session"), self.package_root)
+        self.assistant = AssistantManager(self.root, self.sessions, self.bus)
         self._cache: Optional[Dict[str, Any]] = None
         self._cache_sig: Optional[str] = None
         self._cache_lock = threading.Lock()
@@ -225,7 +233,8 @@ class DashboardApp:
                 supplied = match.group(1) if match else ""
             if not secrets.compare_digest(supplied, self.token):
                 raise ApiError(401, "missing or wrong dashboard token")
-        if method != "GET" and method != "HEAD":
+        read_post = method == "POST" and path in READ_ONLY_POSTS
+        if method != "GET" and method != "HEAD" and not read_post:
             if _header(headers, "x-polier-action").strip() != "1":
                 raise ApiError(403, "state-changing requests need the X-Polier-Action: 1 header")
             origin = _header(headers, "origin")
@@ -714,6 +723,83 @@ class DashboardApp:
             return 200, coverage_mod.build(self.root, snapshot=self.snapshot())
         if path == "/api/analytics" and method == "GET":
             return 200, analytics_mod.build(self.root, snapshot=self.snapshot())
+        # assistant, automations, GitHub and bulk operations (2.4) ----------
+        if path == "/api/assistant" and method == "GET":
+            return 200, {"conversations": self.assistant.list()}
+        if path == "/api/assistant/chat" and method == "POST":
+            payload = self._json(body)
+            try:
+                conversation = self.assistant.start(str(payload.get("message") or ""),
+                                                    payload.get("conversation_id") or None)
+            except KeyError:
+                raise ApiError(404, "unknown conversation")
+            except PolierError as exc:
+                raise ApiError(400, str(exc))
+            self.bus.publish("assistant", {"conversation": conversation.get("id")})
+            return 200, conversation
+        if path == "/api/assistant/apply" and method == "POST":
+            payload = self._json(body)
+            proposal = payload.get("proposal") if isinstance(payload.get("proposal"), dict) else {}
+            try:
+                result = self._apply_proposal(proposal)
+            except state_mod.TransitionBlocked as exc:  # type: ignore[attr-defined]
+                raise ApiError(409, "transition refused", {
+                    "errors": getattr(exc, "errors", []), "actions": getattr(exc, "actions", []),
+                    "detail": str(exc)})
+            except PolierError as exc:
+                raise ApiError(400, str(exc))
+            conversation_id = payload.get("conversation_id")
+            if conversation_id:
+                try:
+                    assistant_mod_append = assistant_mod.append_message
+                    assistant_mod_append(self.root, str(conversation_id), {
+                        "role": "assistant",
+                        "content": f"Applied proposal: {proposal.get('title') or proposal.get('kind')}",
+                        "proposals": [], "status": "applied", "applied": result})
+                except (KeyError, PolierError, OSError):
+                    pass
+            self.invalidate()
+            return 200, {"ok": True, "result": result}
+        match = re.fullmatch(r"/api/assistant/(conv-[0-9A-Za-z-]{6,60})", path)
+        if match and method == "GET":
+            try:
+                return 200, self.assistant.get(match.group(1))
+            except KeyError:
+                raise ApiError(404, "unknown conversation")
+        if match and method == "DELETE":
+            try:
+                return 200, self.assistant.delete(match.group(1))
+            except KeyError:
+                raise ApiError(404, "unknown conversation")
+        match = re.fullmatch(r"/api/assistant/(conv-[0-9A-Za-z-]{6,60})/cancel", path)
+        if match and method == "POST":
+            try:
+                return 200, self.assistant.cancel(match.group(1))
+            except KeyError:
+                raise ApiError(404, "unknown conversation")
+        if path == "/api/automations" and method == "GET":
+            value = automations_mod.load(self.root, strict=False)
+            return 200, {"automations": value, "errors": automations_mod.errors(value),
+                         "kinds": list(automations_mod.KINDS),
+                         "action_types": list(automations_mod.ACTION_TYPES)}
+        if path == "/api/automations" and method in ("PUT", "POST"):
+            payload = self._json(body)
+            try:
+                value = automations_mod.save(self.root, payload)
+            except PolierError as exc:
+                raise ApiError(400, str(exc))
+            self.bus.publish("automations", {"rules": len(value.get("rules") or [])})
+            return 200, {"automations": value, "errors": []}
+        if path == "/api/automations/run" and method in ("GET", "POST"):
+            try:
+                value = automations_mod.evaluate(self.root, snapshot=self.snapshot())
+            except PolierError as exc:
+                raise ApiError(400, str(exc))
+            return 200, value
+        if path == "/api/github" and method == "GET":
+            return 200, github_mod.status(self.root, force=query.get("force") in ("1", "true", "yes"))
+        if path == "/api/bulk" and method == "POST":
+            return 200, self._bulk(self._json(body))
         # pages, intake and task templates (2.3) ---------------------------
         if path == "/api/pages" and method == "GET":
             return 200, pages_mod.index(self.root)
@@ -852,6 +938,92 @@ class DashboardApp:
         if path == "/api/audit" and method == "GET":
             return 200, audit_mod.audit(self.root)
         raise ApiError(404, f"no route for {method} {path}")
+
+    # -- 2.4 helpers -------------------------------------------------------
+    def _apply_proposal(self, proposal: Dict[str, Any]) -> Dict[str, Any]:
+        if not isinstance(proposal, dict):
+            raise ApiError(400, "proposal must be an object")
+        kind = str(proposal.get("kind") or "")
+        payload = proposal.get("payload") if isinstance(proposal.get("payload"), dict) else {}
+        if kind == "note":
+            return {"kind": "note", "text": str(payload.get("text") or proposal.get("title") or "")}
+        if kind == "state":
+            task, status = str(payload.get("task") or ""), str(payload.get("status") or "")
+            if not task or not status:
+                raise ApiError(400, "a state proposal needs task and status")
+            result = state_mod.set_status(self.root, task, status, actor="lead",
+                                          note=payload.get("note"))
+            self.bus.publish("state", {"task": task, "status": status, "result": result})
+            return {"kind": "state", "result": result}
+        if kind == "plan_task":
+            try:
+                task = plan_edit.create_task(self.root, payload)
+            except PolierError as exc:
+                raise ApiError(400, str(exc))
+            self.bus.publish("state", {"plan": "task-created", "task": task.get("id")})
+            return {"kind": "plan_task", "task": task}
+        if kind == "gate":
+            task = str(payload.get("task") or "")
+            name = str(payload.get("name") or "")
+            if not task or not name:
+                raise ApiError(400, "a gate proposal needs task and name")
+            command = str(payload.get("command") or "").strip()
+            if not command:
+                command = (self.config_view()["gate_commands"] or {}).get(name, "")
+            if not command:
+                raise ApiError(400, f"no command configured for gate '{name}'")
+            job = self.jobs.start_gate(task, name, command,
+                                       timeout=int(payload.get("timeout") or 1800))
+            return {"kind": "gate", "job": job}
+        if kind == "session":
+            task = payload.get("task") or None
+            session = self.sessions.start(task=str(task) if task else None,
+                                          role=str(payload.get("role") or "worker"),
+                                          note=payload.get("note") or None,
+                                          worktree=bool(payload.get("worktree")))
+            return {"kind": "session", "session": session}
+        raise ApiError(400, f"proposal kind {kind!r} cannot be applied")
+
+    def _bulk(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        action = str(payload.get("action") or "")
+        tasks = payload.get("tasks")
+        if not isinstance(tasks, list) or not tasks:
+            raise ApiError(400, "tasks must be a non-empty array")
+        if len(tasks) > 100:
+            raise ApiError(400, "bulk operations are limited to 100 tasks")
+        task_ids = [str(task) for task in tasks if isinstance(task, (str, int))]
+        results: List[Dict[str, Any]] = []
+        for task_id in task_ids:
+            try:
+                if action == "state":
+                    status = str(payload.get("status") or "")
+                    if not status:
+                        raise PolierError("status is required")
+                    state_mod.set_status(self.root, task_id, status, actor="lead",
+                                         note=payload.get("note"))
+                elif action == "claim":
+                    claims_mod.take(self.root, task_id, harness="dsh",
+                                    session=str(payload.get("session") or "bulk"))
+                elif action == "release":
+                    claims_mod.release(self.root, task_id)
+                elif action == "labels":
+                    labels = payload.get("labels")
+                    if not isinstance(labels, list):
+                        raise PolierError("labels must be an array")
+                    plan_edit.update_task(self.root, task_id, {"labels": labels})
+                elif action == "estimate":
+                    plan_edit.update_task(self.root, task_id,
+                                          {"estimate_hours": payload.get("estimate_hours")})
+                else:
+                    raise PolierError(f"unknown bulk action {action!r}")
+                results.append({"task": task_id, "ok": True})
+            except (state_mod.TransitionBlocked, PolierError, KeyError) as exc:  # type: ignore[attr-defined]
+                results.append({"task": task_id, "ok": False, "error": str(exc)})
+        self.bus.publish("state", {"bulk": action, "count": len(results)})
+        self.invalidate()
+        return {"action": action, "results": results,
+                "ok_count": len([item for item in results if item["ok"]]),
+                "failed_count": len([item for item in results if not item["ok"]])}
 
     def _json(self, body: Optional[bytes]) -> Dict[str, Any]:
         if body is None or not body.strip():

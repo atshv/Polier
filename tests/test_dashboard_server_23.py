@@ -42,7 +42,7 @@ class Dashboard23Test(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertTrue(settings["features"]["pages"])
         self.assertTrue(settings["features"]["intake"])
-        self.assertFalse(settings["features"]["assistant"])
+        self.assertTrue(settings["features"]["assistant"])
 
     def test_pages_endpoints(self) -> None:
         status, value = request(self.base, "/api/pages")
