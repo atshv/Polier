@@ -26,6 +26,8 @@ const VIEWS = [
   { key: 'activity', label: 'Activity' },
   { key: 'analytics', label: 'Analytics', feature: 'analytics' },
   { key: 'sessions', label: 'Sessions' },
+  { key: 'pages', label: 'Pages', feature: 'pages' },
+  { key: 'intake', label: 'Intake', feature: 'intake' },
   { key: 'plan', label: 'Plan' },
   { key: 'settings', label: 'Settings' }
 ];
@@ -427,10 +429,10 @@ async function copyText(text) {
    7. Safe markdown-ish renderer (DOM only, never HTML strings)
    ========================================================================= */
 
-function inlineNodes(text) {
+function inlineNodes(text, options) {
   const nodes = [];
   const source = String(text);
-  const pattern = /(`[^`]+`|\*\*[^*]+\*\*|\*[^*\s][^*]*\*)/g;
+  const pattern = /(`[^`]+`|\[[^\]]+\]\([^()\s]+\)|\*\*[^*]+\*\*|\*[^*\s][^*]*\*)/g;
   let last = 0;
   let match = pattern.exec(source);
   while (match) {
@@ -438,6 +440,10 @@ function inlineNodes(text) {
     const token = match[0];
     if (token.charAt(0) === '`') {
       nodes.push(h('code', { class: 'md-inline-code', text: token.slice(1, -1) }));
+    } else if (token.charAt(0) === '[') {
+      const parsed = /^\[([^\]]+)\]\(([^()\s]+)\)$/.exec(token);
+      if (parsed) nodes.push(markdownLink(parsed[1], parsed[2], options));
+      else nodes.push(document.createTextNode(token));
     } else if (token.startsWith('**')) {
       nodes.push(h('strong', { text: token.slice(2, -2) }));
     } else {
@@ -450,7 +456,8 @@ function inlineNodes(text) {
   return nodes;
 }
 
-function mdFragment(text) {
+function mdFragment(text, options) {
+  const opts = options || {};
   const fragment = document.createDocumentFragment();
   if (text === null || text === undefined || String(text) === '') return fragment;
   const lines = String(text).replace(/\r\n?/g, '\n').split('\n');
@@ -460,14 +467,13 @@ function mdFragment(text) {
   const flush = () => {
     if (!paragraph.length) return;
     const node = h('p');
-    append(node, inlineNodes(paragraph.join(' ')));
+    append(node, inlineNodes(paragraph.join(' '), opts));
     fragment.appendChild(node);
     paragraph = [];
   };
 
   while (index < lines.length) {
     const line = lines[index];
-
     if (/^\s*```/.test(line)) {
       flush();
       const buffer = [];
@@ -477,51 +483,46 @@ function mdFragment(text) {
       fragment.appendChild(h('pre', { class: 'md-code' }, h('code', { text: buffer.join('\n') })));
       continue;
     }
-
     const heading = /^(#{1,6})\s+(.*)$/.exec(line);
     if (heading) {
       flush();
       const level = Math.min(6, heading[1].length + 1);
       const node = h('h' + level);
-      append(node, inlineNodes(heading[2].trim()));
+      append(node, inlineNodes(heading[2].trim(), opts));
       fragment.appendChild(node);
       index += 1;
       continue;
     }
-
     if (/^\s*([-*_])\s*\1\s*\1+\s*$/.test(line)) {
       flush();
       fragment.appendChild(h('hr'));
       index += 1;
       continue;
     }
-
     if (/^\s*[-*+]\s+/.test(line)) {
       flush();
       const list = h('ul');
       while (index < lines.length && /^\s*[-*+]\s+/.test(lines[index])) {
         const item = h('li');
-        append(item, inlineNodes(lines[index].replace(/^\s*[-*+]\s+/, '')));
+        append(item, inlineNodes(lines[index].replace(/^\s*[-*+]\s+/, ''), opts));
         list.appendChild(item);
         index += 1;
       }
       fragment.appendChild(list);
       continue;
     }
-
     if (/^\s*\d+[.)]\s+/.test(line)) {
       flush();
       const list = h('ol');
       while (index < lines.length && /^\s*\d+[.)]\s+/.test(lines[index])) {
         const item = h('li');
-        append(item, inlineNodes(lines[index].replace(/^\s*\d+[.)]\s+/, '')));
+        append(item, inlineNodes(lines[index].replace(/^\s*\d+[.)]\s+/, ''), opts));
         list.appendChild(item);
         index += 1;
       }
       fragment.appendChild(list);
       continue;
     }
-
     if (/^\s*>\s?/.test(line)) {
       flush();
       const buffer = [];
@@ -530,11 +531,10 @@ function mdFragment(text) {
         index += 1;
       }
       const quote = h('blockquote');
-      append(quote, inlineNodes(buffer.join(' ')));
+      append(quote, inlineNodes(buffer.join(' '), opts));
       fragment.appendChild(quote);
       continue;
     }
-
     if (/^\s*\|/.test(line)) {
       flush();
       const buffer = [];
@@ -542,13 +542,7 @@ function mdFragment(text) {
       fragment.appendChild(h('pre', { class: 'md-table' }, h('code', { text: buffer.join('\n') })));
       continue;
     }
-
-    if (line.trim() === '') {
-      flush();
-      index += 1;
-      continue;
-    }
-
+    if (line.trim() === '') { flush(); index += 1; continue; }
     paragraph.push(line.trim());
     index += 1;
   }
@@ -623,8 +617,8 @@ const FEATURE_NOTES = {
   modules: 'The package map with health, docs, contracts and effort.',
   coverage: 'Requirements from docs/quality.md mapped to tasks and evidence.',
   analytics: 'Throughput, cycle time, gate results and effort charts.',
-  pages: 'A documentation reader for the project pages.',
-  intake: 'An intake form that turns requests into tasks.',
+  pages: 'The project Markdown as a browsable wiki with search, history and backlinks.',
+  intake: 'Proposals that become tasks after an accept decision.',
   assistant: 'A chat surface for the project assistant.'
 };
 const FEATURE_LABELS = {
@@ -1304,11 +1298,25 @@ async function loadAnalytics() {
   state.analyticsLoading = false;
 }
 
-/* Planning dates (board schema 1.2) are not part of the snapshot task view yet;
-   read them from board.json via the read-only file endpoint. */
+/* Planning dates (board schema 1.2) come from the snapshot task views (2.2+);
+   the read-only board.json endpoint is only a fallback for older payloads. */
 async function loadPlanningDates(force) {
   if (state.planningDatesLoaded && !force) return state.planningDates;
   if (state.planningDatesLoading) return state.planningDates;
+  if (state.snapshot && Array.isArray(state.snapshot.tasks)) {
+    const map = {};
+    for (const task of state.snapshot.tasks) {
+      if (!task || !task.id) continue;
+      map[task.id] = {
+        planned_start: typeof task.planned_start === 'string' ? task.planned_start : null,
+        target: typeof task.target === 'string' ? task.target : null
+      };
+    }
+    state.planningDates = map;
+    state.planningDatesLoaded = true;
+    state.planningDatesError = null;
+    return state.planningDates;
+  }
   state.planningDatesLoading = true;
   try {
     const file = await api('/api/file?path=board.json');
@@ -1405,6 +1413,237 @@ function loadCurrentPlanningView() {
   else if (view === 'coverage') loadCoverage().then(renderView);
   else if (view === 'analytics') loadAnalytics().then(renderView);
   else renderView();
+}
+
+/* =========================================================================
+   2.3 — Pages, Intake and task-template loaders and helpers
+   ========================================================================= */
+
+/* ---------- safe markdown links (internal .md links open the Pages viewer) ---------- */
+
+function resolvePageLink(target, base) {
+  if (!target) return null;
+  let value = String(target).trim();
+  if (!value) return null;
+  if (/^[a-z][a-z0-9+.-]*:/i.test(value)) return null; /* external or unknown scheme */
+  value = value.split('#')[0].split('?')[0];
+  if (!value) return null;
+  if (value.startsWith('/')) value = value.replace(/^\/+/, '');
+  else {
+    const baseParts = base ? String(base).split('/').slice(0, -1) : [];
+    value = baseParts.concat([value]).join('/');
+  }
+  const parts = [];
+  for (const part of value.split('/')) {
+    if (!part || part === '.') continue;
+    if (part === '..') { if (parts.length) parts.pop(); continue; }
+    parts.push(part);
+  }
+  const resolved = parts.join('/');
+  if (!resolved || !/\.md$/i.test(resolved)) return null;
+  return resolved;
+}
+
+function markdownLink(label, url, options) {
+  const opts = options || {};
+  const inner = inlineNodes(label, opts);
+  if (/^https?:\/\//i.test(url) || /^mailto:/i.test(url)) {
+    return h('a', { href: url, rel: 'noopener noreferrer' }, inner);
+  }
+  if (url.startsWith('#')) return h('a', { href: url }, inner);
+  const resolved = resolvePageLink(url, opts.linkBase);
+  if (!resolved) return document.createTextNode(label);
+  return h('a', {
+    href: '#/pages/' + encodeURIComponent(resolved),
+    dataset: { pageLink: resolved },
+    title: 'Open ' + resolved
+  }, inner);
+}
+
+
+
+/* ---------- Pages data ---------- */
+
+async function loadPages() {
+  state.pagesLoading = true;
+  try {
+    const results = await Promise.all([api('/api/pages'), api('/api/pages/favorites')]);
+    state.pages = results[0];
+    state.pageFavorites = Array.isArray(results[1].favorites) ? results[1].favorites : [];
+    state.pagesLoaded = true;
+    state.pagesError = null;
+  } catch (err) {
+    state.pagesError = err;
+  }
+  state.pagesLoading = false;
+  ensurePagesSelection();
+  return state.pages;
+}
+
+function pageExistsInIndex(path) {
+  return Boolean(state.pages && (state.pages.pages || []).some((page) => page.path === path));
+}
+
+function pageByPath(path) {
+  return (state.pages && (state.pages.pages || []).find((page) => page.path === path)) || null;
+}
+
+function ensurePagesSelection() {
+  if (!state.pages) return null;
+  if (state.pagesSelected && pageExistsInIndex(state.pagesSelected)) return state.pagesSelected;
+  const favorites = (state.pageFavorites || []).filter((path) => pageExistsInIndex(path));
+  const first = favorites[0] || (state.pages.pages && state.pages.pages[0] ? state.pages.pages[0].path : null);
+  state.pagesSelected = first;
+  state.pagesRef = null;
+  return first;
+}
+
+async function loadPage(path, ref) {
+  if (!path) { state.pageDetail = null; return; }
+  state.pageLoading = true;
+  try {
+    const query = '/api/page?path=' + encodeURIComponent(path) + (ref ? '&ref=' + encodeURIComponent(ref) : '');
+    state.pageDetail = await api(query);
+    state.pageError = null;
+  } catch (err) {
+    state.pageError = err;
+    state.pageDetail = null;
+  }
+  state.pageLoading = false;
+}
+
+function schedulePagesSearch(value) {
+  state.pagesSearch = value;
+  if (state.pagesSearchTimer) window.clearTimeout(state.pagesSearchTimer);
+  const query = String(value || '').trim();
+  if (query.length < 2) {
+    state.pagesResults = [];
+    state.pagesSearchError = null;
+    state.pagesSearching = false;
+    renderView();
+    return;
+  }
+  state.pagesSearching = true;
+  state.pagesSearchError = null;
+  renderView();
+  state.pagesSearchTimer = window.setTimeout(() => { runPagesSearch(query); }, 280);
+}
+
+async function runPagesSearch(query) {
+  state.pagesSearchTimer = null;
+  if (state.route.view !== 'pages') return;
+  if (String(state.pagesSearch || '').trim() !== query) return;
+  try {
+    const result = await api('/api/pages/search?q=' + encodeURIComponent(query) + '&limit=30');
+    state.pagesResults = result.results || [];
+    state.pagesSearchError = null;
+  } catch (err) {
+    state.pagesResults = [];
+    state.pagesSearchError = err;
+  }
+  state.pagesSearching = false;
+  renderView();
+}
+
+async function togglePageFavorite(path) {
+  if (!canWrite() || !path) return;
+  const favorites = (state.pageFavorites || []).slice();
+  const index = favorites.indexOf(path);
+  if (index >= 0) favorites.splice(index, 1);
+  else favorites.push(path);
+  try {
+    await api('/api/pages/favorites', { method: 'PUT', body: { favorites: favorites } });
+    await loadPages();
+    if (state.pagesSelected) await loadPage(state.pagesSelected, state.pagesRef);
+    toast(index >= 0 ? 'Removed from favorites' : 'Added to favorites', 'ok', 1800);
+    renderView();
+  } catch (err) {
+    toast('Favorites: ' + describeError(err), 'error');
+  }
+}
+
+function pageKindLabel(kind) {
+  return { root: 'root', doc: 'doc', task: 'brief', review: 'review', package: 'package' }[kind] || kind;
+}
+
+function pageKindChip(kind) {
+  const tone = { root: 'blue', doc: 'violet', task: 'green', review: 'amber', package: 'neutral' }[kind] || 'neutral';
+  return h('span', { class: 'chip bg-' + tone + ' st-' + tone, text: pageKindLabel(kind) });
+}
+
+/* ---------- Intake data ---------- */
+
+async function loadIntake() {
+  state.intakeLoading = true;
+  try {
+    state.intake = await api('/api/intake');
+    state.intakeLoaded = true;
+    state.intakeError = null;
+  } catch (err) {
+    state.intakeError = err;
+  }
+  state.intakeLoading = false;
+}
+
+function intakeEntries() {
+  return (state.intake && Array.isArray(state.intake.entries)) ? state.intake.entries : [];
+}
+
+function intakeCounts() {
+  return (state.intake && state.intake.counts) || { proposed: 0, accepted: 0, rejected: 0 };
+}
+
+function intakeKindChip(kind) {
+  const value = kind || 'idea';
+  return h('span', { class: 'chip kind-' + value, text: value });
+}
+
+function intakePriorityChip(priority) {
+  const value = priority || 'medium';
+  return h('span', { class: 'chip prio-' + value, text: value + ' priority' });
+}
+
+function intakeStatusTone(status) {
+  return { proposed: 'amber', accepted: 'green', rejected: 'red' }[status] || 'neutral';
+}
+
+function intakeStatusPill(status) {
+  const tone = intakeStatusTone(status);
+  return h('span', { class: 'badge bg-' + tone + ' st-' + tone }, h('span', { class: 'dot' }), status);
+}
+
+/* ---------- Task templates ---------- */
+
+async function loadTaskTemplates() {
+  try {
+    const result = await api('/api/task-templates');
+    state.templates = Array.isArray(result.templates) ? result.templates : [];
+    state.templatesLoaded = true;
+    state.templatesError = null;
+  } catch (err) {
+    state.templatesError = err;
+  }
+}
+
+function templateById(templateId) {
+  return (state.templates || []).find((template) => template.id === templateId) || null;
+}
+
+function templateChips(template) {
+  const chips = h('div', { class: 'template-chips' });
+  if (template.estimate_hours !== null && template.estimate_hours !== undefined) {
+    chips.appendChild(h('span', { class: 'chip', text: 'est ' + fmtHours(template.estimate_hours) }));
+  }
+  if (template.complexity !== null && template.complexity !== undefined) {
+    chips.appendChild(h('span', { class: 'chip', text: 'complexity ' + template.complexity }));
+  }
+  for (const gate of template.gates || []) chips.appendChild(h('span', { class: 'chip', text: gate }));
+  for (const labelId of template.labels || []) {
+    const label = labelById(labelId);
+    if (label) chips.appendChild(labelChip(label));
+    else chips.appendChild(h('span', { class: 'chip mono', text: labelId }));
+  }
+  return chips;
 }
 
 /* =========================================================================
@@ -1525,7 +1764,34 @@ const state = {
   planningDates: {},
   planningDatesLoaded: false,
   planningDatesLoading: false,
-  planningDatesError: null
+  planningDatesError: null,
+
+  /* 2.3 pages, intake and task templates */
+  pages: null,
+  pagesLoaded: false,
+  pagesLoading: false,
+  pagesError: null,
+  pagesSelected: null,
+  pagesRef: null,
+  pagesCollapsed: {},
+  pagesSearch: '',
+  pagesResults: [],
+  pagesSearching: false,
+  pagesSearchError: null,
+  pagesSearchTimer: null,
+  pageFavorites: [],
+  pageDetail: null,
+  pageLoading: false,
+  pageError: null,
+  intake: null,
+  intakeLoaded: false,
+  intakeLoading: false,
+  intakeError: null,
+  intakeFilter: 'proposed',
+  intakeBusy: null,
+  templates: null,
+  templatesLoaded: false,
+  templatesError: null
 };
 
 const dom = {
@@ -1647,6 +1913,13 @@ function taskById(taskId) {
 
 function openTask(taskId) {
   if (!taskId) return;
+  if (state.route.view === 'pages') {
+    const base = state.pagesSelected ? '#/pages/' + encodeURIComponent(state.pagesSelected) : '#/pages';
+    const target = base + '?task=' + encodeURIComponent(taskId);
+    if (location.hash === target) applyRoute();
+    else location.hash = target;
+    return;
+  }
   const route = state.route.view === 'plan' ? 'board' : state.route.view;
   navigate(route, taskId);
 }
@@ -1667,15 +1940,27 @@ function taskChip(taskId, title) {
 
 function parseHash() {
   const raw = location.hash || '';
-  if (!raw.startsWith('#/')) return { view: 'board', taskId: null };
-  const parts = raw.slice(2).split('/').filter(Boolean);
+  if (!raw.startsWith('#/')) return { view: 'board', taskId: null, drawer: null };
+  let body = raw.slice(2);
+  let drawer = null;
+  const queryAt = body.indexOf('?');
+  if (queryAt !== -1) {
+    try {
+      const query = new URLSearchParams(body.slice(queryAt + 1));
+      drawer = query.get('task') || null;
+    } catch (err) {
+      drawer = null;
+    }
+    body = body.slice(0, queryAt);
+  }
+  const parts = body.split('/').filter(Boolean);
   const known = VIEWS.some((view) => view.key === parts[0]);
   const view = known ? parts[0] : 'board';
   let taskId = null;
   if (parts[1]) {
     try { taskId = decodeURIComponent(parts[1]); } catch (err) { taskId = parts[1]; }
   }
-  return { view, taskId };
+  return { view: view, taskId: taskId, drawer: drawer };
 }
 
 function navigate(view, taskId) {
@@ -1698,9 +1983,23 @@ function applyRoute() {
   renderTabs();
   renderHeader();
   syncSearchInput();
-  renderView();
 
-  if (parsed.taskId) ensureDrawer(parsed.taskId);
+  if (parsed.view === 'pages') {
+    if (parsed.taskId && state.pagesSelected !== parsed.taskId) {
+      state.pagesSelected = parsed.taskId;
+      state.pagesRef = null;
+    }
+    if (parsed.drawer) ensureDrawer(parsed.drawer);
+    else closeDrawer(false);
+    renderView();
+    loadViewData('pages');
+    startViewTimers();
+    return;
+  }
+
+  renderView();
+  if (parsed.drawer) ensureDrawer(parsed.drawer);
+  else if (parsed.taskId) ensureDrawer(parsed.taskId);
   else closeDrawer(false);
 
   loadViewData(parsed.view);
@@ -1872,8 +2171,7 @@ function connectEvents() {
     loadSettings().then(() => {
       renderHeader();
       renderTabs();
-      if (state.route.view === 'settings') renderView();
-      else renderView();
+      renderView();
     });
   });
   source.addEventListener('views', () => {
@@ -1884,6 +2182,14 @@ function connectEvents() {
   source.addEventListener('inbox', () => {
     loadInboxCounts();
     if (state.route.view === 'yourwork') loadInbox().then(() => { if (state.route.view === 'yourwork') renderView(); });
+  });
+  source.addEventListener('intake', () => {
+    if (state.route.view === 'intake') loadIntake().then(() => { if (state.route.view === 'intake') renderView(); });
+  });
+  source.addEventListener('templates', () => {
+    loadTaskTemplates().then(() => {
+      if (state.route.view === 'settings' || state.route.view === 'plan' || state.route.view === 'intake') renderView();
+    });
   });
   source.addEventListener('job', () => { loadJobs(); });
   source.addEventListener('session', (event) => {
@@ -2092,20 +2398,25 @@ async function refreshAll() {
   loadInboxCounts();
   renderHeader();
   renderTabs();
-  if (state.route.taskId) loadDrawer(state.route.taskId, true);
+  if (state.drawer.id) loadDrawer(state.drawer.id, true);
   const view = state.route.view;
   if (view === 'dispatch') await loadDispatch();
   else if (view === 'approvals') await loadApprovals();
   else if (view === 'activity') await loadActivity();
-  else if (view === 'plan') await loadPlan();
+  else if (view === 'plan') await Promise.all([loadPlan(), loadTaskTemplates()]);
   else if (view === 'sessions') await loadSessions({ quiet: true });
   else if (view === 'yourwork') await Promise.all([loadYourWork(), loadInbox()]);
-  else if (view === 'settings') await loadHealth();
+  else if (view === 'settings') await Promise.all([loadHealth(), loadTaskTemplates()]);
   else if (view === 'timeline') await loadTimeline();
   else if (view === 'cycles') await loadCycles();
   else if (view === 'modules') await loadModules();
   else if (view === 'coverage') await loadCoverage();
   else if (view === 'analytics') await loadAnalytics();
+  else if (view === 'pages') {
+    await loadPages();
+    ensurePagesSelection();
+    if (state.pagesSelected) await loadPage(state.pagesSelected, state.pagesRef);
+  } else if (view === 'intake') await Promise.all([loadIntake(), loadTaskTemplates()]);
   if ((view === 'board' || view === 'table') && feature('worklog')) await loadWorklog();
   renderView();
   renderJobsTray();
@@ -2128,23 +2439,30 @@ async function loadViewData(view) {
   }
   if (view === 'activity') { await loadActivity(); return rerender(); }
   if (view === 'sessions') { await loadSessions(); return rerender(); }
-  if (view === 'plan') { await Promise.all([loadPlan(), loadSnapshot()]); return rerender(); }
+  if (view === 'plan') { await Promise.all([loadPlan(), loadSnapshot(), loadTaskTemplates()]); return rerender(); }
   if (view === 'yourwork') {
     await Promise.all([loadSnapshot(), loadYourWork(), loadInboxCounts(), loadInbox()]);
     return rerender();
   }
   if (view === 'settings') {
-    await Promise.all([loadSettings(), loadConfig(), loadSnapshot(), loadViews(), loadHealth(), loadFilterFields()]);
+    await Promise.all([loadSettings(), loadConfig(), loadSnapshot(), loadViews(), loadHealth(), loadFilterFields(), loadTaskTemplates()]);
     return rerender();
   }
-  if (view === 'timeline') {
-    await Promise.all([loadSnapshot(), loadTimeline()]);
-    return rerender();
-  }
+  if (view === 'timeline') { await Promise.all([loadSnapshot(), loadTimeline()]); return rerender(); }
   if (view === 'cycles') { await Promise.all([loadSnapshot(), loadCycles()]); return rerender(); }
   if (view === 'modules') { await Promise.all([loadSnapshot(), loadModules()]); return rerender(); }
   if (view === 'coverage') { await Promise.all([loadSnapshot(), loadCoverage()]); return rerender(); }
   if (view === 'analytics') { await Promise.all([loadSnapshot(), loadAnalytics()]); return rerender(); }
+  if (view === 'pages') {
+    await loadPages();
+    ensurePagesSelection();
+    if (state.pagesSelected) await loadPage(state.pagesSelected, state.pagesRef);
+    return rerender();
+  }
+  if (view === 'intake') {
+    await Promise.all([loadSnapshot(), loadIntake(), loadTaskTemplates()]);
+    return rerender();
+  }
 
   if (!state.snapshot && !state.noBoard && !state.snapshotError) await loadSnapshot();
   if (!state.packageOptions && !state.noBoard) await loadPackageOptions();
@@ -2221,6 +2539,8 @@ function renderView() {
     case 'activity': renderActivity(); break;
     case 'analytics': renderAnalytics(); break;
     case 'sessions': renderSessions(); break;
+    case 'pages': renderPages(); break;
+    case 'intake': renderIntake(); break;
     default: renderBoard();
   }
   restoreFocus(focus);
@@ -3813,7 +4133,14 @@ function closeDrawer(updateHash) {
   dom.drawerBackdrop.hidden = true;
   document.body.style.overflow = '';
   clear(dom.drawer);
-  if (updateHash) navigate(state.route.view, null);
+  if (!updateHash) return;
+  if (state.route.view === 'pages') {
+    const base = state.pagesSelected ? '#/pages/' + encodeURIComponent(state.pagesSelected) : '#/pages';
+    try { history.replaceState(null, '', base); } catch (err) { location.hash = base; }
+    applyRoute();
+  } else {
+    navigate(state.route.view, null);
+  }
 }
 
 async function loadDrawer(taskId, quiet) {
@@ -5376,6 +5703,7 @@ function renderSettings() {
   if (feature('labels')) view.appendChild(renderSettingsLabels(ui));
   view.appendChild(renderSettingsSessions(config, ui));
   view.appendChild(renderSettingsGates(config, ui));
+  view.appendChild(renderSettingsTemplates(ui, config));
   view.appendChild(renderSettingsAbout(project, config, health, settingsErrors));
 }
 
@@ -6840,6 +7168,1002 @@ function renderAnalytics() {
 }
 
 /* =========================================================================
+   2.3 — Pages: collections, search, reader, history and backlinks
+   ========================================================================= */
+
+function pageCollectionId(page) {
+  return page.collection + (page.subcollection ? '/' + page.subcollection : '');
+}
+
+function selectedPageEntry() {
+  return state.pageDetail || (state.pagesSelected ? pageByPath(state.pagesSelected) : null);
+}
+
+function openPage(path, ref) {
+  if (!path) return;
+  state.pagesSelected = path;
+  state.pagesRef = ref || null;
+  const target = '#/pages/' + encodeURIComponent(path);
+  if (location.hash === target) applyRoute();
+  else location.hash = target;
+}
+
+function renderPages() {
+  const view = h('div', { class: 'pages-view' });
+  dom.view.appendChild(view);
+  const index = state.pages;
+  const page = state.pageDetail;
+  const searchQuery = String(state.pagesSearch || '').trim();
+  const searching = searchQuery.length >= 2;
+
+  view.appendChild(h('div', { class: 'view-head' },
+    h('div', {},
+      h('h1', { class: 'view-title', text: 'Pages' }),
+      h('p', {
+        class: 'view-sub',
+        text: index
+          ? index.counts.pages + ' pages · ' + index.counts.collections + ' collections · ' + index.counts.favorites + ' favorites'
+          : 'The project knowledge layer'
+      })),
+    h('div', { class: 'view-actions' },
+      h('button', {
+        class: 'btn btn-sm', type: 'button', text: 'Refresh',
+        on: {
+          click: async () => {
+            await loadPages();
+            if (state.pagesSelected) await loadPage(state.pagesSelected, state.pagesRef);
+            renderView();
+          }
+        }
+      }))));
+
+  view.appendChild(h('div', { class: 'pages-toolbar' },
+    h('div', { class: 'pages-searchbox' },
+      h('input', {
+        class: 'input', type: 'search', value: state.pagesSearch || '',
+        placeholder: 'Search the project knowledge…', 'aria-label': 'Search pages',
+        'data-fkey': 'pages-search',
+        on: { input: (event) => schedulePagesSearch(event.target.value) }
+      })),
+    h('span', { class: 'hint', text: searching ? 'Searching titles and Markdown content (min 2 characters).' : 'Read-only view of Markdown files in the project.' })));
+
+  if (!state.pagesLoaded && !index) {
+    if (state.pagesError) {
+      view.appendChild(errorCallout(state.pagesError));
+      view.appendChild(h('div', { style: { marginTop: '10px' } },
+        h('button', { class: 'btn', type: 'button', text: 'Retry', on: { click: () => loadPages().then(() => renderView()) } })));
+    } else {
+      view.appendChild(loadingRow('Indexing the project pages…'));
+    }
+    return;
+  }
+  if (state.pagesError) view.appendChild(errorCallout(state.pagesError));
+  if (!index || !(index.pages || []).length) {
+    view.appendChild(emptyState('No pages found',
+      'Polier indexes README, ARCHITECTURE, docs/, tasks/, reviews/ and package Markdown files.',
+      null));
+    return;
+  }
+
+  const grid = h('div', { class: 'pages-grid' });
+  grid.appendChild(renderPagesSidebar());
+  grid.appendChild(renderPagesList(searching, searchQuery));
+  grid.appendChild(renderPagesReader());
+  view.appendChild(grid);
+}
+
+function renderPagesSidebar() {
+  const index = state.pages;
+  const sidebar = h('aside', { class: 'pages-sidebar', 'aria-label': 'Page collections' });
+  const favorites = (state.pageFavorites || []).filter((path) => pageExistsInIndex(path));
+
+  sidebar.appendChild(h('div', { class: 'pages-section-title' },
+    h('span', { text: 'Favorites' }),
+    h('span', { class: 'collection-count', text: String(favorites.length) })));
+  if (!favorites.length) {
+    sidebar.appendChild(h('div', { class: 'hint', style: { padding: '2px 6px 6px' }, text: 'Star a page to keep it here.' }));
+  } else {
+    for (const path of favorites) {
+      const page = pageByPath(path);
+      if (!page) continue;
+      sidebar.appendChild(h('button', {
+        class: 'fav-page' + (state.pagesSelected === path ? ' is-active' : ''),
+        type: 'button', title: path,
+        on: { click: () => openPage(path) }
+      },
+        h('span', { class: 'page-star is-on', 'aria-hidden': 'true', text: '★' }),
+        h('span', { class: 'truncate', text: page.title })));
+    }
+  }
+
+  sidebar.appendChild(h('div', { class: 'pages-section-title', style: { marginTop: '6px' } },
+    h('span', { text: 'Collections' })));
+  const selectedPage = state.pagesSelected ? pageByPath(state.pagesSelected) : null;
+  const selectedCollection = selectedPage ? pageCollectionId(selectedPage) : null;
+  for (const collection of index.collections || []) {
+    const containsSelected = collection.id === selectedCollection;
+    const stored = state.pagesCollapsed[collection.id];
+    const collapsed = stored === undefined ? !containsSelected : Boolean(stored);
+    const label = collection.sub ? collection.title + ' / ' + collection.sub : collection.title;
+    const wrapper = h('div', { class: 'tree-collection' });
+    wrapper.appendChild(h('button', {
+      class: 'tree-toggle', type: 'button',
+      'aria-expanded': collapsed ? 'false' : 'true',
+      title: collection.id,
+      on: {
+        click: () => {
+          state.pagesCollapsed[collection.id] = !collapsed;
+          renderView();
+        }
+      }
+    },
+      h('span', { class: 'tree-caret', text: collapsed ? '▸' : '▾' }),
+      h('span', { class: 'truncate', text: label }),
+      h('span', { class: 'collection-count', text: String(collection.pages.length) })));
+    if (!collapsed) {
+      const pagesHost = h('div', { class: 'tree-pages' });
+      for (const entry of collection.pages) {
+        pagesHost.appendChild(h('button', {
+          class: 'tree-page' + (state.pagesSelected === entry.path ? ' is-active' : ''),
+          type: 'button', title: entry.path,
+          on: { click: () => openPage(entry.path) }
+        },
+          h('span', { class: 'truncate', text: entry.title }),
+          entry.favorite ? h('span', { class: 'page-star is-on', 'aria-hidden': 'true', text: '★' }) : null));
+      }
+      wrapper.appendChild(pagesHost);
+    }
+    sidebar.appendChild(wrapper);
+  }
+  return sidebar;
+}
+
+function renderPagesList(searching, searchQuery) {
+  const pane = h('section', { class: 'pages-listpane', 'aria-label': 'Page list' });
+  const index = state.pages;
+
+  if (searching) {
+    pane.appendChild(h('div', { class: 'pages-list-head' },
+      h('span', { class: 'pages-list-title', text: 'Search results' }),
+      h('span', { class: 'collection-count', text: state.pagesResults.length + ' hits' })));
+    if (state.pagesSearching) {
+      pane.appendChild(h('div', { class: 'reader-loading' }, loadingRow('Searching…')));
+      return pane;
+    }
+    if (state.pagesSearchError) {
+      pane.appendChild(h('div', { class: 'reader-loading' }, errorCallout(state.pagesSearchError)));
+      return pane;
+    }
+    if (!state.pagesResults.length) {
+      pane.appendChild(h('div', { class: 'pages-empty', text: 'No page matches "' + searchQuery + '".' }));
+      return pane;
+    }
+    for (const result of state.pagesResults) {
+      pane.appendChild(h('button', {
+        class: 'page-list-item' + (state.pagesSelected === result.path ? ' is-active' : ''),
+        type: 'button', title: result.path,
+        on: { click: () => openPage(result.path) }
+      },
+        h('div', { class: 'page-list-title-row' },
+          h('span', { class: 'page-list-name', text: result.title }),
+          h('span', { class: 'page-result-score', text: 'score ' + result.score }),
+          result.favorite ? h('span', { class: 'page-star is-on', 'aria-hidden': 'true', text: '★' }) : null),
+        h('div', { class: 'page-list-path', text: result.path }),
+        result.snippet ? h('div', { class: 'page-result-snippet', text: result.snippet }) : null));
+    }
+    return pane;
+  }
+
+  const selectedPage = state.pagesSelected ? pageByPath(state.pagesSelected) : null;
+  const collectionId = selectedPage ? pageCollectionId(selectedPage) : (index.collections[0] || {}).id;
+  const collection = (index.collections || []).find((entry) => entry.id === collectionId) || index.collections[0];
+  if (!collection) {
+    pane.appendChild(h('div', { class: 'pages-empty', text: 'No collection selected.' }));
+    return pane;
+  }
+  pane.appendChild(h('div', { class: 'pages-list-head' },
+    h('span', { class: 'pages-list-title', text: collection.title + (collection.sub ? ' / ' + collection.sub : '') }),
+    h('span', { class: 'collection-count', text: collection.pages.length + ' pages' })));
+  for (const entry of collection.pages) {
+    pane.appendChild(h('button', {
+      class: 'page-list-item' + (state.pagesSelected === entry.path ? ' is-active' : ''),
+      type: 'button', title: entry.path,
+      on: { click: () => openPage(entry.path) }
+    },
+      h('div', { class: 'page-list-title-row' },
+        h('span', { class: 'page-list-name', text: entry.title }),
+        entry.favorite ? h('span', { class: 'page-star is-on', 'aria-hidden': 'true', text: '★' }) : null),
+      h('div', { class: 'page-list-path', text: entry.path })));
+  }
+  return pane;
+}
+
+function renderPagesReader() {
+  const pane = h('article', { class: 'pages-reader', 'aria-label': 'Page reader' });
+  const path = state.pagesSelected;
+
+  if (!path) {
+    pane.appendChild(h('div', { class: 'pages-empty', text: 'Select a page from the list.' }));
+    return pane;
+  }
+  if (state.pageLoading && !state.pageDetail) {
+    pane.appendChild(h('div', { class: 'reader-loading' }, loadingRow('Loading the page…')));
+    return pane;
+  }
+  if (state.pageError && !state.pageDetail) {
+    pane.appendChild(h('div', { class: 'reader-loading' }, errorCallout(state.pageError)));
+    pane.appendChild(h('div', { style: { padding: '0 16px 16px' } },
+      h('button', { class: 'btn', type: 'button', text: 'Retry', on: { click: () => loadPage(path, state.pagesRef).then(() => renderView()) } })));
+    return pane;
+  }
+  const page = state.pageDetail;
+  if (!page) {
+    pane.appendChild(h('div', { class: 'pages-empty', text: 'This page could not be loaded.' }));
+    return pane;
+  }
+
+  const favorite = (state.pageFavorites || []).indexOf(page.path) !== -1;
+  pane.appendChild(h('div', { class: 'reader-head' },
+    h('div', { class: 'reader-title-row' },
+      h('h2', { class: 'reader-title', text: page.title || page.path }),
+      h('button', {
+        class: 'page-star' + (favorite ? ' is-on' : ''),
+        type: 'button',
+        disabled: !canWrite(),
+        title: canWrite() ? (favorite ? 'Remove from favorites' : 'Add to favorites') : 'The dashboard is read-only',
+        'aria-label': favorite ? 'Remove from favorites' : 'Add to favorites',
+        text: favorite ? '★' : '☆',
+        on: { click: () => togglePageFavorite(page.path) }
+      })),
+    h('div', { class: 'reader-meta' },
+      h('span', { class: 'reader-path', text: page.path }),
+      pageKindChip(page.kind),
+      h('span', { class: 'chip', text: page.collection_title + (page.subcollection ? ' / ' + page.subcollection : '') }),
+      h('span', { text: page.words + ' words' }),
+      h('span', { text: 'updated ' + relTime(page.updated) }),
+      page.favorite ? h('span', { class: 'badge bg-amber st-amber', text: 'favorite' }) : null)));
+
+  if (page.ref) {
+    pane.appendChild(h('div', { class: 'revision-banner' },
+      h('span', { text: 'Viewing old revision ' + page.ref + ' — the working copy may differ.' }),
+      h('button', {
+        class: 'btn btn-sm', type: 'button', text: 'Back to current',
+        on: { click: () => openPage(page.path, null) }
+      })));
+  }
+
+  const body = h('div', { class: 'reader-body' });
+  const content = h('div', { class: 'md' }, mdFragment(page.text || '', { linkBase: page.path }));
+  content.addEventListener('click', (event) => {
+    const target = event.target && event.target.closest ? event.target.closest('a[data-page-link]') : null;
+    if (!target) return;
+    event.preventDefault();
+    openPage(target.getAttribute('data-page-link'));
+  });
+  body.appendChild(content);
+
+  /* History */
+  const history = page.history || [];
+  const historySection = h('section', { class: 'reader-section' },
+    h('div', { class: 'reader-section-title' },
+      h('span', { text: 'History' }),
+      page.ref ? h('button', {
+        class: 'btn btn-sm btn-ghost', type: 'button', text: 'Current',
+        on: { click: () => openPage(page.path, null) }
+      }) : h('span', { class: 'hint', text: history.length + ' revision(s)' })));
+  if (!history.length) {
+    historySection.appendChild(h('div', { class: 'hint', text: 'No git history for this page (not committed yet).' }));
+  } else {
+    for (const entry of history) {
+      historySection.appendChild(h('button', {
+        class: 'history-row' + (page.ref === entry.hash ? ' is-current' : ''),
+        type: 'button', title: entry.subject,
+        on: { click: () => openPage(page.path, entry.hash) }
+      },
+        h('span', { class: 'history-hash', text: entry.hash }),
+        h('span', { class: 'history-date', text: entry.date }),
+        h('span', { class: 'truncate', style: { flex: '1 1 auto' }, text: entry.subject }),
+        h('span', { class: 'hint', text: entry.author })));
+    }
+  }
+  body.appendChild(historySection);
+
+  /* Backlinks */
+  const backlinks = page.backlinks || [];
+  const backlinkSection = h('section', { class: 'reader-section' },
+    h('div', { class: 'reader-section-title' },
+      h('span', { text: 'Backlinks' }),
+      h('span', { class: 'hint', text: backlinks.length + ' reference(s)' })));
+  if (!backlinks.length) {
+    backlinkSection.appendChild(h('div', { class: 'hint', text: 'No page or task references this page yet.' }));
+  } else {
+    const chips = h('div', { class: 'backlink-chips' });
+    for (const link of backlinks) {
+      if (link.kind === 'task') {
+        chips.appendChild(h('button', {
+          class: 'chip chip-link req-task-chip', type: 'button',
+          title: 'Open task ' + link.id,
+          on: { click: () => openTask(link.id) }
+        },
+          statusDot(link.status),
+          h('span', { class: 'mono', text: link.id })));
+      } else {
+        chips.appendChild(h('button', {
+          class: 'chip chip-link', type: 'button', title: link.path,
+          on: { click: () => openPage(link.path) }
+        }, link.title || link.path));
+      }
+    }
+    backlinkSection.appendChild(chips);
+  }
+  body.appendChild(backlinkSection);
+
+  pane.appendChild(body);
+  return pane;
+}
+
+/* =========================================================================
+   2.3 — Intake: proposals, accept/reject and task creation
+   ========================================================================= */
+
+function intakeFilterLabel(status) {
+  return status === 'all' ? 'All' : status;
+}
+
+function filteredIntakeEntries() {
+  const entries = intakeEntries();
+  const filter = state.intakeFilter || 'proposed';
+  return filter === 'all' ? entries : entries.filter((entry) => entry.status === filter);
+}
+
+function renderIntake() {
+  const view = h('div', { class: 'intake' });
+  dom.view.appendChild(view);
+  const counts = intakeCounts();
+  const total = state.intake ? state.intake.total : 0;
+
+  view.appendChild(h('div', { class: 'view-head' },
+    h('div', {},
+      h('h1', { class: 'view-title', text: 'Intake' }),
+      h('p', { class: 'view-sub', text: total + ' proposal(s) · ' + counts.proposed + ' proposed · ' + counts.accepted + ' accepted · ' + counts.rejected + ' rejected' })),
+    h('div', { class: 'view-actions' },
+      canWrite() ? h('button', {
+        class: 'btn btn-sm btn-primary', type: 'button', text: 'New proposal',
+        on: { click: () => openNewIntakeModal() }
+      }) : null,
+      h('button', {
+        class: 'btn btn-sm', type: 'button', text: 'Refresh',
+        on: { click: () => loadIntake().then(() => renderView()) }
+      }))));
+
+  if (!state.intakeLoaded && !state.intake) {
+    if (state.intakeError) {
+      view.appendChild(errorCallout(state.intakeError));
+      view.appendChild(h('div', { style: { marginTop: '10px' } },
+        h('button', { class: 'btn', type: 'button', text: 'Retry', on: { click: () => loadIntake().then(() => renderView()) } })));
+    } else {
+      view.appendChild(loadingRow('Reading the intake…'));
+    }
+    return;
+  }
+  if (state.intakeError) view.appendChild(errorCallout(state.intakeError));
+
+  view.appendChild(h('div', { class: 'tile-row' },
+    statTile('Proposed', counts.proposed, { tone: 'tile-amber', sub: 'waiting for a decision', onClick: () => { state.intakeFilter = 'proposed'; renderView(); } }),
+    statTile('Accepted', counts.accepted, { tone: 'tile-green', sub: 'became tasks', onClick: () => { state.intakeFilter = 'accepted'; renderView(); } }),
+    statTile('Rejected', counts.rejected, { tone: 'tile-red', sub: 'with a reason', onClick: () => { state.intakeFilter = 'rejected'; renderView(); } }),
+    statTile('Total', total, { tone: 'tile-accent', sub: 'all proposals', onClick: () => { state.intakeFilter = 'all'; renderView(); } })));
+
+  const chips = h('div', { class: 'seg-chips', style: { marginBottom: '12px' } });
+  for (const status of ['proposed', 'accepted', 'rejected', 'all']) {
+    const amount = status === 'all' ? total : counts[status] || 0;
+    chips.appendChild(h('button', {
+      class: 'seg-chip', type: 'button',
+      'aria-pressed': (state.intakeFilter || 'proposed') === status ? 'true' : 'false',
+      on: { click: () => { state.intakeFilter = status; renderView(); } }
+    }, capitalize(status), h('span', { class: 'faint', text: String(amount) })));
+  }
+  view.appendChild(chips);
+
+  const entries = filteredIntakeEntries();
+  if (!entries.length) {
+    view.appendChild(emptyState(
+      state.intakeFilter === 'proposed' ? 'No proposals waiting' : 'No ' + (state.intakeFilter || 'proposed') + ' proposals',
+      state.intakeFilter === 'proposed'
+        ? 'Ideas, issues and requests land here first. Accepting one creates a pending task with a template.'
+        : 'Switch the filter to see other proposals.',
+      canWrite() && state.intakeFilter === 'proposed'
+        ? h('button', { class: 'btn btn-primary', type: 'button', text: 'New proposal', on: { click: () => openNewIntakeModal() } })
+        : null));
+    return;
+  }
+
+  const list = h('div', { class: 'intake-list' });
+  for (const entry of entries) list.appendChild(renderIntakeEntry(entry));
+  view.appendChild(list);
+}
+
+function renderIntakeEntry(entry) {
+  const card = h('section', { class: 'card-panel intake-card', id: 'intake-' + entry.id });
+  card.appendChild(h('div', { class: 'intake-head' },
+    h('div', { class: 'intake-main' },
+      h('div', { class: 'intake-title-row' },
+        h('span', { class: 'intake-id', text: entry.id }),
+        h('span', { class: 'intake-title', text: entry.title })),
+      h('div', { class: 'intake-meta' },
+        h('span', { class: 'chip', title: 'Created ' + entry.created, text: relTime(entry.created) }),
+        h('span', { class: 'chip', text: 'by ' + (entry.created_by || '—') }),
+        h('span', { class: 'chip', text: 'source: ' + (entry.source || '—') }),
+        entry.links && entry.links.length ? h('span', { class: 'chip', text: entry.links.length + ' link(s)' }) : null)),
+    h('div', { class: 'row-wrap' },
+      intakeKindChip(entry.kind),
+      intakePriorityChip(entry.priority),
+      intakeStatusPill(entry.status))));
+
+  if (entry.description) card.appendChild(h('div', { class: 'intake-desc', text: entry.description }));
+
+  if (entry.task) {
+    card.appendChild(h('div', { class: 'intake-meta' },
+      h('span', { class: 'hint', text: 'accepted as task' }),
+      taskChip(entry.task)));
+  }
+  if (entry.decision) {
+    card.appendChild(h('div', { class: 'decision-box' },
+      entry.status === 'rejected' ? 'Rejected' : 'Accepted',
+      ' by ' + (entry.decision.by || '—') + ' · ' + relTime(entry.decision.at) +
+      (entry.decision.note ? ' — ' + entry.decision.note : '')));
+  }
+  if (entry.links && entry.links.length) {
+    const links = h('div', { class: 'intake-links' });
+    for (const link of entry.links) {
+      if (/\.md$/i.test(link) && feature('pages')) {
+        links.appendChild(h('button', {
+          class: 'chip chip-link', type: 'button', title: 'Open page ' + link,
+          on: { click: () => openPage(link) }
+        }, h('span', { class: 'mono', text: link })));
+      } else if (/^https?:\/\//i.test(link)) {
+        links.appendChild(h('a', { class: 'chip', href: link, rel: 'noopener noreferrer', text: link }));
+      } else {
+        links.appendChild(h('span', { class: 'chip mono', title: link, text: link }));
+      }
+    }
+    card.appendChild(links);
+  }
+
+  const actions = h('div', { class: 'intake-actions' },
+    h('button', {
+      class: 'btn btn-sm', type: 'button', text: entry.status === 'proposed' ? 'Review proposal' : 'Details',
+      on: { click: () => openIntakeDetail(entry.id) }
+    }));
+  if (entry.status === 'proposed' && canWrite()) {
+    actions.appendChild(h('button', {
+      class: 'btn btn-sm btn-primary', type: 'button', text: 'Accept',
+      on: { click: () => openAcceptModal(entry) }
+    }));
+    actions.appendChild(h('button', {
+      class: 'btn btn-sm btn-danger', type: 'button', text: 'Reject',
+      on: { click: () => openRejectModal(entry) }
+    }));
+  }
+  card.appendChild(actions);
+  return card;
+}
+
+/* ---------- new proposal ---------- */
+
+function openNewIntakeModal() {
+  if (!canWrite()) return;
+  const titleInput = h('input', { class: 'input', type: 'text', placeholder: 'Short, actionable title', 'data-autofocus': '1' });
+  const descriptionArea = h('textarea', { class: 'textarea', rows: '3', placeholder: 'What is it, and why does it matter?' });
+  const kindSelect = h('select', { class: 'select', 'aria-label': 'Kind' },
+    ['idea', 'issue', 'request', 'question'].map((kind) => h('option', { value: kind, text: kind })));
+  const prioritySelect = h('select', { class: 'select', 'aria-label': 'Priority' },
+    ['low', 'medium', 'high'].map((priority) => h('option', { value: priority, text: priority })));
+  prioritySelect.value = 'medium';
+  const linksArea = h('textarea', { class: 'textarea', rows: '2', placeholder: 'One project path or URL per line (optional)' });
+  const errorBox = h('div');
+
+  const body = h('div', { class: 'plan-editor' }, errorBox,
+    h('div', { class: 'intake-form-grid' },
+      h('label', { class: 'field span-2' },
+        h('span', { class: 'field-label', text: 'Title' }), titleInput,
+        h('span', { class: 'field-help', text: '3–160 characters.' })),
+      h('label', { class: 'field' }, h('span', { class: 'field-label', text: 'Kind' }), kindSelect),
+      h('label', { class: 'field' }, h('span', { class: 'field-label', text: 'Priority' }), prioritySelect),
+      h('label', { class: 'field span-2' },
+        h('span', { class: 'field-label', text: 'Description' }), descriptionArea),
+      h('label', { class: 'field span-2' },
+        h('span', { class: 'field-label', text: 'Links' }), linksArea,
+        h('span', { class: 'field-help', text: 'Optional — paths like docs/quality.md or URLs.' }))));
+
+  openModal({
+    title: 'New intake proposal',
+    body: body,
+    footer: [
+      h('button', { class: 'btn', type: 'button', text: 'Cancel', on: { click: () => closeModal() } }),
+      h('button', {
+        class: 'btn btn-primary', type: 'button', text: 'Create proposal',
+        on: {
+          click: async () => {
+            const title = titleInput.value.trim();
+            if (title.length < 3 || title.length > 160) {
+              errorBox.replaceChildren(errorCallout(new ApiError('The title must be 3–160 characters.', 400, null)));
+              return;
+            }
+            try {
+              await api('/api/intake', {
+                method: 'POST',
+                body: {
+                  title: title,
+                  description: descriptionArea.value.trim(),
+                  kind: kindSelect.value,
+                  priority: prioritySelect.value,
+                  links: linksArea.value.split('\n').map((line) => line.trim()).filter(Boolean),
+                  source: 'web'
+                }
+              });
+              closeModal();
+              await loadIntake();
+              state.intakeFilter = 'proposed';
+              renderView();
+              toast('Proposal created', 'ok');
+            } catch (err) {
+              errorBox.replaceChildren(errorCallout(err));
+            }
+          }
+        }
+      })
+    ]
+  });
+  focusSoon(titleInput);
+}
+
+/* ---------- detail / edit ---------- */
+
+function openIntakeDetail(entryId) {
+  const entry = intakeEntries().find((item) => item.id === entryId);
+  if (!entry) { toast('Unknown intake entry', 'error'); return; }
+  const proposed = entry.status === 'proposed';
+  const editable = proposed && canWrite();
+  const errorBox = h('div');
+  const body = h('div', { class: 'plan-editor' }, errorBox);
+
+  let titleInput = null;
+  let descriptionArea = null;
+  let kindSelect = null;
+  let prioritySelect = null;
+  let linksArea = null;
+
+  if (editable) {
+    titleInput = h('input', { class: 'input', type: 'text', value: entry.title, 'data-autofocus': '1' });
+    descriptionArea = h('textarea', { class: 'textarea', rows: '4' });
+    descriptionArea.value = entry.description || '';
+    kindSelect = h('select', { class: 'select', 'aria-label': 'Kind' },
+      ['idea', 'issue', 'request', 'question'].map((kind) => {
+        const option = h('option', { value: kind, text: kind });
+        if (entry.kind === kind) option.selected = true;
+        return option;
+      }));
+    kindSelect.value = entry.kind || 'idea';
+    prioritySelect = h('select', { class: 'select', 'aria-label': 'Priority' },
+      ['low', 'medium', 'high'].map((priority) => {
+        const option = h('option', { value: priority, text: priority });
+        if (entry.priority === priority) option.selected = true;
+        return option;
+      }));
+    prioritySelect.value = entry.priority || 'medium';
+    linksArea = h('textarea', { class: 'textarea', rows: '2', placeholder: 'One link per line' });
+    linksArea.value = (entry.links || []).join('\n');
+    body.appendChild(h('div', { class: 'intake-form-grid' },
+      h('label', { class: 'field span-2' }, h('span', { class: 'field-label', text: 'Title' }), titleInput),
+      h('label', { class: 'field' }, h('span', { class: 'field-label', text: 'Kind' }), kindSelect),
+      h('label', { class: 'field' }, h('span', { class: 'field-label', text: 'Priority' }), prioritySelect),
+      h('label', { class: 'field span-2' }, h('span', { class: 'field-label', text: 'Description' }), descriptionArea),
+      h('label', { class: 'field span-2' }, h('span', { class: 'field-label', text: 'Links' }), linksArea)));
+  } else {
+    body.appendChild(h('div', { class: 'row-wrap' },
+      h('span', { class: 'intake-id', text: entry.id }),
+      intakeStatusPill(entry.status),
+      intakeKindChip(entry.kind),
+      intakePriorityChip(entry.priority)));
+    body.appendChild(h('div', { class: 'intake-title', text: entry.title }));
+    if (entry.description) body.appendChild(h('div', { class: 'intake-desc', style: { WebkitLineClamp: 'unset' }, text: entry.description }));
+    body.appendChild(h('div', { class: 'intake-meta' },
+      h('span', { text: 'created ' + relTime(entry.created) + ' by ' + (entry.created_by || '—') }),
+      h('span', { text: 'source: ' + (entry.source || '—') })));
+    if (entry.links && entry.links.length) {
+      const links = h('div', { class: 'intake-links' });
+      for (const link of entry.links) links.appendChild(h('span', { class: 'chip mono', text: link }));
+      body.appendChild(links);
+    }
+    if (entry.task) {
+      body.appendChild(h('div', { class: 'row-wrap' }, h('span', { class: 'hint', text: 'Created task:' }), taskChip(entry.task)));
+    }
+    if (entry.decision) {
+      body.appendChild(h('div', { class: 'decision-box' },
+        h('div', {}, entry.status === 'rejected' ? 'Rejected by ' : 'Accepted by ', h('strong', { text: entry.decision.by || '—' }),
+          ' · ' + relTime(entry.decision.at)),
+        entry.decision.note ? h('div', { text: entry.decision.note }) : null));
+    }
+  }
+
+  const footer = [];
+  footer.push(h('button', { class: 'btn', type: 'button', text: 'Close', on: { click: () => closeModal() } }));
+  if (editable) {
+    footer.push(h('button', {
+      class: 'btn', type: 'button', text: 'Save changes',
+      on: {
+        click: async () => {
+          const title = titleInput.value.trim();
+          if (title.length < 3 || title.length > 160) {
+            errorBox.replaceChildren(errorCallout(new ApiError('The title must be 3–160 characters.', 400, null)));
+            return;
+          }
+          try {
+            await api('/api/intake/' + encodeURIComponent(entry.id), {
+              method: 'PATCH',
+              body: {
+                title: title,
+                description: descriptionArea.value.trim(),
+                kind: kindSelect.value,
+                priority: prioritySelect.value,
+                links: linksArea.value.split('\n').map((line) => line.trim()).filter(Boolean)
+              }
+            });
+            closeModal();
+            await loadIntake();
+            renderView();
+            toast('Proposal saved', 'ok');
+          } catch (err) {
+            errorBox.replaceChildren(errorCallout(err));
+          }
+        }
+      }
+    }));
+    footer.push(h('button', {
+      class: 'btn btn-danger', type: 'button', text: 'Reject',
+      on: { click: () => { closeModal(); openRejectModal(entry); } }
+    }));
+    footer.push(h('button', {
+      class: 'btn btn-primary', type: 'button', text: 'Accept…',
+      on: { click: () => { closeModal(); openAcceptModal(entry); } }
+    }));
+  }
+  openModal({ title: 'Proposal ' + entry.id, body: body, footer: footer });
+}
+
+/* ---------- accept ---------- */
+
+async function openAcceptModal(entry) {
+  if (!canWrite()) return;
+  if (!state.templatesLoaded) await loadTaskTemplates();
+  const stages = (state.snapshot && state.snapshot.stages) || [];
+  if (!stages.length) { toast('No stages on the board', 'warn'); return; }
+  const errorBox = h('div');
+
+  const templateSelect = h('select', { class: 'select', 'aria-label': 'Task template' },
+    h('option', { value: '', text: 'No template' }),
+    (state.templates || []).map((template) => h('option', { value: template.id, text: (template.name || template.id) + ' (' + template.id + ')' })));
+  const stageSelect = h('select', { class: 'select', 'aria-label': 'Stage' },
+    stages.map((stage) => h('option', { value: stage.id, text: '#' + stage.index + ' ' + (stage.title || stage.id) })));
+  stageSelect.value = stages[0].id;
+  const idInput = h('input', { class: 'input', type: 'text', placeholder: 'auto', 'aria-label': 'Task id' });
+  const ownerInput = h('input', { class: 'input', type: 'text', placeholder: 'optional owner', 'aria-label': 'Owner' });
+  const packageInput = h('input', { class: 'input', type: 'text', placeholder: 'optional package path', 'aria-label': 'Package' });
+  const complexityInput = h('input', { class: 'input', type: 'number', min: '1', max: '10', placeholder: '2', 'aria-label': 'Complexity' });
+  const estimateInput = h('input', { class: 'input', type: 'number', min: '0', max: '10000', step: '0.5', placeholder: 'hours', 'aria-label': 'Estimate hours' });
+  const scopeArea = h('textarea', { class: 'textarea', rows: '3', placeholder: 'One write path per line' });
+  const scopeReadArea = h('textarea', { class: 'textarea', rows: '2', placeholder: 'One read path per line (optional)' });
+  const acceptanceArea = h('textarea', { class: 'textarea', rows: '2', placeholder: 'One criterion per line' });
+  const gatesInput = h('input', { class: 'input', type: 'text', placeholder: 'layout, tests' });
+  const noteInput = h('input', { class: 'input', type: 'text', placeholder: 'Optional decision note' });
+  const labelsHost = h('div', { class: 'label-select' });
+  const labels = settingsLabels();
+  const grouped = new Map();
+  for (const label of labels) {
+    const group = settingsGroups().indexOf(label.group) !== -1 ? label.group : 'custom';
+    if (!grouped.has(group)) grouped.set(group, []);
+    grouped.get(group).push(label);
+  }
+  for (const group of settingsGroups()) {
+    if (!grouped.has(group)) continue;
+    labelsHost.appendChild(h('span', { class: 'props-label-group', text: group }));
+    for (const label of grouped.get(group)) {
+      labelsHost.appendChild(h('label', { class: 'checkbox' },
+        h('input', { type: 'checkbox', value: label.id, 'data-accept-label': label.id }),
+        labelChip(label)));
+    }
+  }
+  if (!labels.length) labelsHost.appendChild(h('span', { class: 'hint', text: 'No labels defined.' }));
+  const preview = h('div', { class: 'template-preview', text: 'Pick a template to pre-fill scope, acceptance, gates, effort and labels.' });
+
+  const applyTemplate = () => {
+    const template = templateById(templateSelect.value);
+    if (!template) {
+      preview.textContent = 'Pick a template to pre-fill scope, acceptance, gates, effort and labels.';
+      return;
+    }
+    if (template.stage && stages.some((stage) => stage.id === template.stage)) stageSelect.value = template.stage;
+    if (template.owner) ownerInput.value = template.owner;
+    if (template.package) packageInput.value = template.package;
+    if (template.complexity !== null && template.complexity !== undefined) complexityInput.value = String(template.complexity);
+    if (template.estimate_hours !== null && template.estimate_hours !== undefined) estimateInput.value = String(template.estimate_hours);
+    scopeArea.value = (template.scope_write || []).join('\n');
+    scopeReadArea.value = (template.scope_read || []).join('\n');
+    acceptanceArea.value = (template.acceptance || []).join('\n');
+    gatesInput.value = (template.gates || []).join(', ');
+    for (const box of labelsHost.querySelectorAll('[data-accept-label]')) {
+      box.checked = (template.labels || []).indexOf(box.getAttribute('data-accept-label')) !== -1;
+    }
+    preview.replaceChildren(templateChips(template));
+  };
+  templateSelect.addEventListener('change', applyTemplate);
+
+  const body = h('div', { class: 'accept-structure' },
+    errorBox,
+    h('p', { class: 'hint', text: 'Accepting creates a pending task on the board from "' + entry.title + '". Stage, write scope, acceptance and gates are required.' }),
+    h('div', { class: 'editor-template-bar' },
+      h('label', { class: 'field' }, h('span', { class: 'field-label', text: 'Template' }), templateSelect),
+      h('label', { class: 'field' }, h('span', { class: 'field-label', text: 'Stage' }), stageSelect)),
+    preview,
+    h('div', { class: 'intake-form-grid' },
+      h('label', { class: 'field' }, h('span', { class: 'field-label', text: 'Task id' }), idInput),
+      h('label', { class: 'field' }, h('span', { class: 'field-label', text: 'Owner' }), ownerInput),
+      h('label', { class: 'field' }, h('span', { class: 'field-label', text: 'Package' }), packageInput),
+      h('label', { class: 'field' }, h('span', { class: 'field-label', text: 'Complexity' }), complexityInput),
+      h('label', { class: 'field' }, h('span', { class: 'field-label', text: 'Estimate (hours)' }), estimateInput),
+      h('label', { class: 'field' }, h('span', { class: 'field-label', text: 'Gates' }), gatesInput),
+      h('label', { class: 'field span-2' }, h('span', { class: 'field-label', text: 'Write scope' }), scopeArea),
+      h('label', { class: 'field span-2' }, h('span', { class: 'field-label', text: 'Read scope' }), scopeReadArea),
+      h('label', { class: 'field span-2' }, h('span', { class: 'field-label', text: 'Acceptance' }), acceptanceArea),
+      h('label', { class: 'field span-2' }, h('span', { class: 'field-label', text: 'Labels' }), labelsHost),
+      h('label', { class: 'field span-2' }, h('span', { class: 'field-label', text: 'Decision note' }), noteInput)));
+
+  openModal({
+    title: 'Accept ' + entry.id,
+    body: body,
+    footer: [
+      h('button', { class: 'btn', type: 'button', text: 'Cancel', on: { click: () => closeModal() } }),
+      h('button', {
+        class: 'btn btn-primary', type: 'button', text: 'Accept and create task',
+        on: {
+          click: async () => {
+            const task = {};
+            const id = idInput.value.trim();
+            if (id) task.id = id;
+            if (ownerInput.value.trim()) task.owner = ownerInput.value.trim();
+            if (packageInput.value.trim()) task.package = packageInput.value.trim();
+            if (complexityInput.value) task.complexity = Number(complexityInput.value);
+            if (estimateInput.value) task.estimate_hours = Number(estimateInput.value);
+            const scope = scopeArea.value.split('\n').map((line) => line.trim()).filter(Boolean);
+            if (scope.length) task.scope_write = scope;
+            const readScope = scopeReadArea.value.split('\n').map((line) => line.trim()).filter(Boolean);
+            if (readScope.length) task.scope_read = readScope;
+            const acceptance = acceptanceArea.value.split('\n').map((line) => line.trim()).filter(Boolean);
+            if (acceptance.length) task.acceptance = acceptance;
+            const gates = gatesInput.value.split(/[,\n]/).map((part) => part.trim()).filter(Boolean);
+            if (gates.length) task.gates = gates;
+            const selectedLabels = [];
+            for (const box of labelsHost.querySelectorAll('[data-accept-label]')) {
+              if (box.checked) selectedLabels.push(box.getAttribute('data-accept-label'));
+            }
+            if (selectedLabels.length) task.labels = selectedLabels;
+            /* the backend reads the structure from task; stage also goes top-level for compatibility */
+            task.stage = stageSelect.value;
+            if (!task.title) task.title = entry.title;
+            if (!task.goal) task.goal = entry.description || entry.title;
+            const payload = {
+              stage: stageSelect.value,
+              template: templateSelect.value || null,
+              note: noteInput.value.trim(),
+              by: 'owner',
+              task: task
+            };
+            try {
+              const result = await api('/api/intake/' + encodeURIComponent(entry.id) + '/accept', { method: 'POST', body: payload });
+              closeModal();
+              await Promise.all([loadIntake(), loadSnapshot()]);
+              renderView();
+              toast('Created task ' + (result.task && result.task.id ? result.task.id : ''), 'ok');
+              if (result.task && result.task.id) openTask(result.task.id);
+            } catch (err) {
+              errorBox.replaceChildren(errorCallout(err));
+            }
+          }
+        }
+      })
+    ]
+  });
+}
+
+/* ---------- reject ---------- */
+
+function openRejectModal(entry) {
+  if (!canWrite()) return;
+  const errorBox = h('div');
+  const noteArea = h('textarea', { class: 'textarea', rows: '3', placeholder: 'Why is this rejected? (required)', 'data-autofocus': '1' });
+  const body = h('div', { class: 'col', style: { gap: '10px' } },
+    errorBox,
+    h('p', { class: 'hint', text: 'Rejecting "' + entry.title + '" keeps the reason in the intake history.' }),
+    h('label', { class: 'field' }, h('span', { class: 'field-label', text: 'Reason' }), noteArea));
+  openModal({
+    title: 'Reject ' + entry.id,
+    body: body,
+    footer: [
+      h('button', { class: 'btn', type: 'button', text: 'Cancel', on: { click: () => closeModal() } }),
+      h('button', {
+        class: 'btn btn-danger', type: 'button', text: 'Reject proposal',
+        on: {
+          click: async () => {
+            if (!noteArea.value.trim()) {
+              errorBox.replaceChildren(errorCallout(new ApiError('A rejection needs a reason.', 400, null)));
+              return;
+            }
+            try {
+              await api('/api/intake/' + encodeURIComponent(entry.id) + '/reject', {
+                method: 'POST',
+                body: { note: noteArea.value.trim(), by: 'owner' }
+              });
+              closeModal();
+              await loadIntake();
+              renderView();
+              toast('Proposal rejected', 'ok');
+            } catch (err) {
+              errorBox.replaceChildren(errorCallout(err));
+            }
+          }
+        }
+      })
+    ]
+  });
+  focusSoon(noteArea);
+}
+
+/* =========================================================================
+   2.3 — Task templates: plan editor, save-as-template and settings list
+   ========================================================================= */
+
+function buildOwnerInput(value) {
+  return h('input', { class: 'input', type: 'text', placeholder: 'optional owner', value: value || '' });
+}
+
+function labelCheckboxHost(task, templateLabels) {
+  const host = h('div', { class: 'editor-labels', 'aria-label': 'Labels' });
+  const selected = (task && Array.isArray(task.labels)) ? task.labels.slice()
+    : (Array.isArray(templateLabels) ? templateLabels.slice() : []);
+  const labels = settingsLabels();
+  const groups = settingsGroups();
+  if (!labels.length) host.appendChild(h('span', { class: 'hint', text: 'No labels defined in Settings.' }));
+  for (const group of groups) {
+    const inGroup = labels.filter((label) => (groups.indexOf(label.group) !== -1 ? label.group : 'custom') === group);
+    if (!inGroup.length) continue;
+    host.appendChild(h('span', { class: 'props-label-group', text: group }));
+    for (const label of inGroup) {
+      host.appendChild(h('label', { class: 'checkbox' },
+        h('input', { type: 'checkbox', value: label.id, checked: selected.indexOf(label.id) !== -1 }),
+        labelChip(label)));
+    }
+  }
+  return host;
+}
+
+
+
+/* ---------- save an existing task as a template ---------- */
+
+function openSaveTemplateModal(taskId) {
+  if (!canWrite()) return;
+  const task = taskById(taskId);
+  if (!task) { toast('Unknown task', 'error'); return; }
+  const idInput = h('input', {
+    class: 'input', type: 'text', placeholder: 'review-task',
+    value: taskId.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, ''), 'data-autofocus': '1'
+  });
+  const nameInput = h('input', { class: 'input', type: 'text', placeholder: 'Template name', value: 'From ' + taskId });
+  const errorBox = h('div');
+  const body = h('div', { class: 'plan-editor' }, errorBox,
+    h('p', { class: 'hint', text: 'Saves the task shape (scope, acceptance, gates, complexity, labels, estimate, package, owner) to templates/tasks/<id>.json.' }),
+    h('div', { class: 'form-grid' },
+      h('label', { class: 'field' },
+        h('span', { class: 'field-label', text: 'Template id' }), idInput,
+        h('span', { class: 'field-help', text: 'Lowercase letters, digits and dashes.' })),
+      h('label', { class: 'field' },
+        h('span', { class: 'field-label', text: 'Name' }), nameInput)));
+  openModal({
+    title: 'Save ' + taskId + ' as a template',
+    body: body,
+    footer: [
+      h('button', { class: 'btn', type: 'button', text: 'Cancel', on: { click: () => closeModal() } }),
+      h('button', {
+        class: 'btn btn-primary', type: 'button', text: 'Save template',
+        on: {
+          click: async () => {
+            const id = idInput.value.trim();
+            if (!/^[a-z][a-z0-9-]{0,40}$/.test(id)) {
+              errorBox.replaceChildren(errorCallout(new ApiError('Template id must be lowercase (a-z, 0-9, -).', 400, null)));
+              return;
+            }
+            try {
+              await api('/api/task-templates', {
+                method: 'POST',
+                body: { from_task: taskId, id: id, name: nameInput.value.trim() || undefined }
+              });
+              closeModal();
+              await loadTaskTemplates();
+              toast('Template ' + id + ' saved', 'ok');
+              renderView();
+            } catch (err) {
+              errorBox.replaceChildren(errorCallout(err));
+            }
+          }
+        }
+      })
+    ]
+  });
+  focusSoon(idInput);
+}
+
+/* ---------- Settings: task templates ---------- */
+
+function renderSettingsTemplates(ui, config) {
+  const templates = state.templates;
+  const card = h('section', { class: 'card-panel settings-section' },
+    h('div', { class: 'panel-head' },
+      h('div', { class: 'row' },
+        h('span', { class: 'panel-title', text: 'Task templates' }),
+        templates ? h('span', { class: 'pill', text: String(templates.length) }) : null),
+      h('span', { class: 'hint', text: 'Committed in templates/tasks/; used by the plan editor and intake accept.' })),
+    h('div', { class: 'panel-body' }));
+
+  const body = card.querySelector('.panel-body');
+  if (!state.templatesLoaded && !state.templatesError) {
+    body.appendChild(loadingRow('Loading templates…'));
+    return card;
+  }
+  if (state.templatesError) {
+    body.appendChild(errorCallout(state.templatesError));
+    return card;
+  }
+  if (!templates || !templates.length) {
+    body.appendChild(h('div', { class: 'hint', text: 'No templates yet. Save one from a task in the Plan view.' }));
+    return card;
+  }
+  for (const template of templates) {
+    body.appendChild(h('div', { class: 'template-row' },
+      h('div', { class: 'template-main' },
+        h('div', { class: 'template-name', text: template.name || template.id }),
+        h('div', { class: 'template-id', text: template.id })),
+      templateChips(template),
+      h('div', { class: 'template-actions' },
+        h('button', {
+          class: 'btn btn-sm btn-danger', type: 'button', text: 'Delete',
+          disabled: !canWrite(),
+          title: canWrite() ? 'DELETE /api/task-templates/' + template.id : 'The dashboard is read-only',
+          on: { click: () => deleteTemplate(template.id) }
+        }))));
+  }
+  return card;
+}
+
+async function deleteTemplate(templateId) {
+  if (!canWrite()) return;
+  const confirmed = await confirmDialog({
+    title: 'Delete template "' + templateId + '"?',
+    message: 'The template file is removed from templates/tasks/. Existing tasks are untouched.',
+    confirmLabel: 'Delete template'
+  });
+  if (!confirmed) return;
+  try {
+    await api('/api/task-templates/' + encodeURIComponent(templateId), { method: 'DELETE' });
+    await loadTaskTemplates();
+    toast('Template deleted', 'ok');
+    renderView();
+  } catch (err) {
+    toast('Delete failed: ' + describeError(err), 'error');
+  }
+}
+
+/* =========================================================================
    24. Approvals inbox
    ========================================================================= */
 
@@ -8300,6 +9624,12 @@ function renderPlanBoard() {
             (task.gates || []).length ? h('span', { class: 'chip', text: 'gates ' + task.gates.join(', ') }) : null)),
         h('div', { class: 'plan-task-actions' },
           h('button', {
+            class: 'btn btn-sm', type: 'button', text: 'Template',
+            disabled: !canWrite(),
+            title: canWrite() ? 'Save this task shape as a template' : 'The dashboard is read-only',
+            on: { click: () => openSaveTemplateModal(task.id) }
+          }),
+          h('button', {
             class: 'btn btn-sm', type: 'button', text: 'Edit',
             disabled: !canWrite() || !editable,
             title: editable ? 'PATCH /api/plan/tasks/' + task.id : 'A done task is reopened before its plan is edited',
@@ -8361,6 +9691,7 @@ function openTaskEditor(taskId) {
   if (!isCreate && !task) { toast('Unknown task ' + taskId, 'error'); return; }
   const stages = (state.snapshot && state.snapshot.stages) || [];
   const allTasks = ((state.snapshot && state.snapshot.tasks) || []).filter((item) => item.id !== taskId);
+  const templates = state.templates || [];
 
   const titleInput = h('input', { class: 'input', type: 'text', value: (task && task.title) || '', 'data-autofocus': '1' });
   const goalInput = h('textarea', { class: 'textarea', rows: '3' });
@@ -8378,7 +9709,14 @@ function openTaskEditor(taskId) {
   const groupInput = h('input', { class: 'input', type: 'text', placeholder: 'optional parallel group' });
   groupInput.value = (task && task.parallel_group) || '';
   const complexityInput = h('input', { class: 'input', type: 'number', min: '1', max: '10', value: String((task && task.complexity) || 2) });
+  const estimateInput = h('input', {
+    class: 'input', type: 'number', min: '0', max: '10000', step: '0.5',
+    placeholder: 'hours',
+    value: task && task.estimate_hours !== null && task.estimate_hours !== undefined ? String(task.estimate_hours) : ''
+  });
+  const ownerInput = h('input', { class: 'input', type: 'text', placeholder: 'optional owner', value: (task && task.owner) || '' });
   const idInput = h('input', { class: 'input', type: 'text', placeholder: 'auto (e.g. T-01)', value: (task && task.id) || '', disabled: !isCreate });
+  const labelsHost = labelCheckboxHost(task, null);
 
   const stageSelect = h('select', { class: 'select', 'aria-label': 'Stage' });
   const stageIds = stages.map((stage) => stage.id);
@@ -8392,27 +9730,57 @@ function openTaskEditor(taskId) {
   const currentDeps = (task && task.depends_on) || [];
   if (!allTasks.length) depGrid.appendChild(h('span', { class: 'hint', text: 'No other tasks yet.' }));
   for (const other of allTasks) {
-    const box = h('label', { class: 'checkbox' },
+    depGrid.appendChild(h('label', { class: 'checkbox' },
       h('input', { type: 'checkbox', value: other.id, checked: currentDeps.indexOf(other.id) !== -1 }),
-      h('span', { class: 'truncate', title: other.title || '', text: other.id + ' · ' + (other.title || '') }));
-    depGrid.appendChild(box);
+      h('span', { class: 'truncate', title: other.title || '', text: other.id + ' · ' + (other.title || '') })));
+  }
+
+  /* template picker (create only) */
+  let templateSelect = null;
+  let templatePreview = null;
+  if (isCreate) {
+    templateSelect = h('select', { class: 'select', 'aria-label': 'Task template' },
+      h('option', { value: '', text: 'No template' }),
+      templates.map((template) => h('option', { value: template.id, text: (template.name || template.id) + ' (' + template.id + ')' })));
+    templatePreview = h('div', { class: 'template-preview', text: 'Pick a template to pre-fill scope, acceptance, gates, effort, package, owner and labels.' });
+    templateSelect.addEventListener('change', () => {
+      const template = templateById(templateSelect.value);
+      if (!template) { templatePreview.textContent = 'Pick a template to pre-fill the task shape.'; return; }
+      if (template.title) titleInput.value = template.title;
+      if (template.goal) goalInput.value = template.goal;
+      if (template.why) whyInput.value = template.why;
+      if (template.stage && stageIds.indexOf(template.stage) !== -1) stageSelect.value = template.stage;
+      if (template.package) packageInput.value = template.package;
+      if (template.parallel_group) groupInput.value = template.parallel_group;
+      if (template.owner) ownerInput.value = template.owner;
+      if (template.complexity !== null && template.complexity !== undefined) complexityInput.value = String(template.complexity);
+      estimateInput.value = template.estimate_hours !== null && template.estimate_hours !== undefined ? String(template.estimate_hours) : '';
+      scopeInput.value = (template.scope_write || []).join('\n');
+      acceptanceInput.value = (template.acceptance || []).join('\n');
+      gatesInput.value = (template.gates || []).join(', ');
+      for (const box of labelsHost.querySelectorAll('input[type="checkbox"]')) {
+        box.checked = (template.labels || []).indexOf(box.value) !== -1;
+      }
+      templatePreview.replaceChildren(templateChips(template));
+    });
   }
 
   const errorBox = h('div');
   const footer = [];
   const saveButton = h('button', {
     class: 'btn btn-primary', type: 'button', text: isCreate ? 'Create task' : 'Save changes',
-    on: { click: () => saveTaskFromEditor({ isCreate, taskId, idInput, titleInput, goalInput, whyInput, scopeInput, acceptanceInput, gatesInput, packageInput, groupInput, complexityInput, stageSelect, depGrid, errorBox, saveButton }) }
+    on: {
+      click: () => saveTaskFromEditor({
+        isCreate, taskId, idInput, titleInput, goalInput, whyInput, scopeInput, acceptanceInput,
+        gatesInput, packageInput, groupInput, complexityInput, estimateInput, ownerInput,
+        labelsHost, stageSelect, depGrid, errorBox, saveButton, templateSelect
+      })
+    }
   });
   if (!isCreate) {
     footer.push(h('button', {
       class: 'btn btn-danger', type: 'button', text: 'Delete task',
-      on: {
-        click: async () => {
-          closeModal();
-          await deleteTask(taskId);
-        }
-      }
+      on: { click: async () => { closeModal(); await deleteTask(taskId); } }
     }));
   }
   footer.push(h('button', { class: 'btn', type: 'button', text: 'Cancel', on: { click: () => closeModal() } }));
@@ -8420,13 +9788,20 @@ function openTaskEditor(taskId) {
 
   const body = h('div', { class: 'plan-editor' },
     errorBox,
+    isCreate && templateSelect
+      ? h('div', { class: 'editor-template-bar' },
+        h('label', { class: 'field' },
+          h('span', { class: 'field-label', text: 'Start from a template' }), templateSelect,
+          h('span', { class: 'field-help', text: 'Pre-fills the shape; fields you edit win. The template id is sent to the server too.' })),
+        templatePreview)
+      : null,
     h('div', { class: 'form-grid' },
       h('label', { class: 'field' },
         h('span', { class: 'field-label', text: 'Task ID' }), idInput,
         h('span', { class: 'field-help', text: isCreate ? 'Leave empty to let the server pick the next free ID.' : 'The ID is stable once created.' })),
+      h('label', { class: 'field' }, h('span', { class: 'field-label', text: 'Stage' }), stageSelect),
+      h('label', { class: 'field' }, h('span', { class: 'field-label', text: 'Owner' }), ownerInput),
       h('label', { class: 'field' },
-        h('span', { class: 'field-label', text: 'Stage' }), stageSelect),
-      h('label', { class: 'field span-2' },
         h('span', { class: 'field-label', text: 'Title' }), titleInput),
       h('label', { class: 'field span-2' },
         h('span', { class: 'field-label', text: 'Goal' }), goalInput),
@@ -8441,21 +9816,19 @@ function openTaskEditor(taskId) {
       h('label', { class: 'field' },
         h('span', { class: 'field-label', text: 'Gates' }), gatesInput,
         h('span', { class: 'field-help', text: 'Comma-separated gate names.' })),
+      h('label', { class: 'field' }, h('span', { class: 'field-label', text: 'Complexity' }), complexityInput),
       h('label', { class: 'field' },
-        h('span', { class: 'field-label', text: 'Complexity' }), complexityInput),
-      h('label', { class: 'field' },
-        h('span', { class: 'field-label', text: 'Package' }), packageInput),
-      h('label', { class: 'field' },
-        h('span', { class: 'field-label', text: 'Parallel group' }), groupInput),
+        h('span', { class: 'field-label', text: 'Estimate (hours)' }), estimateInput,
+        h('span', { class: 'field-help', text: 'Empty clears the estimate.' })),
+      h('label', { class: 'field' }, h('span', { class: 'field-label', text: 'Package' }), packageInput),
+      h('label', { class: 'field' }, h('span', { class: 'field-label', text: 'Parallel group' }), groupInput),
+      h('div', { class: 'field span-2' },
+        h('span', { class: 'field-label', text: 'Labels' }), labelsHost),
       h('div', { class: 'field span-2' },
         h('span', { class: 'field-label', text: 'Depends on' }), depGrid)),
   );
 
-  openModal({
-    title: isCreate ? 'Create a task' : 'Edit ' + taskId,
-    body: body,
-    footer: footer
-  });
+  openModal({ title: isCreate ? 'Create a task' : 'Edit ' + taskId, body: body, footer: footer });
 }
 
 async function saveTaskFromEditor(context) {
@@ -8465,6 +9838,11 @@ async function saveTaskFromEditor(context) {
   for (const box of context.depGrid.querySelectorAll('input[type="checkbox"]')) {
     if (box.checked) deps.push(box.value);
   }
+  const labels = [];
+  for (const box of context.labelsHost.querySelectorAll('input[type="checkbox"]')) {
+    if (box.checked) labels.push(box.value);
+  }
+  const estimateText = String(context.estimateInput.value || '').trim();
   const payload = {
     title: context.titleInput.value.trim(),
     goal: context.goalInput.value.trim(),
@@ -8476,11 +9854,19 @@ async function saveTaskFromEditor(context) {
     complexity: Number(context.complexityInput.value) || 2,
     depends_on: deps,
     package: context.packageInput.value.trim() || null,
-    parallel_group: context.groupInput.value.trim() || null
+    parallel_group: context.groupInput.value.trim() || null,
+    owner: context.ownerInput.value.trim() || null,
+    labels: labels,
+    estimate_hours: estimateText === '' ? null : Number(estimateText)
   };
+  if (estimateText !== '' && (!isFinite(Number(estimateText)) || Number(estimateText) < 0)) {
+    context.errorBox.replaceChildren(errorCallout(new ApiError('Estimate must be a number.', 400, null)));
+    return;
+  }
   if (context.isCreate) {
     const explicitId = context.idInput && context.idInput.value ? context.idInput.value.trim() : '';
     if (explicitId) payload.id = explicitId;
+    if (context.templateSelect && context.templateSelect.value) payload.template = context.templateSelect.value;
   }
 
   if (!payload.title) { context.errorBox.replaceChildren(errorCallout(new ApiError('A title is required.', 400, null))); return; }
@@ -8490,8 +9876,8 @@ async function saveTaskFromEditor(context) {
   context.errorBox.replaceChildren();
   try {
     if (context.isCreate) {
-      await api('/api/plan/tasks', { method: 'POST', body: payload });
-      toast('Task ' + (payload.id || '') + ' created', 'ok');
+      const created = await api('/api/plan/tasks', { method: 'POST', body: payload });
+      toast('Task ' + ((created && created.id) || payload.id || '') + ' created', 'ok');
     } else {
       await api('/api/plan/tasks/' + encodeURIComponent(context.taskId), { method: 'PATCH', body: payload });
       toast('Task ' + context.taskId + ' updated', 'ok');

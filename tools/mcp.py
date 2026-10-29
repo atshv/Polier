@@ -47,9 +47,12 @@ from core import gate as gate_mod  # noqa: E402
 from core import inbox as inbox_mod  # noqa: E402
 from core import runs as runs_mod  # noqa: E402
 from core import runtime as runtime_mod  # noqa: E402
+from core import intake as intake_mod  # noqa: E402
 from core import modules as modules_mod  # noqa: E402
+from core import pages as pages_mod  # noqa: E402
 from core import settings as settings_mod  # noqa: E402
 from core import state as state_mod  # noqa: E402
+from core import task_templates as templates_mod  # noqa: E402
 from core import timeline as timeline_mod  # noqa: E402
 from core import views as views_mod  # noqa: E402
 from core import worklog as worklog_mod  # noqa: E402
@@ -57,7 +60,7 @@ from core.errors import PolierError  # noqa: E402
 from core.gates import suggest_gate_commands  # noqa: E402
 
 PROTOCOL = "2024-11-05"
-SERVER = {"name": "polier", "version": "2.2.0"}
+SERVER = {"name": "polier", "version": "2.3.0"}
 
 
 def _text(value: Any) -> str:
@@ -97,6 +100,22 @@ class Server:
                  "task": {"type": "string"}, "name": {"type": "string"},
                  "command": {"type": "string"}, "timeout": {"type": "integer"}},
                  "required": ["task", "name"]}},
+            {"name": "polier_pages", "description": "The Markdown knowledge layer: collections, pages, word counts and favorites.",
+             "inputSchema": {"type": "object", "properties": {}}},
+            {"name": "polier_page", "description": "One page with content, links, backlinks and git history; ref reads an old revision.",
+             "inputSchema": {"type": "object", "properties": {
+                 "path": {"type": "string"}, "ref": {"type": "string"}}, "required": ["path"]}},
+            {"name": "polier_pages_search", "description": "Search the project's Markdown pages.",
+             "inputSchema": {"type": "object", "properties": {
+                 "q": {"type": "string"}, "limit": {"type": "integer"}}, "required": ["q"]}},
+            {"name": "polier_intake", "description": "Intake proposals (proposed/accepted/rejected) and their counts.",
+             "inputSchema": {"type": "object", "properties": {"status": {"type": "string"}}}},
+            {"name": "polier_intake_add", "description": "Add an intake proposal (idea, issue or request).",
+             "inputSchema": {"type": "object", "properties": {
+                 "title": {"type": "string"}, "description": {"type": "string"},
+                 "kind": {"type": "string"}, "priority": {"type": "string"}}, "required": ["title"]}},
+            {"name": "polier_templates", "description": "Task templates (reusable scope, gates, labels and estimates).",
+             "inputSchema": {"type": "object", "properties": {}}},
             {"name": "polier_timeline", "description": "Auto-scheduled timeline: stage lanes, task bars, critical path and planning dates.",
              "inputSchema": {"type": "object", "properties": {}}},
             {"name": "polier_cycles", "description": "Stages as cycles: progress, exit gates, owner decision, burndown and effort.",
@@ -210,6 +229,31 @@ class Server:
                 "log": str(result.get("log_path")),
                 "summary": gate_mod.summary(result, tail=10, max_errors=10),
             }
+        if name == "polier_pages":
+            return pages_mod.index(self.root)
+        if name == "polier_page":
+            path = _text(arguments.get("path"))
+            if not path:
+                raise PolierError("path is required")
+            return pages_mod.page(self.root, path, arguments.get("ref") or None)
+        if name == "polier_pages_search":
+            query = _text(arguments.get("q"))
+            if not query:
+                raise PolierError("q is required")
+            limit = arguments.get("limit")
+            return {"query": query, "results": pages_mod.search(
+                self.root, query, int(limit) if isinstance(limit, int) and limit > 0 else 50)}
+        if name == "polier_intake":
+            status = _text(arguments.get("status"))
+            if status and status not in intake_mod.STATUSES:
+                raise PolierError("unknown intake status")
+            return {"entries": intake_mod.load_all(self.root, status or None),
+                    **intake_mod.summary(self.root)}
+        if name == "polier_intake_add":
+            self._guard()
+            return intake_mod.create(self.root, arguments, by="mcp", source="mcp")
+        if name == "polier_templates":
+            return {"templates": templates_mod.load_all(self.root)}
         if name == "polier_timeline":
             return timeline_mod.build(self.root)
         if name == "polier_cycles":

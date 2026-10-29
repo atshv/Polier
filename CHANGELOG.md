@@ -2,6 +2,20 @@
 
 Each release lists what a running project must do to adopt it. Update between stages, never during a task (see `guide/cheatsheet.md`). The current version is in `VERSION`; projects record theirs in `board.json` → `generator_version`.
 
+## 2.3.0
+
+**Knowledge and intake.** 2.2 put the plan on a time axis; 2.3 connects the two ends of the work: the project's Markdown (architecture, docs, ADRs, briefs, reviews, package docs) becomes a browsable knowledge layer, and ideas reach the plan through an explicit intake with triage. Task templates make recurring shapes reusable. Everything stays file-based, committed and read-only where it can be.
+
+**Pages (wiki).** `core/pages.py` indexes the project's Markdown: root documents (`README`, `AGENTS`, `ARCHITECTURE`, `STATUS`, `CHANGELOG`, …), `docs/**`, `tasks/*.md`, `reviews/*.md` and the package/service/app/tool README/ARCHITECTURE files. The dashboard gets a page browser with collections (root, documentation with subfolders, briefs, reviews, package docs), content rendering, safe relative links, backlinks (pages and tasks that reference the file), **git history** and old revisions (`git show <ref>:<path>`), full-text search, and local favorites. Nothing is written: the viewer only reads. `GET /api/pages`, `/api/page?path=&ref=`, `/api/page/history`, `/api/pages/search`, `/api/pages/favorites`; MCP `polier_pages`, `polier_page`, `polier_pages_search`; CLI `tools/pages.py list|search|show|history|favorite|favorites`.
+
+**Intake and triage.** Proposals live as committed `intake/<id>.json` files with a small lifecycle: `proposed` → `accepted` or `rejected`, plus kind, priority, source, links and the decision trail. Accepting creates a pending board task through the validated plan editor and links it back; a task template can provide the structure. Sources: dashboard form, CLI and MCP. `GET/POST /api/intake`, `PATCH /api/intake/<id>`, `POST /api/intake/<id>/accept|reject`; MCP `polier_intake`, `polier_intake_add`; CLI `tools/intake.py list|show|add|update|accept|reject`.
+
+**Task templates.** Committed `templates/tasks/<id>.json` files carry the reusable shape of a task (scope, acceptance, gates, complexity, labels, estimate). They can be written by hand, saved from an existing task ("save as template") or used as defaults when creating a task from the plan editor, the intake accept form, the API or the CLI. Validation stays with the normal plan editor. `GET/POST /api/task-templates`, `DELETE /api/task-templates/<id>`; MCP `polier_templates`; CLI `tools/templates.py list|show|save|delete`. `POST /api/plan/tasks` accepts `template: <id>` and merges its defaults.
+
+**Settings.** `dashboard.json` features `pages` and `intake` now default to on (the last planned view, `assistant`, stays off).
+
+**Compatibility.** Additive: no board, policy, run or review file changes shape; `intake/`, `templates/tasks/` and the favorites runtime file are new (the first two are committed). Start the dashboard as before. Plugin users: `git pull`, `dsh plugin --profile <name> add ./polier` again, restart. Claude Code users: replace the package copy; MCP gains the knowledge tools. Skill-only users: `./update.sh`.
+
 ## 2.2.0
 
 **Planning.** 2.1 made the dashboard the place where the owner works; 2.2 adds the overview: where the plan sits in time (Timeline), how each stage is doing (Cycles), how the packages are doing (Modules), which requirements are really covered (Coverage) and what the evidence says about the project (Analytics). Everything is derived from the files Polier already writes; there is no new store and no required field.
