@@ -30,6 +30,7 @@ EDITABLE = frozenset({
     "parallel_group", "scope_write", "scope_read", "acceptance", "gates",
     "owner", "branch", "worktree", "scope_write_forbidden", "package",
     "exclusive", "resources", "labels", "estimate_hours",
+    "planned_start", "target",
 })
 LABEL_ID = re.compile(r"^[a-z][a-z0-9-]{0,40}$")
 REQUIRED_EDIT = ("title", "goal", "scope_write", "acceptance", "gates")
@@ -49,11 +50,15 @@ def _strings(value: Any, field: str) -> List[str]:
 
 
 def _ensure_schema(root: Path, board: dict, payload: dict) -> None:
-    """Upgrade a 0.9/1.0 board to 1.1 when labels or an estimate are added."""
-    if not any(field in payload for field in ("labels", "estimate_hours")):
+    """Upgrade the board when 1.1/1.2 fields are added (additive only)."""
+    version = board_mod.schema_version(board)
+    if any(field in payload for field in ("planned_start", "target")):
+        if version in (board_mod.SCHEMA_09, board_mod.SCHEMA_10, board_mod.SCHEMA_11):
+            board["schema_version"] = board_mod.SCHEMA_12
         return
-    if board_mod.schema_version(board) in (board_mod.SCHEMA_09, board_mod.SCHEMA_10):
-        board["schema_version"] = board_mod.SCHEMA_11
+    if any(field in payload for field in ("labels", "estimate_hours")):
+        if version in (board_mod.SCHEMA_09, board_mod.SCHEMA_10):
+            board["schema_version"] = board_mod.SCHEMA_11
 
 
 def _check_labels(root: Path, task: dict) -> None:
@@ -186,6 +191,17 @@ def _apply_payload(board: dict, task: dict, payload: dict, *, creating: bool) ->
         if value is not None and not isinstance(value, dict):
             raise PolierError("resources must be an object")
         task["resources"] = value
+    for field in ("planned_start", "target"):
+        if field in payload:
+            value = payload[field]
+            if value is None:
+                task.pop(field, None)
+            elif not isinstance(value, str) or not __import__("re").match(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$", value):
+                raise PolierError(f"{field} must be a date string (YYYY-MM-DD), or null to clear it")
+            else:
+                task[field] = value
+    if task.get("planned_start") and task.get("target") and task["target"] < task["planned_start"]:
+        raise PolierError("target must not be before planned_start")
     if "labels" in payload:
         labels = _strings(payload["labels"], "labels")
         if any(not LABEL_ID.match(label) for label in labels):

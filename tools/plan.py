@@ -41,7 +41,7 @@ def _payload(args) -> dict:
             raise PolierError("the JSON payload must be an object")
         payload.update(value)
     for field in ("id", "title", "goal", "why", "stage", "package", "complexity",
-                  "estimate_hours", "parallel_group", "owner"):
+                  "estimate_hours", "parallel_group", "owner", "planned_start", "target"):
         value = getattr(args, field, None)
         if value is not None:
             payload[field] = value
@@ -73,6 +73,8 @@ def main(argv=None) -> int:
     create.add_argument("--package")
     create.add_argument("--complexity", type=int)
     create.add_argument("--estimate-hours", type=float, dest="estimate_hours")
+    create.add_argument("--planned-start", dest="planned_start")
+    create.add_argument("--target")
     create.add_argument("--parallel-group", dest="parallel_group")
     create.add_argument("--owner")
     create.add_argument("--scope-write", action="append", default=[])
@@ -96,6 +98,8 @@ def main(argv=None) -> int:
             command.add_argument("--package")
             command.add_argument("--complexity", type=int)
             command.add_argument("--estimate-hours", type=float, dest="estimate_hours")
+            command.add_argument("--planned-start", dest="planned_start")
+            command.add_argument("--target")
             command.add_argument("--parallel-group", dest="parallel_group")
             command.add_argument("--owner")
             command.add_argument("--scope-write", action="append", default=[])

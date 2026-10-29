@@ -40,6 +40,22 @@ one self-contained page from `server/assets/`. Stop it with Ctrl+C.
 - **Your Work** (`Your Work` tab) is the owner cockpit: my tasks, review queue, approvals, claims, blocked tasks, budget warnings, ready tasks and running sessions. The **inbox** (header bell, same tab) is one actionable feed — approvals, failed gates, blocked tasks, budget, review requests, failed sessions — with a local read/unread state. Nothing is project state; only read marks are stored (runtime).
 - **Worklog**: the task drawer's Worklog tab shows attempts, gate records, sessions, token usage and durations; `estimate_hours` (schema 1.1) is compared with the actual hours (session time when sessions exist, otherwise the attempt window). Project and stage sums are available from `/api/worklog` and `polier_worklog`.
 
+## Planning views (2.2)
+
+- **Timeline** — the plan on a time axis. `core/timeline.py` schedules tasks after their dependencies, sized from `estimate_hours` (or `complexity × 2 h`) at `dashboard.json` → `defaults.hours_per_day` (default 4), inside sequential stage lanes; completed tasks are placed at their run-record finish date. Optional board schema 1.2 fields `planned_start` and `target` (`YYYY-MM-DD`) override the auto-schedule; the plan editor, `tools/plan.py` and the task drawer's Properties set and clear them. The view draws day/week axes, a today line, the critical path, explicit-date and overdue markers and unscheduled work. `GET /api/timeline`, `polier_timeline`.
+- **Cycles** — every stage as a cycle with its goal, exit criteria and exit gates, progress, owner decision, tokens/effort and a burndown built from `runs/` state events. The first incomplete stage is the active cycle; the view can set the stage decision. `GET /api/cycles`, `polier_cycles`.
+- **Modules** — `packages[]` as modules: tasks and status counts, health (`ok`/`watch`/`attention`/`done`), README/ARCHITECTURE presence, contract versions, tokens and effort; tasks without a package are listed separately. `GET /api/modules`, `polier_modules`.
+- **Coverage** — definitions from `docs/quality.md` (`**Dn** …`) joined with task `satisfies` and passing evidence; states `covered`/`partial`/`open`/`missing`; referenced-but-undefined requirements are reported. `GET /api/coverage`, `polier_coverage`.
+- **Analytics** — completion, throughput per ISO week, cycle time per stage, gate pass rate, rework rate, blocked age, estimate vs actual effort, tokens per stage and sessions, all derived from runs, evidence and the worklog. `GET /api/analytics`, `polier_analytics`.
+
+![Timeline](images/dashboard-timeline.png)
+![Cycles](images/dashboard-cycles.png)
+![Modules](images/dashboard-modules.png)
+![Coverage](images/dashboard-coverage.png)
+![Analytics](images/dashboard-analytics.png)
+
+The five views are controlled by `dashboard.json` → `features` (default on). `defaults.hours_per_day` (1–24) changes the timeline scale. Nothing in this section writes to the project: planning dates are the only new board fields, and they are edited through the validated plan editor.
+
 Reading the page without live updates: add `?noevents=1` (static mode) and
 `?theme=light|dark` to freeze the theme; deep links are `#/board`, `#/table`,
 `#/graph`, `#/dispatch`, `#/approvals`, `#/activity`, `#/sessions`, `#/plan`
@@ -156,6 +172,11 @@ the `errors`/`actions` the CLI would print.
 | `GET /api/views`, `PUT/DELETE /api/views/<id>` | built-in and saved views |
 | `GET /api/worklog[?task=<id>]` | per-task or project worklog and estimate comparison |
 | `GET /api/me`, `GET /api/inbox`, `POST /api/inbox/read` | Your Work, inbox items and read state |
+| `GET /api/timeline` | dependency- and estimate-based schedule, lanes, critical path, dates |
+| `GET /api/cycles` | stages as cycles: progress, exit gates, decision, burndown, effort |
+| `GET /api/modules` | packages with tasks, health, docs and contracts |
+| `GET /api/coverage` | requirement definitions, task links, evidence and gaps |
+| `GET /api/analytics` | throughput, cycle time, gate pass rate, rework, effort and tokens |
 | `GET /api/events` | Server-Sent Events (`state`, `job`, `session`, `approval`, `claim`, `plan`, `inbox`, `views`, `settings`, `ready`, `lag`) |
 
 The dashboard also reads gate commands from the project's own table in
@@ -170,7 +191,7 @@ page falls back to `.polier-dashboard/`):
 
 | Path | Contents |
 |---|---|
-| `dashboard.json` (project root, committed) | feature flags, label definitions, defaults (`me`) |
+| `dashboard.json` (project root, committed) | feature flags, label definitions, defaults (`me`, `hours_per_day`) |
 | `views/<id>.json` (project root, committed) | saved filters, grouping, sorting and columns |
 | `config.json` (runtime) | provider command/settings, gate-command overrides, UI preferences |
 | `plan.json`, `plan/` | interview answers and the last generator prompt |
@@ -199,3 +220,6 @@ Deleting the folder loses transcripts, job logs and read marks only; `dashboard.
 - "Worklog actual hours" are derived, not tracked: an attempt window or the
   session span. It is a comparison aid for estimates, not payroll time.
 - The inbox is a derived feed, not a store; only its read marks are local.
+- The timeline is a derived schedule unless `planned_start`/`target` are set; it
+  is a planning aid, not a promise. Cycles are stages by evidence, not calendar
+  periods, and Coverage only knows the D-codes the project documents.

@@ -33,19 +33,24 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 from urllib.parse import parse_qs, urlparse
 
+from core import analytics as analytics_mod
 from core import approvals as approvals_mod
 from core import audit as audit_mod
 from core import board as board_mod
 from core import claims as claims_mod
+from core import coverage as coverage_mod
+from core import cycles as cycles_mod
 from core import dashboard as dashboard_mod
 from core import filters as filters_mod
 from core import inbox as inbox_mod
+from core import modules as modules_mod
 from core import plans as plans_mod
 from core import plan_edit
 from core import policy as policy_mod
 from core import runtime as runtime_mod
 from core import settings as settings_mod
 from core import state as state_mod
+from core import timeline as timeline_mod
 from core import views as views_mod
 from core import worklog as worklog_mod
 from core.errors import PolierError
@@ -54,7 +59,7 @@ from core.jobs import JobManager
 
 from .sessions import SessionManager
 
-VERSION = "2.1.0"
+VERSION = "2.2.0"
 CONFIG = "config.json"
 MAX_BODY = 1_500_000
 ASSETS = Path(__file__).resolve().parent / "assets"
@@ -682,6 +687,21 @@ class DashboardApp:
             self.bus.publish("inbox", {"counts": inbox_mod.inbox_summary(
                 self.root, snapshot=self.snapshot())["counts"]})
             return 200, state
+        # planning views (2.2): timeline, cycles, modules, coverage, analytics
+        if path == "/api/timeline" and method == "GET":
+            try:
+                return 200, timeline_mod.build(self.root)
+            except PolierError as exc:
+                raise ApiError(400, str(exc))
+        if path == "/api/cycles" and method == "GET":
+            return 200, cycles_mod.build(self.root, snapshot=self.snapshot())
+        if path == "/api/modules" and method == "GET":
+            snapshot = self.snapshot()
+            return 200, modules_mod.build(self.root, snapshot=snapshot)
+        if path == "/api/coverage" and method == "GET":
+            return 200, coverage_mod.build(self.root, snapshot=self.snapshot())
+        if path == "/api/analytics" and method == "GET":
+            return 200, analytics_mod.build(self.root, snapshot=self.snapshot())
         # files / audit ----------------------------------------------------
         if path == "/api/files" and method == "GET":
             try:

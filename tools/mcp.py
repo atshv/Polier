@@ -39,20 +39,25 @@ from core import approvals as approvals_mod  # noqa: E402
 from core import board as board_mod  # noqa: E402
 from core import claims as claims_mod  # noqa: E402
 from core import dashboard as dashboard_mod  # noqa: E402
+from core import analytics as analytics_mod  # noqa: E402
+from core import coverage as coverage_mod  # noqa: E402
+from core import cycles as cycles_mod  # noqa: E402
 from core import filters as filters_mod  # noqa: E402
 from core import gate as gate_mod  # noqa: E402
 from core import inbox as inbox_mod  # noqa: E402
 from core import runs as runs_mod  # noqa: E402
 from core import runtime as runtime_mod  # noqa: E402
+from core import modules as modules_mod  # noqa: E402
 from core import settings as settings_mod  # noqa: E402
 from core import state as state_mod  # noqa: E402
+from core import timeline as timeline_mod  # noqa: E402
 from core import views as views_mod  # noqa: E402
 from core import worklog as worklog_mod  # noqa: E402
 from core.errors import PolierError  # noqa: E402
 from core.gates import suggest_gate_commands  # noqa: E402
 
 PROTOCOL = "2024-11-05"
-SERVER = {"name": "polier", "version": "2.1.0"}
+SERVER = {"name": "polier", "version": "2.2.0"}
 
 
 def _text(value: Any) -> str:
@@ -92,6 +97,16 @@ class Server:
                  "task": {"type": "string"}, "name": {"type": "string"},
                  "command": {"type": "string"}, "timeout": {"type": "integer"}},
                  "required": ["task", "name"]}},
+            {"name": "polier_timeline", "description": "Auto-scheduled timeline: stage lanes, task bars, critical path and planning dates.",
+             "inputSchema": {"type": "object", "properties": {}}},
+            {"name": "polier_cycles", "description": "Stages as cycles: progress, exit gates, owner decision, burndown and effort.",
+             "inputSchema": {"type": "object", "properties": {}}},
+            {"name": "polier_modules", "description": "Packages as modules: tasks, health, docs and contracts.",
+             "inputSchema": {"type": "object", "properties": {}}},
+            {"name": "polier_coverage", "description": "Requirement coverage: D-codes, linked tasks, evidence and gaps.",
+             "inputSchema": {"type": "object", "properties": {}}},
+            {"name": "polier_analytics", "description": "Project analytics: throughput, cycle time, gate pass rate, rework, effort and tokens.",
+             "inputSchema": {"type": "object", "properties": {}}},
             {"name": "polier_settings", "description": "Committed dashboard settings: features, labels, defaults and the current feature flags.",
              "inputSchema": {"type": "object", "properties": {}}},
             {"name": "polier_views", "description": "Built-in and saved task views (filters, grouping, sorting).",
@@ -195,6 +210,17 @@ class Server:
                 "log": str(result.get("log_path")),
                 "summary": gate_mod.summary(result, tail=10, max_errors=10),
             }
+        if name == "polier_timeline":
+            return timeline_mod.build(self.root)
+        if name == "polier_cycles":
+            return cycles_mod.build(self.root)
+        if name == "polier_modules":
+            snapshot = dashboard_mod.snapshot(self.root)
+            return modules_mod.build(self.root, snapshot=snapshot)
+        if name == "polier_coverage":
+            return coverage_mod.build(self.root)
+        if name == "polier_analytics":
+            return analytics_mod.build(self.root)
         if name == "polier_settings":
             value = settings_mod.load(self.root, strict=False)
             return {
