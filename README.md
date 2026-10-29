@@ -1,24 +1,56 @@
-# Polier
+<p align="center">
+  <img src="docs/images/banner.png" alt="Polier: plans an AI coding project before the first line of code, then keeps the agents to the plan" width="100%">
+</p>
 
-Plan an AI coding project before the first line of code, then keep the agents to the plan.
+<p align="center">
+  <a href="https://github.com/atshv/Polier/releases"><img alt="release" src="https://img.shields.io/github/v/release/atshv/Polier?style=flat-square&color=f08a2c"></a>
+  <a href="https://github.com/atshv/Polier/actions/workflows/test.yml"><img alt="tests" src="https://img.shields.io/github/actions/workflow/status/atshv/Polier/test.yml?branch=main&style=flat-square&label=tests"></a>
+  <img alt="license" src="https://img.shields.io/badge/license-MIT-2f7d4f?style=flat-square">
+  <img alt="python" src="https://img.shields.io/badge/python-3.9%2B-1f5f8b?style=flat-square">
+</p>
 
-![version](https://img.shields.io/badge/version-1.1.0-blue?style=flat-square)
-![license](https://img.shields.io/badge/license-MIT-green?style=flat-square)
+Polier (German for site foreman) is a plugin for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) with hooks for Claude Code. It interviews you, writes a one-page architecture and a task plan, and sets up the project after your approval. While agents build, it blocks writes outside the current task, accepts only recorded test runs as proof, and commits a record of every attempt, approval and review round.
 
-A plugin for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness), with hooks for Claude Code. It interviews you, writes a one-page architecture and a task plan, and after your approval sets up the project. While agents build, it blocks writes outside the current task, records test results as proof, and keeps a committed record of every attempt, approval and review round.
+## How it works
+
+<p align="center"><img src="docs/images/how-it-works.png" alt="Planning phases A to I produce the project files; every task then moves through in_progress, verifying, review and done while the write guard checks each write" width="100%"></p>
+
+The rules live once, in `core/` (Python, standard library only). The DeepSeek Harness plugin and the Claude Code hooks only translate their host's events into calls to it, and the command-line tools in `tools/` work in any shell.
+
+## What it looks like
+
+All four screens are real output from the reference project [`examples/monorepo-mini`](examples/monorepo-mini/).
+
+**The write guard** stops an agent at the first file outside its task, and a denied command stays denied for every role.
+
+<img src="docs/images/guard.png" alt="Claude Code hook denies a write outside the task scope and a git push" width="100%">
+
+**Checkpoints** refuse a status that has no proof behind it, and say which command produces the proof.
+
+<img src="docs/images/checkpoint.png" alt="state.py refuses in_progress because a dependency is open, and review because gate records are missing" width="100%">
+
+**The dispatch plan** shows what may start now, what waits and why, and which approvals are open.
+
+<img src="docs/images/dispatch.png" alt="dispatch.py output with next wave, blocked tasks and a pending approval" width="100%">
+
+**Research** checks every pinned version against npm and PyPI and keeps findings with dated sources in `docs/research/`.
+
+<img src="docs/images/research.png" alt="research.py versions --lookup confirms versions and lists open VERIFY markers" width="100%">
 
 ## Install
 
-Requirements: DeepSeek Harness, git, Python 3.9+.
+Requirements: DeepSeek Harness or Claude Code, git, Python 3.9+.
 
 ```bash
 git clone https://github.com/atshv/polier.git
 dsh plugin --profile web add ./polier
 ```
 
-Use your own profile name instead of `web`, then restart the harness. Updating an existing install: `git pull` in the clone, run the same `add` command again and restart — one update is needed to get `tools/manifest.json` for drift detection.
+Use your own profile name instead of `web`, then restart the harness. To update, run `git pull` in the clone, run the same `add` command again and restart.
 
-**Claude Code:** run `./install.sh claude`, then add the hooks from [`adapters/claude-code/settings.example.json`](adapters/claude-code/settings.example.json) to `.claude/settings.json`. Details, roles and settings: [`adapters/claude-code/README.md`](adapters/claude-code/README.md).
+**Claude Code:** run `./install.sh claude`, then add the hooks from [`adapters/claude-code/settings.example.json`](adapters/claude-code/settings.example.json) to `.claude/settings.json`. Roles and settings: [`adapters/claude-code/README.md`](adapters/claude-code/README.md).
+
+**Skill only, without the plugin:** `./install.sh`, later `./update.sh`.
 
 ## Start
 
@@ -26,81 +58,43 @@ Open a new session in an empty folder and write:
 
 > Plan a new project: a command-line tool that stores my bookmarks locally and finds them again.
 
-Polier asks its questions, shows the plan for approval, writes the project files and gives you the prompt for the first task. Once the project has a `policy.json`, every task moves through checkpoints instead of a hand-edited board.
-
-## What's new in 1.1
-
-1.1 turns the planner into an orchestration control plane. The board stays the plan; three new stores carry what the plan cannot:
-
-- **Policy as code** — `policy.json`: limits (attempts per task, tasks in progress, review rounds), protected paths, dependency manifests that need an approval, denied and lead-only commands, and which done-checks are on. Checked mechanically; a project without the file keeps the 1.0 behaviour.
-- **Checkpoints** — `tools/state.py` is the only writer of a task's status. It enforces gates before review, review before done, an open attempt before verifying, the attempt cap before another try, a free review round before a rework, and an approval before reopening a done task. A refused transition names what is missing and the command that records it.
-- **Run records** — `runs/<ID>.json` per task: attempt counter, append-only gate/state/review/approval events, last result. Committed with the task; the audit trail a chat history cannot be.
-- **Approvals** — `reviews/approvals/AP-NNN.json`: request, grant and deny records for new dependencies, protected paths, merges to the base branch, releases, reopening and forced transitions. The tools read every record, and the write guard checks the dependency approval before a manifest write.
-- **Dispatch** — `tools/dispatch.py` turns the board into an execution plan: waves of tasks that may run in parallel, blocked tasks with the command that records the block, scope conflicts and pending approvals.
-- **Audit** — `tools/audit.py` prints one compliance view per task: board status against the run record, attempts used, gates, review verdict, handoff, approvals. For a `done` task every check the policy turns on is an error; without `policy.json` the findings are warnings and the exit code stays 0.
-- **The model on one page** — [`prompt/orchestration.md`](prompt/orchestration.md), and generated projects get `docs/orchestration.md`: the task loop, the stage loop, checkpoints, approvals, escalation and what is not covered.
-- **Guard** — a dependency manifest is refused without a granted `new_dependency` approval, a protected path is refused to every session except a lead, denied commands are refused for every role and lead-only commands for worker and reviewer sessions (DeepSeek Harness and Claude Code).
-- **STATUS.md** — still generated, never hand-edited, now from `board.json`, `runs/` and `policy.json`: a new "Orchestration" section shows limits, next wave, running attempts, blocked tasks with reasons and pending approvals. Run `tools/render_status.py` after every state change.
-- **Compatibility** — 0.9 and 1.0 projects are unchanged: without `policy.json` the new checks warn instead of failing and the guard adds no policy denials. The transition table, the note rules and the `reopen_done`/`state_override` approvals still apply; the gate, review, attempt and concurrency checks degrade to warnings and the dependency approval is not checked. Board schema stays 1.0; the new state lives outside `board.json`.
-
-1.0 added board schema 1.0 (stages, packages, runtime resources, budgets, contracts), runtime slots, exclusive gates, cross-harness claims, worktrees, profile L and the release and smoke checks.
-
-## What it does
-
-| Part | What it does |
-|---|---|
-| Planning | Interview, architecture, task plan, project files, briefs for the next 3–5 tasks |
-| Write guard | While a task is in progress, agents may only write the files listed for it; a dependency manifest needs an approval, protected paths are lead-only, denied commands never pass |
-| Stop check | Before an agent finishes, all changed files are compared with the task; foreign changes of other live claims are reported separately |
-| Claims | One live session per task across harnesses, listed by `claim.py list` and `pl_status` |
-| Worktrees | A task checkout with its own branch, runtime slot and claim (`worktree.py start`) |
-| Runtime slots | Ports, test database and bucket per worktree, read from `.polier-slot` |
-| Exclusive gates | Shared resources (e2e, load, DB reset) are locked; a busy one exits 75 and does not run |
-| Gate records | `pl_gate` runs a test and saves the output; only that counts as proof |
-| Checkpoints | `tools/state.py` moves a task through `in_progress → verifying → review → done`, with rework, block and fail paths |
-| Policy | `policy.json`: limits, approvals, protected paths, denied and lead-only commands |
-| Run records | `runs/<ID>.json`: attempts and events, committed with the task |
-| Approvals | `reviews/approvals/AP-NNN.json`: request, grant, deny; read by the tools and the guard |
-| Dispatch | `tools/dispatch.py`: waves, blocked tasks, scope conflicts, pending approvals |
-| Audit | `tools/audit.py`: compliance view for every task, errors for `done` tasks with an enabled policy |
-| Tools | `pl_status`, `pl_gate`, `pl_scope_check`, `pl_check`, `pl_next`, `pl_state` |
+Polier asks its questions, shows the plan for approval, writes the project files and gives you the prompt for the first task. From then on every task moves through checkpoints instead of a hand-edited board.
 
 ## Commands
 
-In DeepSeek Harness (Claude Code uses `POLIER_ROLE` and `POLIER_TASK` instead, see its adapter README):
+In DeepSeek Harness. Claude Code uses the environment variables `POLIER_ROLE` and `POLIER_TASK` instead.
 
 | Command | Effect |
 |---|---|
 | `/pl lead` | this session may write everything (planning, board, merge) |
 | `/pl worker` | back to the current task's files (default) |
 | `/pl reviewer` | this session writes only under `reviews/` |
+| `/pl off` | switch the guard off for this session |
 | `/pl task M03` | bind this session to one task and claim it; `/pl task` releases the claim |
 | `/pl status` | show role, task and allowed files |
+| `/pl next` | show the dispatch plan |
+| `/pl policy` | show the active policy |
 | `/pl render` | regenerate `STATUS.md` (lead only) |
-| `/pl next` | show the dispatch plan: next wave, blocked tasks, conflicts, pending approvals |
-| `/pl policy` | show the active policy: limits, approval actions, protected paths, denied commands |
+
+The plugin also gives agents the tools `pl_status`, `pl_gate`, `pl_scope_check`, `pl_check`, `pl_next` and `pl_state`.
 
 ## Command-line tools
 
 | Tool | Purpose |
 |---|---|
-| `tools/check.py` | lint a generated project (files, board, briefs, budgets, stages, packages, evidence, policy, runs, approvals, drift) |
-| `tools/gate.py` | run one gate, lock `--exclusive` resources, write a checksummed record |
-| `tools/render_status.py` | regenerate `STATUS.md` from `board.json` |
-| `tools/scope_check.py` | changed files against the task's scope, with foreign-change detection |
-| `tools/state.py` | `show`, `set`, `check` a task's state; the only writer of the board status in 1.1 |
+| `tools/check.py` | lint a generated project: files, board, briefs, budgets, stages, evidence, policy, runs, approvals, drift |
+| `tools/state.py` | `show`, `check`, `set` a task's status; the only writer of the status |
+| `tools/gate.py` | run one gate, lock shared resources, write a checksummed record |
 | `tools/approve.py` | `request`, `grant`, `deny`, `list`, `check` approval records |
 | `tools/dispatch.py` | the dispatch plan: waves, blocked tasks, conflicts, pending approvals |
-| `tools/audit.py` | compliance view of the tasks against policy, runs, gates and reviews |
-| `tools/slot.py` | `acquire`, `release`, `show`, `list` runtime slots per worktree |
-| `tools/claim.py` | `take`, `release`, `beat`, `list` cross-harness task claims |
-| `tools/worktree.py` | `start`, `finish` a task worktree with branch, slot and claim |
-| `tools/boundaries.py` | cross-package import check (profile L) |
-| `tools/contracts.py` | contract schemas, fixtures, versions and dependants (profile L) |
-| `tools/release_check.py` | clean, tagged, merged release state (gate `release-clean`) |
-| `tools/smoke.py` | post-deploy smoke check, recorded as a gate |
-| `tools/drift.py` | project-local generator copy vs `tools/manifest.json` |
-| `tools/manifest.py` | build or verify `tools/manifest.json` at release |
+| `tools/audit.py` | compliance view of every task against policy, runs, gates and reviews |
+| `tools/research.py` | dependencies, versions checked against npm and PyPI, research notes with sources |
+| `tools/render_status.py` | regenerate `STATUS.md` from `board.json`, `runs/` and `policy.json` |
+| `tools/scope_check.py` | changed files against the task's scope, with foreign-change detection |
+| `tools/claim.py` · `slot.py` · `worktree.py` | one live session per task, ports and test databases per worktree, task checkouts |
+| `tools/boundaries.py` · `contracts.py` | import boundaries and contract schemas (profile L) |
+| `tools/release_check.py` · `smoke.py` | clean tagged release, post-deploy smoke check |
+| `tools/drift.py` · `manifest.py` | compare a project-local copy with the release manifest |
 
 ## Project files
 
@@ -108,17 +102,20 @@ In DeepSeek Harness (Claude Code uses `POLIER_ROLE` and `POLIER_TASK` instead, s
 my-project/
 ├── ARCHITECTURE.md   rules every module follows, one page
 ├── AGENTS.md         commands and rules for agents
-├── board.json        tasks, dependencies, allowed files, status; stages/packages/resources at 1.0
-├── policy.json       limits, approvals, protected paths, denied commands (1.1)
-├── STATUS.md         progress, generated from board.json, runs/ and policy.json
-├── tasks/            briefs for the next tasks
-├── runs/             one execution record per task: attempts, events (1.1)
-├── reviews/          reviews and gate records; approvals/AP-NNN.json (1.1)
-├── docs/             module or package map, orchestration, quality gates, release and environment docs
+├── board.json        tasks, dependencies, allowed files, status
+├── policy.json       limits, approvals, protected paths, denied commands
+├── STATUS.md         progress, generated, never edited by hand
+├── tasks/            briefs for the next 3–5 tasks
+├── runs/             one execution record per task: attempts, events
+├── reviews/          reviews, gate records, approvals
+├── docs/             module map, orchestration, quality, versions, research
 └── packages/ services/ apps/   profile L only
 ```
 
 ## What the guard does not cover
+
+<details>
+<summary>The guard keeps honest agents on track; it is not a sandbox. Open for the known gaps.</summary>
 
 The guard keeps honest agents on track; it is not a sandbox. Known gaps:
 
@@ -139,32 +136,38 @@ The guard keeps honest agents on track; it is not a sandbox. Known gaps:
 
 For hard limits, run workers in a sandbox or a container with write access to the task's files only.
 
-## Package layout
+</details>
 
-The rules are separate from the harness, so they can run in other hosts too.
+## Package layout
 
 | Folder | What it holds |
 |---|---|
-| `core/` | Board reading (schema 0.9 and 1.0), write guard, stop check, gate records, claims, slots, locks, boundaries, and the 1.1 modules: `policy.py`, `runs.py`, `approvals.py`, `state.py`, `dispatch.py`, `audit.py`. Python 3.9+, standard library only, no harness code. Tests in `core/tests/`. |
-| `adapters/dsh/` | The DeepSeek Harness plugin. It maps harness events and tool names onto `core/`, including the policy guard in `lib/policy.mjs` (see [`adapters/README.md`](adapters/README.md)). |
-| `adapters/claude-code/` | Claude Code hooks (`PreToolUse`, `Stop`) that call `core/`, policy checks included. |
-| `tools/` | Command-line tools built on `core/`; the table above lists them. |
-| `templates/` | Canonical artifacts: board schema, policy, AGENTS, briefs, orchestration, contracts, release, environments, gates, design rules. |
-| `prompt/` | The process (`generator.md`), the shipped orchestration model (`orchestration.md`), the rubric and the DeepSeek Harness mapping. |
-| `examples/` | Reference projects: `minimal-cli` (profile S, the 0.9 compatibility reference) and `monorepo-mini` (profile L, the 1.1 reference); the CI validates both with `check.py`. |
+| `core/` | all rules: board, write guard, stop check, gates, claims, slots, locks, boundaries, policy, runs, approvals, state, dispatch, audit; tests in `core/tests/` |
+| `adapters/dsh/` | the DeepSeek Harness plugin; see [`adapters/README.md`](adapters/README.md) |
+| `adapters/claude-code/` | Claude Code hooks (`PreToolUse`, `Stop`) |
+| `tools/` | the command-line tools above |
+| `templates/` | board schema, policy, AGENTS, briefs, orchestration, research note, versions, contracts, release, gates |
+| `prompt/` | the process ([`generator.md`](prompt/generator.md)), the orchestration model, the rubric, the DeepSeek Harness mapping |
+| `guide/` | the [step-by-step checklist](guide/cheatsheet.md) |
+| `examples/` | [`minimal-cli`](examples/minimal-cli/) (profile S) and [`monorepo-mini`](examples/monorepo-mini/) (profile L); CI checks both |
 
-An adapter for git hooks is planned. Run all tests with `npm test`; the core alone with `python3 -m unittest discover -s core/tests -t .`.
+Run all tests with `npm test`; the core alone with `python3 -m unittest discover -s core/tests -t .`.
 
-## More
+## What's new
 
-- Step-by-step checklist: [`guide/cheatsheet.md`](guide/cheatsheet.md)
-- Full process: [`prompt/generator.md`](prompt/generator.md)
-- Orchestration model: [`prompt/orchestration.md`](prompt/orchestration.md)
-- Quality rubric: [`prompt/rubric.md`](prompt/rubric.md)
-- DeepSeek Harness details and plugin settings: [`prompt/dsh.md`](prompt/dsh.md)
-- Example projects: [`examples/minimal-cli`](examples/minimal-cli/) (profile S, the 0.9 compatibility reference) and [`examples/monorepo-mini`](examples/monorepo-mini/) (profile L, the 1.1 reference)
-- Changes and updates: [`CHANGELOG.md`](CHANGELOG.md)
-- Skill only, without the plugin: `./install.sh`
+**1.2** adds `tools/research.py`, refuses `in_progress` while a dependency is open, and publishes releases automatically. **1.1** added orchestration: `policy.json`, checkpoints, run records, approvals, dispatch and audit. **1.0** added board schema 1.0, runtime slots, exclusive gates, claims, worktrees and profile L.
+
+Details and migration steps: [`CHANGELOG.md`](CHANGELOG.md) and [Releases](https://github.com/atshv/Polier/releases).
+
+## Releasing
+
+Releases are automatic. To publish a new version:
+
+1. Set the new number in `VERSION` (for example `1.3.0`).
+2. Add a section `## 1.3.0` at the top of `CHANGELOG.md` with what changed and how to migrate.
+3. Push or upload both to `main`.
+
+The workflow [`.github/workflows/release.yml`](.github/workflows/release.yml) then syncs `package.json` and `tools/manifest.json`, runs the tests, creates the tag `v1.3.0` and publishes a GitHub Release with the changelog section as its notes. It stops with a clear message when the changelog section is missing, and never overwrites an existing release.
 
 ## License
 

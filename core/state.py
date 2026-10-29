@@ -339,6 +339,19 @@ def check_transition(root, board, task, new_status, *, actor: str = "lead",
             req("stage")
             need("wait", "python3 tools/dispatch.py --json",
                  f"stage {sid} waits for {waiting}")
+        status_of = {item.get("id"): item.get("status") for item in tasks if isinstance(item, dict)}
+        open_deps = [str(dep) for dep in entry.get("depends_on") or []
+                     if status_of.get(dep) != "done"]
+        if open_deps:
+            waiting = ", ".join(open_deps)
+            if policy_on:
+                pre.append(f"{task_id}: depends on {waiting}, not done yet")
+                req("depends_on")
+                need("wait", f"python3 tools/state.py show {open_deps[0]} --json",
+                     f"finish {waiting} first (the same rule as the dispatch plan)")
+            else:
+                result["warnings"].append(f"{task_id}: depends on {waiting}, not done yet "
+                                          "(no policy.json: not enforced)")
 
     elif new_status == "verifying":
         record = load_run(root, task_id)

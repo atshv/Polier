@@ -2,9 +2,33 @@
 
 Each release lists what a running project must do to adopt it. Update between stages, never during a task (see `guide/cheatsheet.md`). The current version is in `VERSION`; projects record theirs in `board.json` → `generator_version`.
 
+## 1.2.0
+
+**Research, a dependency checkpoint and automatic releases.**
+
+**Research (`tools/research.py`).**
+- `deps` lists the dependencies of every `package.json`, `requirements*.txt` and `pyproject.toml` in the project; the project's own workspace packages are left out.
+- `versions` compares them with `docs/versions.md`: missing rows, leftover `[VERIFY…]`/`[UNVERIFIED]` markers and versions that differ from the manifest. `--lookup` asks npm and PyPI whether each exact version exists and when it was published; `--write` records the confirmed ones with source URL and date. Ranges and failed lookups stay findings.
+- `note "<topic>"` creates `docs/research/<slug>.md` from the new `templates/research-note.md` (question, answer, dated sources); `check` validates every note and the versions table.
+- `tools/check.py` reads `docs/versions.md` through the same parser, so a row titled "Next.js" with an npm URL counts for `next`.
+- `prompt/generator.md` (phases A, B, H), `prompt/dsh.md`, `SKILL.md`, `templates/versions.md`, `templates/task-brief.md` and the cheatsheet point to the tool.
+
+**Dependency checkpoint.** `tools/state.py set <ID> in_progress` now refuses while a task in `depends_on` is not `done`, the same rule the dispatch plan already used. Without `policy.json` it is a warning.
+
+**Cleanup.**
+- Phase 0 is now phase A (A1 tool check, A2 interview, A3 profile); the phases run A to I without a gap.
+- `docs/agents/roles.md` and `protocol.md` are no longer required at M/L. No template or check existed for them; roles and the loop live in `AGENTS.md` and `docs/orchestration.md`.
+- The task loop is described once, in `prompt/orchestration.md`; `prompt/dsh.md` and the cheatsheet link to it.
+- `plans/` (the internal planning record of 1.0 and 1.1) is removed; it stays in the git history.
+- `install.sh` no longer copies `.github/`, `docs/`, `package.json`, `install.sh` and `update.sh` into the skill folder.
+
+**Releases.** `.github/workflows/release.yml` publishes a GitHub Release when `VERSION` changes on `main`, with this file's section as notes. The README has screenshots of real tool output.
+
+**Migration:** set `generator_version` to `1.2.0`. Optional: add `python3 <package>/tools/research.py check` to the lint commands in `AGENTS.md`. A task that was started while a dependency was open keeps its status; the new check applies to the next `in_progress`. Plugin users: `git pull`, `dsh plugin --profile <name> add ./polier` again, restart. Skill-only users: `./update.sh`.
+
 ## 1.1.0
 
-**Orchestration on top of the plan.** 1.0 planned a project and guarded the writes, but it could not say what had been tried, when a review happened or whether a risky action was approved. The board was the only record, so a status could simply be typed in; attempts, review rounds and emergency stops lived in chat. 1.1 separates plan state from execution state and puts a checkpoint before every transition. A project without `policy.json` keeps the 1.0 behaviour: the new checks warn instead of failing.
+**Orchestration on top of the plan.** 1.0 planned a project and guarded the writes, but it could not say what had been tried, when a review happened or whether a risky action was approved. The board was the only record, so a status could simply be typed in; attempts, review rounds and emergency stops lived in chat. 1.1 separates plan state from execution state and puts a checkpoint before every transition.
 
 **Policy as code (`policy.json`).**
 - New `templates/policy.json` and `core/policy.py`: limits (`max_attempts_per_task`, `max_in_progress`, `max_review_rounds`, with ranges 1–10, 1–64, 1–20), `scope.protected_paths`, `dependencies` (approval switch + manifest list), `approvals` (actions + approver), `commands` (deny, lead_only, warn) and `checks` (review/handoff/run-record/disjoint-scopes).
@@ -48,9 +72,9 @@ Each release lists what a running project must do to adopt it. Update between st
 - `prompt/generator.md`: limits per profile in phase 0.3, `policy.json` in phase D, the loop, approvals and escalation in phase E, the new files in the G scaffold, `audit.py` and `dispatch.py` in phase H, the orchestrate prompt and state/approval commands in phase I, plus definitions and artifact-map rows.
 - `prompt/rubric.md`: criteria 14 (execution state) and 15 (policy and approvals), the 1.1 lint items, critic and cold-start updates. `prompt/dsh.md`, `SKILL.md`, `guide/cheatsheet.md` and `README.md` describe the loop and the new tools.
 
-**Compatibility.** Additive, and a project without `policy.json` is not broken by 1.1. Both 0.9 and 1.0 boards are unchanged, `board.json` keeps its schema (1.1 adds no board field), and `check.py`/`audit.py` warn instead of failing; the guard adds no policy denials. A project that runs `tools/state.py` without a policy still gets the transition table, the note rules and the approvals that guard a reopened done task or a forced change; the gate, review, attempt and concurrency checks become warnings, and the dependency-manifest approval is not checked. `examples/minimal-cli` stays the 0.9 compatibility reference; `examples/monorepo-mini` is the 1.1 reference. Existing tools, plugin tools, `/pl` commands and board fields are unchanged. The core gains `core/policy.py`, `core/runs.py`, `core/approvals.py`, `core/state.py`, `core/dispatch.py` and `core/audit.py`; `tools/` gains `state.py`, `approve.py`, `dispatch.py` and `audit.py`.
+**Compatibility.** Additive, and a project without `policy.json` is not broken by 1.1. Both 0.9 and 1.0 boards are unchanged, `board.json` keeps its schema (1.1 adds no board field), and `check.py`/`audit.py` warn instead of failing; the guard adds no policy denials. A project that runs `tools/state.py` without a policy still gets the transition table, the note rules and the approvals that guard a reopened done task or a forced change; the gate, review, attempt and concurrency checks become warnings, and the dependency-manifest approval is not checked. Existing tools, plugin tools, `/pl` commands and board fields are unchanged. The core gains `core/policy.py`, `core/runs.py`, `core/approvals.py`, `core/state.py`, `core/dispatch.py` and `core/audit.py`; `tools/` gains `state.py`, `approve.py`, `dispatch.py` and `audit.py`.
 
-**Migration:** 0.9 and 1.0 projects need nothing. To adopt 1.1: copy `policy.json` from `templates/policy.json` and set the limits for the profile (S 3/1/3, M 3/2/3, L 3/3/3 for attempts/in progress/rounds), the project's manifests and its protected paths; copy `docs/orchestration.md` from the template; add the state, gate, approval and runs rules from `templates/AGENTS.template.md` to `AGENTS.md`; name `policy.json`, `runs/` and `docs/orchestration.md` in `AGENTS.md` and `README.md`; commit `runs/` from the next task on. From then on set statuses only with `tools/state.py set` and approve high-risk actions with `tools/approve.py`. Plugin users: `git pull` in the clone, run `dsh plugin --profile <name> add ./polier` again and restart. Claude Code users: replace the package copy; the hook applies the same policy checks. Skill-only users: `./update.sh`. Until `policy.json` exists, `check.py` stays green with the 1.0 result and the project keeps working; `examples/minimal-cli` is the 0.9 compatibility reference, `examples/monorepo-mini` the 1.1 reference.
+**Migration:** 0.9 and 1.0 projects need nothing. To adopt 1.1: copy `policy.json` from `templates/policy.json` and set the limits for the profile (S 3/1/3, M 3/2/3, L 3/3/3 for attempts/in progress/rounds), the project's manifests and its protected paths; copy `docs/orchestration.md` from the template; add the state, gate, approval and runs rules from `templates/AGENTS.template.md` to `AGENTS.md`; name `policy.json`, `runs/` and `docs/orchestration.md` in `AGENTS.md` and `README.md`; commit `runs/` from the next task on. From then on set statuses only with `tools/state.py set` and approve high-risk actions with `tools/approve.py`. Plugin users: `git pull` in the clone, run `dsh plugin --profile <name> add ./polier` again and restart. Claude Code users: replace the package copy; the hook applies the same policy checks. Skill-only users: `./update.sh`.
 
 ## 1.0.0
 

@@ -1,0 +1,112 @@
+name: release
+
+# Publishes a release whenever VERSION changes on main.
+# Steps: read VERSION, require a matching "## X.Y.Z" section in CHANGELOG.md,
+# sync package.json and tools/manifest.json, run the tests, tag vX.Y.Z and
+# create a GitHub Release with that changelog section as notes.
+# An existing tag or release is never moved or overwritten.
+# "Run workflow" (manual) also publishes a missing release for the current VERSION.
+
+on:
+  push:
+    branches: [main]
+    paths: [VERSION]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Read version and changelog section
+        id: meta
+        run: |
+          set -euo pipefail
+          VERSION="$(tr -d '[:space:]' < VERSION)"
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error file=VERSION::VERSION must look like 1.2.0, found '$VERSION'"
+            exit 1
+          fi
+          awk -v v="$VERSION" '
+            $0 == "## " v { found = 1; next }
+            found && /^## / { exit }
+            found { print }
+          ' CHANGELOG.md > release-notes.md
+          if ! grep -q '[^[:space:]]' release-notes.md; then
+            echo "::error file=CHANGELOG.md::No section '## $VERSION' with content in CHANGELOG.md. Add it at the top and push again."
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Sync package.json and manifest
+        run: |
+          set -euo pipefail
+          V="${{ steps.meta.outputs.version }}"
+          node -e '
+            const fs = require("fs");
+            const p = JSON.parse(fs.readFileSync("package.json", "utf8"));
+            if (p.version !== process.argv[1]) {
+              p.version = process.argv[1];
+              fs.writeFileSync("package.json", JSON.stringify(p, null, 2) + "\n");
+            }
+          ' "$V"
+          if ! python3 tools/manifest.py --check; then
+            python3 tools/manifest.py --write
+          fi
+
+      - name: Run tests
+        run: |
+          npm install --no-audit --no-fund
+          npm test
+          python3 tools/check.py examples/minimal-cli
+          python3 tools/check.py examples/monorepo-mini
+          python3 tools/audit.py --root examples/monorepo-mini
+          python3 tools/manifest.py --check
+
+      - name: Commit synced files
+        run: |
+          set -euo pipefail
+          if [ -n "$(git status --porcelain -- package.json tools/manifest.json)" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add package.json tools/manifest.json
+            git commit -m "release: sync package.json and manifest for ${{ steps.meta.outputs.tag }}"
+            git push origin HEAD:main
+          fi
+
+      - name: Tag and publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.meta.outputs.tag }}"
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            echo "Tag $TAG exists; it is not moved."
+          else
+            git tag -a "$TAG" -m "Polier $TAG"
+            git push origin "$TAG"
+          fi
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG exists; nothing to do."
+          else
+            gh release create "$TAG" --title "Polier $TAG" --notes-file release-notes.md --verify-tag
+          fi

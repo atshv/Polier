@@ -27,4 +27,10 @@ jobs:
       - name: Reference L evidence chain passes audit.py
         run: python3 tools/audit.py --root examples/monorepo-mini
       - name: Shipped manifest is current
-        run: python3 tools/manifest.py --check
+        # Strict for pull requests. On main the release workflow rewrites the
+        # manifest when VERSION changes, so a stale one is only a warning there.
+        run: |
+          if ! python3 tools/manifest.py --check; then
+            if [ "${{ github.event_name }}" = "pull_request" ]; then exit 1; fi
+            echo "::warning::tools/manifest.json is stale; the release workflow updates it with the next VERSION change."
+          fi

@@ -213,21 +213,11 @@ def check_versions(root: Path, board: dict, warnings: list[str]) -> None:
     if not versions.exists():
         warnings.append("docs/versions.md is missing (profile L: pin every tool and library with source URL and date)")
         return
-    text = versions.read_text(encoding="utf-8").lower()
-    names: set[str] = set()
-    for manifest in sorted(root.rglob("package.json")):
-        if "node_modules" in manifest.parts:
-            continue
-        try:
-            data = json.loads(manifest.read_text(encoding="utf-8"))
-        except (ValueError, OSError):
-            continue
-        for key in ("dependencies", "devDependencies"):
-            for name in (data.get(key) or {}):
-                names.add(name)
-    for name in sorted(names):
-        if name.lower() not in text:
-            warnings.append(f"docs/versions.md: dependency {name} is in a manifest but not pinned with a source")
+    import research  # tools/research.py: one parser for manifests and docs/versions.md
+    _, rows = research.read_versions(root)
+    missing = sorted({dep["name"] for dep in research.dependencies(root) if dep["name"].lower() not in rows})
+    for name in missing:
+        warnings.append(f"docs/versions.md: dependency {name} is in a manifest but not pinned with a source")
 
 
 def check_stages(root: Path, board: dict, errors: list[str], warnings: list[str]) -> None:

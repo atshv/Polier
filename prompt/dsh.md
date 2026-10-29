@@ -6,7 +6,7 @@ Maps each phase of `prompt/generator.md`, and the execution of the generated pro
 
 ## 1. Before you start: what is available
 
-DSH composes its tools from packages, so not every session has every tool. In phase 0.1, look at the session's tool list and use the fallback column for anything missing.
+DSH composes its tools from packages, so not every session has every tool. In phase A1, look at the session's tool list and use the fallback column for anything missing.
 
 | Capability | Tools | Availability |
 |---|---|---|
@@ -45,10 +45,10 @@ Runtime and orchestration state are not a harness feature; they are files shared
 
 | Phase | Use | How | Fallback |
 |---|---|---|---|
-| all | `todo_write` | One item per phase (0, B, C+D, E, F, G, H, I); mark each when its approval or check is done. | none needed |
-| 0.1 tool check | session tool list | Fill in section 1 for this session and name the fallbacks in the profile proposal. Check for the plugin tools and for `tools/slot.py`, `tools/claim.py`, `tools/worktree.py`; for a 1.1 project also `tools/state.py`, `tools/approve.py`, `tools/dispatch.py` and `tools/audit.py` (`pl_next`, `pl_state`). | ask the user |
-| 0.2 interview | `ask_user_question` | Max. 10 questions per call. Give `options` where the answer space is closed (mode, profile, platform, yes/no), with the recommended option first; free text otherwise. | questions in chat |
-| 0, B, F facts | `web_search`, `web_fetch` | Check library versions, APIs and formats before writing them down. Put source URL and date into the brief's pitfalls. | `[UNVERIFIED]` + ask |
+| all | `todo_write` | One item per phase (A, B, C+D, E, F, G, H, I); mark each when its approval or check is done. | none needed |
+| A1 tool check | session tool list | Fill in section 1 for this session and name the fallbacks in the profile proposal. Check for the plugin tools and for `tools/slot.py`, `tools/claim.py`, `tools/worktree.py`; for a 1.1 project also `tools/state.py`, `tools/approve.py`, `tools/dispatch.py` and `tools/audit.py` (`pl_next`, `pl_state`). | ask the user |
+| A2 interview | `ask_user_question` | Max. 10 questions per call. Give `options` where the answer space is closed (mode, profile, platform, yes/no), with the recommended option first; free text otherwise. | questions in chat |
+| A, B, F facts | `web_search`, `web_fetch` | Check library versions, APIs and formats before writing them down. Record the answer with `tools/research.py note` and versions with `tools/research.py versions --lookup --write`; briefs link the note. | `[UNVERIFIED]` + ask |
 | B recon | `subagent` or `workflow` | Read-only children, one per top-level area of the repo, each returning facts with file paths. Use a cheaper model if `list_subagent_models` offers one. | main session reads the repo |
 | C+D approval | `/plan` + `exit_plan_mode` | Plan = architecture + artifact map + DAG table + Mermaid, starting with a `#` heading. At L include the package map, stages and contract list. "Keep planning" returns the user's feedback: revise and resubmit. Approved = the S joint yes. | show in chat, wait for "yes" |
 | C, D critics (M/L) | `workflow` | Run architecture critic, scope critique and test design as parallel fresh agents; each returns findings only. At L one of them checks package boundaries and contract versions. | three sequential `subagent` calls |
@@ -61,7 +61,7 @@ Subagents and `workflow` only read, research and criticise. `spawn_teammate` and
 
 ## 3. Executing the generated project
 
-### The task loop (1.1)
+### The task loop
 
 A 1.1 project moves through the same checkpoints in every profile. The lead runs the transitions; a worker session reads the state and reports.
 
@@ -76,10 +76,7 @@ python3 <package>/tools/state.py set M03 done --note "review pass, gates green"
 python3 <package>/tools/render_status.py .          # STATUS.md from board + runs + policy
 ```
 
-- `state.py set` refuses a transition whose precondition is missing and prints each blocker with the command that fixes it (`check ID STATUS` evaluates without writing). The default `policy.json` lists `*tools/state.py set*` under `commands.lead_only`, and `pl_state set` refuses outside a lead session, so the lead records the state; `pl_state show` and `state.py show` work everywhere.
-- Attempts (one run of a task) and rounds (one review) are counted by the tool; `runs/<ID>.json` is the record, committed with the task and never edited by hand.
-- Approvals: `python3 <package>/tools/approve.py request --action new_dependency --task M09 --note "adds httpx 0.27"`, then the owner runs `grant AP-001` (or `deny`). `list` shows pending records; `check --action ... --task ...` exits 0 only for a granted match. A granted record is the approval, not a chat message.
-- Without `policy.json` the project is not broken: `tools/state.py` still sets the board status and writes `runs/`, and the transition table, note rules and `reopen_done`/`state_override` approvals still hold. The gate, review, attempt and concurrency checks are warnings, the dependency-manifest approval is not checked, and the guard adds no policy denials.
+The lead records every transition (`pl_state set` and `state.py set` are lead-only; `show` works everywhere). Checkpoints, attempts, rounds, approvals and the behaviour without `policy.json` are described once, in `prompt/orchestration.md`.
 
 ### S — one writer, one reviewer
 
@@ -231,7 +228,7 @@ Without the plugin, copy the package as a plain skill (`./install.sh`) to `~/.ds
 | Anti-pattern | Better |
 |---|---|
 | `spawn_teammate` for the generator | subagents for critique |
-| Assuming Agent Teams or worktrees exist | check in phase 0.1, use the fallback |
+| Assuming Agent Teams or worktrees exist | check in phase A1, use the fallback |
 | Treating plan mode as a write lock | sandbox and approval policy |
 | Pasting `AGENTS.md` into prompts | it is already loaded; keep it short |
 | Polling teammates | `wait_agent` |

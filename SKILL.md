@@ -11,9 +11,10 @@ description: Plans an AI coding project before any code is written. Interviews t
 
 | Phase | Files |
 |---|---|
-| 0.1 | check for `tools/slot.py`, `tools/claim.py`, `tools/worktree.py`, `tools/gate.py` (runtime) and `tools/state.py`, `tools/approve.py`, `tools/dispatch.py`, `tools/audit.py` (1.1 orchestration); with the plugin, `pl_next` and `pl_state` |
+| A1 | check for `tools/slot.py`, `tools/claim.py`, `tools/worktree.py`, `tools/gate.py` (runtime) and `tools/state.py`, `tools/approve.py`, `tools/dispatch.py`, `tools/audit.py` (1.1 orchestration); with the plugin, `pl_next` and `pl_state` |
 | C | `templates/ARCHITECTURE.md`, `templates/module-map.md`; L: `templates/monorepo-layout.md`, `templates/package-ARCHITECTURE.md`, `templates/package-AGENTS.md` |
 | D | `templates/board.schema.json`, `templates/policy.json`, `templates/adr.md`, `templates/versions.md`, `templates/gates/<stack>.md`; L: `templates/contract.md` |
+| A, B, F | research: `templates/research-note.md` via `tools/research.py note`, versions via `tools/research.py versions --lookup --write` |
 | F | `templates/task-brief.md`; UI: `templates/design-rules.md` |
 | G | `templates/AGENTS.template.md`, `templates/orchestration.md`, `templates/review-feedback.md`, `templates/releasing.md`, `templates/environments.md` |
 | H | `prompt/rubric.md` §3–4 |
@@ -24,6 +25,7 @@ description: Plans an AI coding project before any code is written. Interviews t
 ```bash
 python3 <skill-folder>/tools/check.py <project>
 python3 <skill-folder>/tools/render_status.py <project>
+python3 <skill-folder>/tools/research.py check --root <project>
 # 1.1: only when the project has a policy.json
 python3 <skill-folder>/tools/dispatch.py --root <project>
 python3 <skill-folder>/tools/audit.py --root <project>

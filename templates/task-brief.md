@@ -65,7 +65,7 @@ A3 ...
 
 ## Pitfalls
 
-- <quirk of a library or version> (source: <URL>, checked <date>)
+- <quirk of a library or version> (source: <URL>, checked <date>, or `docs/research/<topic>.md`)
 - <trap in the project, e.g. field X has a different name in the DB>
 
 ## Edge cases
