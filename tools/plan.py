@@ -49,9 +49,15 @@ def _payload(args) -> dict:
                           ("acceptance", args.acceptance), ("gates", args.gates),
                           ("depends_on", args.depends_on), ("labels", args.labels),
                           ("satisfies", args.satisfies), ("exclusive", args.exclusive)):
+        if source and field in _COMMA_LISTS:
+            source = [part.strip() for value in source for part in value.split(",") if part.strip()]
         if source:
             payload[field] = source
     return payload
+
+
+# IDs may be given repeated (--labels a --labels b) or as one comma list (--labels a,b).
+_COMMA_LISTS = {"labels", "depends_on", "gates", "satisfies"}
 
 
 def _print(value) -> None:

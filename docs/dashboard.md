@@ -1,4 +1,4 @@
-# The dashboard (2.0)
+# The dashboard
 
 A local, zero-dependency control plane for a Polier project: one page that shows
 the plan, the execution state and the decisions, and can drive the same actions
@@ -16,16 +16,32 @@ one self-contained page from `server/assets/`. Stop it with Ctrl+C.
 
 ![The board](images/dashboard.png)
 
+## Finding your way (2.5)
+
+The sidebar groups the views: **Your Work**, **Board** and **Table** at the top,
+then **Plan** (Plan editor, Timeline, Cycles, Dependencies, Dispatch), **Track**
+(Approvals, Activity, Coverage, Modules, Analytics), **Agents** (Sessions,
+Assistant, Automations, GitHub) and **Knowledge** (Pages, Intake); Settings sits
+at the bottom. Views turned off in `dashboard.json` → `features` are hidden.
+
+- **Ctrl/Cmd+K** (or *Commands* in the header) opens the palette: every view,
+  every task and the quick actions.
+- **/** focuses the task search, **g** opens the dependency graph, **?** lists
+  the shortcuts, **Esc** closes a drawer or dialog and leaves selection mode.
+- On the board and the table, **Select** turns on bulk mode: tick tasks (or
+  click cards), then move them to a status, claim/release them, replace their
+  labels or set an estimate. **Done** leaves the mode.
+
 ## What the page can do
 
 | View | What it shows / does |
 |---|---|
-| Board | Kanban columns for every status (`pending`, `in_progress`, `verifying`, `review`, `rework`, `blocked`, `failed`, `done`), gate progress, tokens against the budget, live claims; table view and stage/package/owner filters |
+| Board | stage progress strip; Kanban columns for every status (`pending`, `in_progress`, `verifying`, `review`, `rework`, `blocked`, `failed`, `done` — empty side columns and Done fold into rails), gate progress, effort and tokens against the budget, live claims; table view, filters, saved views and bulk mode |
 | Task drawer | brief, gates and records, run events, review verdict, evidence logs, handoff; status transitions, claim/release, gate runs, a worker/reviewer session |
 | Approvals | pending/granted/denied records; request, grant and deny with a note |
 | Dispatch | next wave, running attempts, blocked tasks with reasons, scope conflicts |
 | Activity | run events, gate results, reviews and approvals, newest first |
-| Graph | dependency DAG as SVG (column = depth, row = stage, colour = status) |
+| Dependencies | dependency DAG as SVG (column = depth, row = stage, colour = status), fitted to the width or zoomed |
 | Sessions | start a headless agent session for a task, watch its transcript, record tokens, stop it |
 | Plan | the interview wizard for a greenfield project; plan editing for an existing board (tasks, dependencies, scopes, stage decisions) |
 | Jobs | gate/check/audit runs with live logs and stop buttons |
@@ -34,10 +50,10 @@ one self-contained page from `server/assets/`. Stop it with Ctrl+C.
 
 ## The project cockpit (2.1)
 
-- **Settings** (`Settings` tab) edits the committed `dashboard.json` next to `board.json`: feature flags for optional views (future views default off), the label definitions (id, title, palette colour, group) and the owner handle used by "Your Work". Machine-local settings — session provider, gate commands, theme, read state — stay in the runtime folder. The CLI is `python3 tools/settings.py show|init|feature|me|label …`.
+- **Settings** (bottom of the sidebar) edits the committed `dashboard.json` next to `board.json`: feature flags for optional views, the label definitions (id, title, palette colour, group) and the owner handle used by "Your Work". Machine-local settings — session provider, gate commands, theme, read state — stay in the runtime folder. The CLI is `python3 tools/settings.py show|init|feature|me|label …`.
 - **Labels** are optional task fields of board schema 1.1 (`labels: [ids]`); they never change the write scope. Add or edit definitions in Settings, then assign them in the task drawer or the plan editor; the plan editor upgrades a 0.9/1.0 board to 1.1 on first use. `tools/plan.py` accepts `--labels`.
 - **Filters and views**: the filter bar builds bounded conditions (field, operator, value) for text, status, label, number, boolean and budget fields. The result can be saved as a committed `views/<id>.json` with grouping, sorting and columns; built-in views ("Ready now", "Blocked", "Review queue", "Over budget", "No estimate", "Mine") come from the code and never overwrite files. CLI: `python3 tools/views.py list|builtin|show|save|delete`.
-- **Your Work** (`Your Work` tab) is the owner cockpit: my tasks, review queue, approvals, claims, blocked tasks, budget warnings, ready tasks and running sessions. The **inbox** (header bell, same tab) is one actionable feed — approvals, failed gates, blocked tasks, budget, review requests, failed sessions — with a local read/unread state. Nothing is project state; only read marks are stored (runtime).
+- **Your Work** (top of the sidebar) is the owner cockpit: my tasks, review queue, approvals, claims, blocked tasks, budget warnings, ready tasks and running sessions. The **inbox** (header bell, first panel of Your Work) is one actionable feed — approvals, failed gates, blocked tasks, budget, review requests, failed sessions — with a local read/unread state. Nothing is project state; only read marks are stored (runtime).
 - **Worklog**: the task drawer's Worklog tab shows attempts, gate records, sessions, token usage and durations; `estimate_hours` (schema 1.1) is compared with the actual hours (session time when sessions exist, otherwise the attempt window). Project and stage sums are available from `/api/worklog` and `polier_worklog`.
 
 ## Planning views (2.2)

@@ -1,4 +1,4 @@
-/* Polier dashboard 2.0 — one dependency-free ES2020 file.
+/* Polier dashboard — one dependency-free ES2020 file.
    No frameworks, no imports, no inline handlers. Every piece of server text is
    rendered with textContent (or the small safe markdown renderer below). */
 
@@ -8,31 +8,41 @@
    1. Constants
    ========================================================================= */
 
-const VERSION = '2.0.0';
 const THEME_KEY = 'polier.theme';
 const MORE_MARK = '…';
 
-const VIEWS = [
-  { key: 'yourwork', label: 'Your Work', feature: 'inbox' },
-  { key: 'board', label: 'Board' },
-  { key: 'table', label: 'Table' },
-  { key: 'timeline', label: 'Timeline', feature: 'timeline' },
-  { key: 'cycles', label: 'Cycles', feature: 'cycles' },
-  { key: 'modules', label: 'Modules', feature: 'modules' },
-  { key: 'coverage', label: 'Coverage', feature: 'coverage' },
-  { key: 'graph', label: 'Graph' },
-  { key: 'dispatch', label: 'Dispatch' },
-  { key: 'approvals', label: 'Approvals' },
-  { key: 'activity', label: 'Activity' },
-  { key: 'analytics', label: 'Analytics', feature: 'analytics' },
-  { key: 'sessions', label: 'Sessions' },
-  { key: 'pages', label: 'Pages', feature: 'pages' },
-  { key: 'intake', label: 'Intake', feature: 'intake' },
-  { key: 'assistant', label: 'Assistant', feature: 'assistant' },
-  { key: 'automations', label: 'Automations', feature: 'automations' },
-  { key: 'github', label: 'GitHub', feature: 'github' },
+/* Navigation: views are grouped in the sidebar; `feature` hides a view when the
+   matching dashboard.json feature is off. */
+const VIEW_GROUPS = [
+  { key: 'work', label: '' },
   { key: 'plan', label: 'Plan' },
-  { key: 'settings', label: 'Settings' }
+  { key: 'track', label: 'Track' },
+  { key: 'agents', label: 'Agents' },
+  { key: 'knowledge', label: 'Knowledge' },
+  { key: 'system', label: '' }
+];
+
+const VIEWS = [
+  { key: 'yourwork', label: 'Your Work', group: 'work', feature: 'inbox' },
+  { key: 'board', label: 'Board', group: 'work' },
+  { key: 'table', label: 'Table', group: 'work' },
+  { key: 'plan', label: 'Plan editor', group: 'plan' },
+  { key: 'timeline', label: 'Timeline', group: 'plan', feature: 'timeline' },
+  { key: 'cycles', label: 'Cycles', group: 'plan', feature: 'cycles' },
+  { key: 'graph', label: 'Dependencies', group: 'plan' },
+  { key: 'dispatch', label: 'Dispatch', group: 'plan' },
+  { key: 'approvals', label: 'Approvals', group: 'track' },
+  { key: 'activity', label: 'Activity', group: 'track' },
+  { key: 'coverage', label: 'Coverage', group: 'track', feature: 'coverage' },
+  { key: 'modules', label: 'Modules', group: 'track', feature: 'modules' },
+  { key: 'analytics', label: 'Analytics', group: 'track', feature: 'analytics' },
+  { key: 'sessions', label: 'Sessions', group: 'agents' },
+  { key: 'assistant', label: 'Assistant', group: 'agents', feature: 'assistant' },
+  { key: 'automations', label: 'Automations', group: 'agents', feature: 'automations' },
+  { key: 'github', label: 'GitHub', group: 'agents', feature: 'github' },
+  { key: 'pages', label: 'Pages', group: 'knowledge', feature: 'pages' },
+  { key: 'intake', label: 'Intake', group: 'knowledge', feature: 'intake' },
+  { key: 'settings', label: 'Settings', group: 'system' }
 ];
 
 const STATUS = {
@@ -128,11 +138,6 @@ function clear(node) {
   return node;
 }
 
-function setChildren(node, ...children) {
-  clear(node);
-  append(node, children);
-  return node;
-}
 
 function focusSoon(node) {
   if (!node) return;
@@ -203,11 +208,6 @@ function fmtDuration(seconds) {
   return hours + 'h ' + String(minutes % 60).padStart(2, '0') + 'm';
 }
 
-function fmtTime(iso) {
-  const date = parseDate(iso);
-  if (!date) return '—';
-  return date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
-}
 
 function relTime(iso) {
   const date = parseDate(iso);
@@ -2134,7 +2134,7 @@ const state = {
   interviewOpen: false,
   generator: null,
 
-  graph: { zoom: 1 },
+  graph: { zoom: 'fit' },
   packageOptions: null,
 
   /* 2.1 cockpit state */
@@ -2250,7 +2250,7 @@ const state = {
   githubLoaded: false,
   githubLoading: false,
   githubError: null,
-  bulk: { selected: [], status: 'blocked', note: '', labels: [], estimate: '', labelsOpen: false, busy: false }
+  bulk: { mode: false, selected: [], status: 'in_progress', note: '', labels: [], estimate: '', labelsOpen: false, busy: false }
 };
 
 const dom = {
@@ -2265,6 +2265,7 @@ const dom = {
   inboxButton: document.getElementById('btn-inbox'),
   bellCount: document.getElementById('bell-count'),
   checkButton: document.getElementById('btn-check'),
+  paletteButton: document.getElementById('btn-palette'),
   auditButton: document.getElementById('btn-audit'),
   drawer: document.getElementById('drawer'),
   drawerBackdrop: document.getElementById('drawer-backdrop'),
@@ -2359,11 +2360,6 @@ function tokenBar(task) {
     progressBar(used, max, classes));
 }
 
-function statusCounts(tasks) {
-  const counts = {};
-  for (const task of tasks || []) counts[task.status || '?'] = (counts[task.status || '?'] || 0) + 1;
-  return counts;
-}
 
 function taskById(taskId) {
   if (!state.snapshot) return null;
@@ -2575,16 +2571,22 @@ function renderTabs() {
     approvals: snapshot && snapshot.approvals && snapshot.approvals.pending ? snapshot.approvals.pending.length : 0,
     yourwork: Number(state.inboxCounts && state.inboxCounts.unread) || 0
   };
-  for (const view of VIEWS) {
-    if (view.feature && !feature(view.feature)) continue;
-    const tab = h('a', {
-      class: 'tab',
-      href: '#/' + view.key,
-      'aria-current': state.route.view === view.key ? 'page' : null,
-      dataset: { view: view.key }
-    }, h('span', { text: view.label }));
-    if (counts[view.key]) tab.appendChild(h('span', { class: 'tab-count', text: String(counts[view.key]) }));
-    dom.tabs.appendChild(tab);
+  for (const group of VIEW_GROUPS) {
+    const members = VIEWS.filter((view) => view.group === group.key && (!view.feature || feature(view.feature)));
+    if (!members.length) continue;
+    const section = h('div', { class: 'nav-group' + (group.key === 'system' ? ' is-bottom' : '') });
+    if (group.label) section.appendChild(h('div', { class: 'nav-group-title', text: group.label }));
+    for (const view of members) {
+      const tab = h('a', {
+        class: 'tab',
+        href: '#/' + view.key,
+        'aria-current': state.route.view === view.key ? 'page' : null,
+        dataset: { view: view.key }
+      }, h('span', { class: 'tab-label', text: view.label }));
+      if (counts[view.key]) tab.appendChild(h('span', { class: 'tab-count', text: String(counts[view.key]) }));
+      section.appendChild(tab);
+    }
+    dom.tabs.appendChild(section);
   }
 }
 
@@ -3061,43 +3063,7 @@ function syncSearchInput() {
   if (dom.search && dom.search.value !== state.filters.text) dom.search.value = state.filters.text;
 }
 
-function filterValues(key) {
-  const tasks = (state.snapshot && state.snapshot.tasks) || [];
-  const seen = new Map();
-  for (const task of tasks) {
-    if (key === 'stage') {
-      const value = task.stage === null || task.stage === undefined ? '' : String(task.stage);
-      if (!seen.has(value)) seen.set(value, task.stage_title || value || '—');
-    } else if (key === 'package') {
-      continue;
-    } else if (key === 'owner') {
-      const value = task.owner || '';
-      if (!seen.has(value)) seen.set(value, value || 'Unassigned');
-    }
-  }
-  if (key === 'package') {
-    return (state.packageOptions || []).map((path) => [path, path]);
-  }
-  return Array.from(seen.entries()).sort((a, b) => String(a[1]).localeCompare(String(b[1])));
-}
 
-function applyFilters(tasks) {
-  const filters = state.filters;
-  const text = String(filters.text || '').trim().toLowerCase();
-  return (tasks || []).filter((task) => {
-    if (filters.stage && String(task.stage) !== filters.stage) return false;
-    if (filters.package && !packageMatches(task, filters.package)) return false;
-    if (filters.owner && (task.owner || '') !== filters.owner) return false;
-    if (!text) return true;
-    const haystack = [
-      task.id, task.title, task.goal, task.why, task.owner, task.stage_title,
-      task.stage, task.package, task.parallel_group, task.branch,
-      (task.depends_on || []).join(' '), (task.gates || []).join(' '),
-      (task.scope_write || []).join(' ')
-    ].filter(Boolean).join(' ').toLowerCase();
-    return haystack.indexOf(text) !== -1;
-  });
-}
 
 function packageMatches(task, packagePath) {
   if (!packagePath) return true;
@@ -3168,21 +3134,6 @@ function renderViewBar() {
   select.value = state.activeViewId || '';
   bar.appendChild(viewField('View', select));
 
-  const active = currentView();
-  bar.appendChild(h('button', {
-    class: 'btn btn-sm', type: 'button', text: 'Save view',
-    disabled: !canWrite(),
-    title: canWrite() ? 'Save the current filters, grouping and sorting as a view' : 'The dashboard is read-only',
-    on: { click: () => openSaveViewModal() }
-  }));
-  if (active && !active.builtin) {
-    bar.appendChild(h('button', {
-      class: 'btn btn-sm btn-danger', type: 'button', text: 'Delete', disabled: !canWrite(),
-      title: canWrite() ? 'Delete this saved view' : 'The dashboard is read-only',
-      on: { click: () => deleteCurrentView() }
-    }));
-  }
-
   const groupSelect = h('select', {
     class: 'select', 'aria-label': 'Group by',
     on: {
@@ -3235,71 +3186,10 @@ function renderViewBar() {
     }
   }));
 
-  bar.appendChild(h('button', {
-    class: 'btn btn-sm btn-ghost', type: 'button',
-    text: state.density === 'compact' ? 'Compact' : 'Comfortable',
-    title: 'Toggle display density',
-    on: { click: () => toggleDensity() }
-  }));
-
-  const hint = h('span', { class: 'view-hint' });
-  if (active) {
-    append(hint, ['View ', h('strong', { text: active.name || active.id }), active.builtin ? ' · built-in' : ' · saved']);
-  } else {
-    hint.textContent = 'Custom filters · not saved';
-  }
-  bar.appendChild(hint);
-  return bar;
-}
-
-function renderFilterBuilder() {
-  const wrap = h('div', { class: 'filter-builder' });
-  const chips = h('div', { class: 'filter-chips' });
-  const conditions = state.structuredFilters || [];
-
-  if (!conditions.length) {
-    chips.appendChild(h('span', { class: 'hint', text: 'No filters — every task is shown.' }));
-  }
-  conditions.forEach((condition, index) => {
-    chips.appendChild(h('span', { class: 'filter-chip' },
-      h('span', { text: conditionText(condition) }),
-      h('button', {
-        class: 'filter-chip-x', type: 'button', 'aria-label': 'Remove filter', title: 'Remove filter', text: '×',
-        on: {
-          click: () => {
-            state.structuredFilters.splice(index, 1);
-            markCustomView();
-            rerenderWithFocus();
-          }
-        }
-      })));
-  });
-  if (conditions.length) {
-    chips.appendChild(h('button', {
-      class: 'btn btn-sm btn-ghost', type: 'button', text: 'Clear all',
-      on: {
-        click: () => {
-          state.structuredFilters = [];
-          markCustomView();
-          rerenderWithFocus();
-        }
-      }
-    }));
-    if (conditions.length > 1) chips.appendChild(h('span', { class: 'hint', style: { fontSize: '10.5px' }, text: 'All conditions must match (AND)' }));
-  }
-
-  const total = (state.snapshot && state.snapshot.tasks ? state.snapshot.tasks.length : 0);
-  const shown = visibleTasks().length;
-  chips.appendChild(h('span', {
-    class: 'filter-count',
-    text: conditions.length ? shown + ' of ' + total + ' tasks' : total + ' ' + plural(total, 'task')
-  }));
-  wrap.appendChild(chips);
-
-  if (state.filterEditorOpen) wrap.appendChild(renderFilterEditor());
-  else {
-    wrap.appendChild(h('button', {
-      class: 'btn btn-sm', type: 'button', text: '+ Add filter',
+  if (!state.filterEditorOpen) {
+    bar.appendChild(h('button', {
+      class: 'btn btn-sm', type: 'button', text: '+ Filter',
+      title: 'Add a filter condition',
       on: {
         click: () => {
           state.filterEditorOpen = true;
@@ -3310,6 +3200,85 @@ function renderFilterBuilder() {
       }
     }));
   }
+
+  bar.appendChild(h('span', { class: 'view-bar-spacer' }));
+  const total = (state.snapshot && state.snapshot.tasks ? state.snapshot.tasks.length : 0);
+  const shown = visibleTasks().length;
+  bar.appendChild(h('span', {
+    class: 'filter-count',
+    text: shown === total ? total + ' ' + plural(total, 'task') : shown + ' of ' + total + ' tasks'
+  }));
+
+  const active = currentView();
+  const conditions = state.structuredFilters || [];
+  const customised = conditions.length || (state.groupBy || 'status') !== 'status' ||
+    ((state.sort && state.sort.field) || 'id') !== 'id' || (state.sort && state.sort.dir === 'desc');
+  if (canWrite() && !active && customised) {
+    bar.appendChild(h('button', {
+      class: 'btn btn-sm', type: 'button', text: 'Save view',
+      title: 'Save the current filters, grouping and sorting as a view',
+      on: { click: () => openSaveViewModal() }
+    }));
+  }
+  if (canWrite() && active && !active.builtin) {
+    bar.appendChild(h('button', {
+      class: 'btn btn-sm btn-danger', type: 'button', text: 'Delete view',
+      title: 'Delete the saved view "' + (active.name || active.id) + '"',
+      on: { click: () => deleteCurrentView() }
+    }));
+  }
+  const selectButton = renderSelectToggle();
+  if (selectButton) bar.appendChild(selectButton);
+  bar.appendChild(densityToggle());
+  return bar;
+}
+
+function densityToggle() {
+  const compact = state.density === 'compact';
+  return h('button', {
+    class: 'btn btn-sm btn-icon', type: 'button',
+    text: compact ? '☰' : '≡',
+    'aria-pressed': compact ? 'true' : 'false',
+    'aria-label': compact ? 'Compact density, switch to comfortable' : 'Comfortable density, switch to compact',
+    title: compact ? 'Compact density' : 'Comfortable density',
+    on: { click: () => toggleDensity() }
+  });
+}
+
+function renderFilterBuilder() {
+  const conditions = state.structuredFilters || [];
+  if (!conditions.length && !state.filterEditorOpen) return null;
+  const wrap = h('div', { class: 'filter-builder' });
+  if (conditions.length) {
+    const chips = h('div', { class: 'filter-chips' });
+    conditions.forEach((condition, index) => {
+      chips.appendChild(h('span', { class: 'filter-chip' },
+        h('span', { text: conditionText(condition) }),
+        h('button', {
+          class: 'filter-chip-x', type: 'button', 'aria-label': 'Remove filter', title: 'Remove filter', text: '×',
+          on: {
+            click: () => {
+              state.structuredFilters.splice(index, 1);
+              markCustomView();
+              rerenderWithFocus();
+            }
+          }
+        })));
+    });
+    chips.appendChild(h('button', {
+      class: 'btn btn-sm btn-ghost', type: 'button', text: 'Clear all',
+      on: {
+        click: () => {
+          state.structuredFilters = [];
+          markCustomView();
+          rerenderWithFocus();
+        }
+      }
+    }));
+    if (conditions.length > 1) chips.appendChild(h('span', { class: 'hint', text: 'all must match' }));
+    wrap.appendChild(chips);
+  }
+  if (state.filterEditorOpen) wrap.appendChild(renderFilterEditor());
   return wrap;
 }
 
@@ -3719,31 +3688,21 @@ function renderFilters(options) {
   const wrap = h('div', { class: 'filters-block' });
   if (!feature('views')) {
     const total = (state.snapshot && state.snapshot.tasks ? state.snapshot.tasks.length : 0);
-    wrap.appendChild(h('div', { class: 'row-wrap' },
-      h('span', { class: 'hint', text: 'Filtering is disabled (feature "views" is off) — search in the header still works.' }),
-      h('span', { class: 'filter-count', text: total + ' ' + plural(total, 'task') })));
+    wrap.appendChild(h('div', { class: 'view-bar' },
+      h('span', { class: 'hint', text: 'Use the search in the header to filter tasks.' }),
+      h('span', { class: 'view-bar-spacer' }),
+      h('span', { class: 'filter-count', text: total + ' ' + plural(total, 'task') }),
+      renderSelectToggle(),
+      densityToggle()));
     return wrap;
   }
   wrap.appendChild(renderViewBar());
-  wrap.appendChild(renderFilterBuilder());
+  const builder = renderFilterBuilder();
+  if (builder) wrap.appendChild(builder);
   if (opts.note) wrap.appendChild(h('p', { class: 'hint', text: opts.note }));
   return wrap;
 }
 
-function filterSelect(key, allLabel, entries, onChange) {
-  if (!entries.length) return null;
-  const select = h('select', {
-    class: 'select', 'aria-label': 'Filter by ' + key,
-    on: { change: (event) => onChange(event.target.value) }
-  }, h('option', { value: '', text: allLabel }));
-  for (const entry of entries) {
-    const option = h('option', { value: entry[0], text: entry[1] });
-    if (state.filters[key] === entry[0]) option.selected = true;
-    select.appendChild(option);
-  }
-  select.value = state.filters[key] || '';
-  return select;
-}
 
 function rerenderWithFocus() {
   renderView();
@@ -4031,6 +3990,12 @@ function bindStatic() {
       else toast('The inbox feature is disabled in Settings', 'warn');
     });
   }
+  if (dom.paletteButton) {
+    dom.paletteButton.addEventListener('click', () => openPalette());
+    const isMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || '');
+    const kbd = dom.paletteButton.querySelector('.kbd');
+    if (kbd && !isMac) kbd.textContent = 'Ctrl K';
+  }
   dom.checkButton.addEventListener('click', () => startJob('check'));
   dom.auditButton.addEventListener('click', () => startJob('audit'));
   dom.jobsToggle.addEventListener('click', () => toggleJobs());
@@ -4074,6 +4039,7 @@ function bindStatic() {
     if (event.key === 'Escape') {
       if (!dom.modalBackdrop.hidden) { closeModal(); event.preventDefault(); return; }
       if (state.drawer.id) { closeDrawer(true); event.preventDefault(); return; }
+      if (!typing && selectionMode()) { setSelectionMode(false); event.preventDefault(); return; }
       if (typing && target === dom.search) {
         dom.search.value = '';
         state.filters.text = '';
@@ -4099,9 +4065,11 @@ function bindStatic() {
       openModal({
         title: 'Keyboard shortcuts',
         body: h('div', { class: 'col' },
+          shortcutRow('Ctrl/Cmd+K', 'Command palette: views, actions and tasks'),
           shortcutRow('/', 'Focus the search field'),
           shortcutRow('g', 'Open the dependency graph'),
-          shortcutRow('Esc', 'Close the drawer or a dialog')),
+          shortcutRow('Esc', 'Close the drawer or a dialog, leave selection mode'),
+          shortcutRow('?', 'Show this list')),
         footer: [h('button', { class: 'btn btn-primary', type: 'button', text: 'Close', on: { click: () => closeModal() } })]
       });
     }
@@ -4183,14 +4151,12 @@ function renderBoard() {
       h('button', {
         class: 'btn btn-sm', type: 'button', title: 'Refetch the snapshot',
         on: { click: () => refreshSnapshotButton() }
-      }, 'Refresh'),
-      h('button', {
-        class: 'btn btn-sm', type: 'button', text: 'Plan',
-        on: { click: () => navigate('plan') }
-      }))));
+      }, 'Refresh'))));
 
+  if ((stages || []).length) view.appendChild(renderStagePanel());
   view.appendChild(renderFilters());
-  if (canWrite()) view.appendChild(renderBulkBar());
+  const boardBulkBar = renderBulkBar();
+  if (boardBulkBar) view.appendChild(boardBulkBar);
 
   if (!tasks.length) {
     view.appendChild(emptyState('No tasks on the board',
@@ -4223,16 +4189,13 @@ function renderBoard() {
     : filtered;
   const groupBy = sortableFilters ? (state.groupBy || 'status') : 'status';
 
-  const wrap = h('div', { class: 'board-wrap' });
   const board = h('div', { class: 'board' });
   if (groupBy === 'status') {
     for (const column of COLUMNS) board.appendChild(renderColumn(column, sorted));
   } else {
     for (const group of groupTaskList(sorted, groupBy)) board.appendChild(renderGroupColumn(group));
   }
-  wrap.appendChild(board);
-  wrap.appendChild(renderStagePanel());
-  view.appendChild(wrap);
+  view.appendChild(board);
 }
 
 async function refreshSnapshotButton() {
@@ -4242,9 +4205,13 @@ async function refreshSnapshotButton() {
   renderView();
 }
 
+/* Columns that usually stay empty fold into a slim rail until they hold a task. */
+const FOLDABLE_COLUMNS = new Set(['rework', 'blocked', 'failed']);
+
 function renderColumn(column, tasks) {
   const members = tasks.filter((task) => column.statuses.indexOf(task.status) !== -1);
-  const collapsed = column.key === 'done' ? !state.boardDoneOpen : false;
+  const isDone = column.key === 'done';
+  const collapsed = isDone ? !state.boardDoneOpen : (FOLDABLE_COLUMNS.has(column.key) && !members.length);
   const node = h('section', {
     class: 'column',
     dataset: { collapsed: collapsed ? 'true' : 'false', column: column.key },
@@ -4254,31 +4221,33 @@ function renderColumn(column, tasks) {
   node.appendChild(h('header', { class: 'column-head' },
     statusDot(column.statuses[0]),
     h('span', { class: 'column-name', text: column.label }),
-    h('span', { class: 'column-count', text: String(members.length) })));
+    h('span', { class: 'column-count', text: String(members.length) }),
+    isDone && !collapsed ? h('button', {
+      class: 'btn btn-ghost btn-sm column-fold', type: 'button',
+      title: 'Fold the done column', 'aria-label': 'Fold the done column', text: '«',
+      on: { click: () => { state.boardDoneOpen = false; renderView(); } }
+    }) : null));
 
   if (collapsed) {
-    node.style.cursor = 'pointer';
-    node.appendChild(h('button', {
-      class: 'btn btn-ghost btn-sm column-expand', type: 'button',
-      title: 'Expand the done column', text: '»',
-      'aria-label': 'Expand the done column',
-      on: { click: () => { state.boardDoneOpen = true; renderView(); } }
-    }));
-    node.addEventListener('click', () => { state.boardDoneOpen = true; renderView(); });
+    if (isDone) {
+      node.classList.add('is-clickable');
+      node.title = 'Show the done tasks';
+      node.tabIndex = 0;
+      const open = () => { state.boardDoneOpen = true; renderView(); };
+      node.addEventListener('click', open);
+      node.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); open(); }
+      });
+    } else {
+      node.title = 'No ' + column.label.toLowerCase() + ' tasks';
+    }
     return node;
   }
 
   const list = h('div', { class: 'column-list' });
-  if (!members.length) list.appendChild(h('div', { class: 'column-empty', text: '—' }));
-  else for (const task of members) list.appendChild(renderTaskCard(task));
+  if (!members.length) list.appendChild(h('div', { class: 'column-empty', text: 'No tasks' }));
+  else for (const task of members) list.appendChild(renderTaskCard(task, column));
   node.appendChild(list);
-  if (column.key === 'done') {
-    node.appendChild(h('button', {
-      class: 'btn btn-ghost btn-sm column-expand', type: 'button',
-      title: 'Collapse the done column', text: '« Collapse',
-      on: { click: () => { state.boardDoneOpen = false; renderView(); } }
-    }));
-  }
   return node;
 }
 
@@ -4298,22 +4267,31 @@ function renderGroupColumn(group) {
   return node;
 }
 
-function renderTaskCard(task) {
+function renderTaskCard(task, column) {
   const meta = stMeta(task.status);
   const gates = task.gates || [];
   const passed = (task.gates_passed || []).length;
   const claim = task.claim;
-  const ownerText = task.owner || 'unassigned';
   const labels = taskLabelIds(task);
+  /* In a status column the badge only adds information when the column holds
+     more than one status (In progress: claimed/in_progress, Reviewing: verifying/review). */
+  const showStatus = !column || column.statuses.length > 1;
 
   const card = h('article', {
-    class: 'task-card status-' + meta.color,
+    class: 'task-card status-' + meta.color + (bulkIsSelected(task.id) ? ' is-selected' : ''),
     role: 'button',
     tabindex: '0',
     dataset: { taskId: task.id, status: task.status },
     title: (task.title || '(untitled)') + ' · ' + task.id + ' · ' + meta.label,
     on: {
-      click: () => openTask(task.id),
+      click: (event) => {
+        if (selectionMode()) {
+          event.preventDefault();
+          toggleBulkTask(task.id, !bulkIsSelected(task.id));
+          return;
+        }
+        openTask(task.id);
+      },
       keydown: (event) => {
         if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openTask(task.id); }
       }
@@ -4322,7 +4300,7 @@ function renderTaskCard(task) {
 
   const topRow = h('div', { class: 'task-card-top' },
     h('span', { class: 'task-card-id', text: task.id }),
-    h('span', { class: 'badge bg-' + meta.color + ' st-' + meta.color }, h('span', { class: 'dot' }), meta.label),
+    showStatus ? h('span', { class: 'badge bg-' + meta.color + ' st-' + meta.color }, h('span', { class: 'dot' }), meta.label) : null,
     claim ? h('span', {
       class: 'claim-badge',
       title: 'Claimed by ' + (claim.harness || 'session') + (claim.session ? ' · ' + claim.session : '')
@@ -4334,82 +4312,68 @@ function renderTaskCard(task) {
   card.appendChild(h('div', { class: 'task-card-title', text: task.title || '(untitled)' }));
   if (labels.length) card.appendChild(labelChips(labels, 3));
 
-  card.appendChild(h('div', { class: 'task-card-meta' },
-    h('span', { text: task.stage_title || String(task.stage || '—') }),
-    h('span', { class: 'sep', text: '·' }),
-    h('span', { text: ownerText }),
-    task.wave !== null && task.wave !== undefined ? h('span', { class: 'sep', text: '·' }) : null,
-    task.wave !== null && task.wave !== undefined ? h('span', { text: 'wave ' + (task.wave + 1) }) : null));
-
-  const effort = effortText(task);
-  if (effort) {
-    card.appendChild(h('div', { class: 'effort-line' },
-      h('span', { text: effort }),
-      estimateOf(task) !== null && actualOf(task) !== null
-        ? h('span', {
-          class: (actualOf(task) - estimateOf(task)) > 0 ? 'delta-over' : 'delta-under',
-          title: 'Actual minus estimate',
-          text: (actualOf(task) - estimateOf(task) > 0 ? '+' : '') + fmtHours(Number(actualOf(task)) - Number(estimateOf(task)))
-        })
-        : null));
+  const metaRow = h('div', { class: 'task-card-meta' },
+    h('span', { text: task.stage_title || String(task.stage || '—') }));
+  if (task.owner) append(metaRow, [h('span', { class: 'sep', text: '·' }), h('span', { text: task.owner })]);
+  if (task.wave !== null && task.wave !== undefined) {
+    append(metaRow, [h('span', { class: 'sep', text: '·' }), h('span', { text: 'wave ' + (task.wave + 1) })]);
   }
+  card.appendChild(metaRow);
 
-  const foot = h('div', { class: 'task-card-foot' });
+  const estimate = estimateOf(task);
+  const actual = actualOf(task);
+  const used = Number(task.tokens) || 0;
+  const foot = h('div', { class: 'task-card-stats' });
   if (gates.length) {
-    foot.appendChild(h('div', { class: 'task-card-line' },
-      h('span', { text: 'gates' }),
-      h('span', { class: 'mono', text: passed + '/' + gates.length })));
-    foot.appendChild(progressBar(passed, gates.length, passed === gates.length ? 'is-ok' : ''));
-  } else {
-    foot.appendChild(h('div', { class: 'task-card-line' },
-      h('span', { text: 'gates' }), h('span', { class: 'mono', text: '—' })));
+    foot.appendChild(h('span', {
+      class: 'stat' + (passed === gates.length ? ' is-ok' : ''),
+      title: passed + ' of ' + gates.length + ' gates passed'
+    }, h('span', { class: 'stat-key', text: 'gates' }), h('span', { class: 'mono', text: passed + '/' + gates.length })));
   }
-  foot.appendChild(tokenBar(task));
-  card.appendChild(foot);
+  if (estimate !== null || actual) {
+    const over = estimate !== null && actual !== null && actual > estimate;
+    foot.appendChild(h('span', { class: 'stat' + (over ? ' is-over' : ''), title: effortText(task) },
+      h('span', { class: 'stat-key', text: 'effort' }),
+      h('span', { class: 'mono', text: (actual ? fmtHours(actual) : '0h') + (estimate !== null ? ' / ' + fmtHours(estimate) : '') })));
+  }
+  if (used) {
+    const budget = task.budget || {};
+    foot.appendChild(h('span', {
+      class: 'stat' + (budget.over ? ' is-over' : (budget.warn ? ' is-warn' : '')),
+      title: 'Tokens used' + (budget.max ? ' of a ' + fmtTokens(budget.max) + ' budget' : '')
+    }, h('span', { class: 'stat-key', text: 'tokens' }),
+      h('span', { class: 'mono', text: fmtTokens(used) + (budget.max ? ' / ' + fmtTokens(budget.max) : '') })));
+  }
+  if (foot.childNodes.length) card.appendChild(foot);
+  if (gates.length) card.appendChild(progressBar(passed, gates.length, passed === gates.length ? 'is-ok' : ''));
   return card;
 }
 
 function renderStagePanel() {
   const stages = state.snapshot.stages || [];
-  const panel = h('aside', { class: 'stage-panel card-panel panel-pad', 'aria-label': 'Stage progress' });
-  panel.appendChild(h('div', { class: 'between', style: { marginBottom: '4px' } },
-    h('span', { class: 'section-title', text: 'Stages' }),
-    h('span', { class: 'faint text-sm', text: 'done / total' })));
-
-  if (!stages.length) {
-    panel.appendChild(h('div', { class: 'hint', text: 'This board declares no stages.' }));
-    return panel;
-  }
-
-  const list = h('div', { class: 'stage-list' });
+  const strip = h('div', { class: 'stage-strip', role: 'list', 'aria-label': 'Stage progress' });
   for (const stage of stages) {
     const total = Array.isArray(stage.tasks) ? stage.tasks.length : 0;
     const open = Array.isArray(stage.tasks_open) ? stage.tasks_open.length : 0;
     const done = Math.max(0, total - open);
     const color = stage.complete ? 'green' : (stage.stopped ? 'red' : (stage.owner_pending ? 'amber' : 'blue'));
-    const flags = [];
-    if (stage.complete) flags.push({ text: 'complete', cls: '' });
-    if (stage.stopped) flags.push({ text: 'stopped', cls: 'is-stop' });
-    if (stage.owner_pending) flags.push({ text: 'owner pending', cls: 'is-pending' });
-    if (!stage.complete && Array.isArray(stage.missing_gates) && stage.missing_gates.length) {
-      flags.push({ text: 'missing: ' + stage.missing_gates.join(', '), cls: '' });
-    }
-
-    const item = h('div', { class: 'stage-item', title: stage.goal || stage.title || stage.id },
+    let note = '';
+    let noteClass = '';
+    if (stage.complete) note = 'complete';
+    else if (stage.stopped) { note = 'stopped'; noteClass = 'is-stop'; }
+    else if (stage.owner_pending) { note = 'owner decision pending'; noteClass = 'is-pending'; }
+    const missing = !stage.complete && Array.isArray(stage.missing_gates) ? stage.missing_gates : [];
+    const title = [stage.goal || stage.title || stage.id,
+      missing.length ? 'missing gates: ' + missing.join(', ') : ''].filter(Boolean).join('\n');
+    strip.appendChild(h('div', { class: 'stage-item', role: 'listitem', title: title },
       h('div', { class: 'stage-item-top' },
         h('span', { class: 'column-dot st-' + color }),
         h('span', { class: 'stage-name', text: stage.title || stage.id }),
         h('span', { class: 'stage-count', text: done + '/' + total })),
-      progressBar(done, total, stage.complete ? 'is-ok' : (stage.stopped ? 'is-over' : '')));
-    if (flags.length) {
-      const flagsRow = h('div', { class: 'stage-flags' });
-      for (const flag of flags) flagsRow.appendChild(h('span', { class: 'stage-flag ' + flag.cls, text: flag.text }));
-      item.appendChild(flagsRow);
-    }
-    list.appendChild(item);
+      progressBar(done, total, stage.complete ? 'is-ok' : (stage.stopped ? 'is-over' : '')),
+      h('div', { class: 'stage-flag ' + noteClass, text: note || (missing.length ? missing.length + ' exit ' + plural(missing.length, 'gate') + ' open' : 'in progress') })));
   }
-  panel.appendChild(list);
-  return panel;
+  return strip;
 }
 
 /* =========================================================================
@@ -4435,7 +4399,8 @@ function renderTable() {
       h('button', { class: 'btn btn-sm', type: 'button', text: 'Refresh', on: { click: () => refreshSnapshotButton() } }))));
 
   view.appendChild(renderFilters());
-  if (canWrite()) view.appendChild(renderBulkBar());
+  const tableBulkBar = renderBulkBar();
+  if (tableBulkBar) view.appendChild(tableBulkBar);
 
   if (!tasks.length) {
     view.appendChild(emptyState('No tasks on the board', 'Add tasks in the Plan view.', null));
@@ -4470,7 +4435,10 @@ function renderTable() {
     { key: 'deps', label: 'Depends on' },
     { key: 'package', label: 'Package' }
   ];
-  const withSelection = canWrite();
+  /* the labels column only earns its width once labels exist */
+  const showLabels = settingsLabels().length > 0 || tasks.some((task) => taskLabelIds(task).length);
+  if (!showLabels) columns.splice(columns.findIndex((column) => column.key === 'labels'), 1);
+  const withSelection = selectionMode();
   const columnCount = columns.length + (withSelection ? 1 : 0);
   const visibleIds = filtered.map((task) => task.id);
   const allSelected = visibleIds.length > 0 && visibleIds.every((taskId) => bulkIsSelected(taskId));
@@ -4499,18 +4467,18 @@ function renderTable() {
           h('span', { text: group.label }),
           h('span', { class: 'group-count', text: String(group.tasks.length) }))));
     }
-    for (const task of group.tasks) tbody.appendChild(renderTableRow(task, columnCount));
+    for (const task of group.tasks) tbody.appendChild(renderTableRow(task, showLabels));
   }
   table.appendChild(tbody);
 
   view.appendChild(h('div', { class: 'table-wrap' }, table));
   view.appendChild(h('p', {
     class: 'hint', style: { marginTop: '8px' },
-    text: 'Click a row to open the task drawer. Tick rows for bulk actions; Ctrl/Cmd+K opens the command palette.'
+    text: 'Click a row to open the task. "Select" enables bulk actions; Ctrl/Cmd+K opens the command palette.'
   }));
 }
 
-function renderTableRow(task, columnCount) {
+function renderTableRow(task, showLabels) {
   const meta = stMeta(task.status);
   const gates = task.gates || [];
   const passed = (task.gates_passed || []).length;
@@ -4529,13 +4497,13 @@ function renderTableRow(task, columnCount) {
     }
   });
 
-  if (canWrite()) row.appendChild(h('td', { class: 'cell-check' }, bulkCheckbox(task)));
+  if (selectionMode()) row.appendChild(h('td', { class: 'cell-check' }, bulkCheckbox(task)));
 
   row.appendChild(h('td', { class: 'cell-task' },
     h('div', { class: 'cell-task-title', text: task.title || '(untitled)' }),
     h('div', { class: 'cell-mono', text: task.id })));
 
-  row.appendChild(h('td', {}, labels.length ? labelChips(labels, 2) : h('span', { class: 'faint', text: '—' })));
+  if (showLabels) row.appendChild(h('td', {}, labels.length ? labelChips(labels, 2) : h('span', { class: 'faint', text: '—' })));
   row.appendChild(h('td', {}, statusPill(task.status)));
   row.appendChild(h('td', { class: 'nowrap', text: task.stage_title || String(task.stage || '—') }));
   row.appendChild(h('td', { class: 'nowrap', text: task.owner || '—' }));
@@ -4792,20 +4760,22 @@ function renderDrawerActions(task, detail) {
   }
   quick.appendChild(row);
 
-  /* transition note */
-  const noteInput = h('input', {
-    class: 'input',
-    type: 'text',
-    placeholder: 'Transition note (required for rework, blocked, failed)',
-    value: state.drawer.note,
-    'data-fkey': 'transition-note',
-    'aria-label': 'Transition note',
-    on: { input: (event) => { state.drawer.note = event.target.value; } }
-  });
-  quick.appendChild(h('div', { class: 'quick-row' },
-    h('span', { class: 'quick-label', text: 'Note' }), noteInput));
+  /* transition note: only offered when a reachable status needs one */
+  if (targets.some((target) => NOTE_TARGETS.has(target))) {
+    const noteInput = h('input', {
+      class: 'input',
+      type: 'text',
+      placeholder: 'Note, required for ' + targets.filter((target) => NOTE_TARGETS.has(target)).map((target) => stMeta(target).label).join(', '),
+      value: state.drawer.note,
+      'data-fkey': 'transition-note',
+      'aria-label': 'Transition note',
+      on: { input: (event) => { state.drawer.note = event.target.value; } }
+    });
+    quick.appendChild(h('div', { class: 'quick-row' },
+      h('span', { class: 'quick-label', text: 'Note' }), noteInput));
+  }
 
-  /* claim / release */
+  /* claim / release and copyable CLI helpers */
   const claimRow = h('div', { class: 'quick-row' },
     h('span', { class: 'quick-label', text: 'Claim' }));
   if (task.claim) {
@@ -4827,19 +4797,17 @@ function renderDrawerActions(task, detail) {
       on: { click: () => doClaimTask() }
     }));
   }
-  quick.appendChild(claimRow);
 
-  /* copyable CLI helpers */
   const stateCommand = 'python3 tools/state.py set ' + task.id + ' ' + (next || task.status || 'in_progress');
   const gateName = state.drawer.gate.name || ((task.gates || [])[0] || '');
   const gateCommand = gateName && detail ? gateCommandFor(gateName, detail) : '';
   const gateCommandFull = 'python3 tools/gate.py --task ' + task.id + ' --name ' + (gateName || '<gate>') +
     ' --shell ' + JSON.stringify(gateCommand || '<command>');
-  const cliRow = h('div', { class: 'quick-row' },
-    h('span', { class: 'quick-label', text: 'CLI' }));
-  cliRow.appendChild(cliButton('Copy state', stateCommand));
-  cliRow.appendChild(cliButton('Copy gate', gateCommandFull));
-  quick.appendChild(cliRow);
+  claimRow.appendChild(h('span', { class: 'quick-spacer' }));
+  claimRow.appendChild(h('span', { class: 'hint', text: 'Copy CLI' }));
+  claimRow.appendChild(cliButton('state', stateCommand));
+  claimRow.appendChild(cliButton('gate', gateCommandFull));
+  quick.appendChild(claimRow);
 
   if (state.drawer.actionError) {
     quick.appendChild(errorCallout(state.drawer.actionError, { class: 'inline-error' }));
@@ -5044,8 +5012,21 @@ function planningSummaryText(plannedStart, target) {
 function renderTaskProperties(task, detail) {
   const readOnly = !canWrite() || task.status === 'done';
   const props = drawerPropsState(task);
-  const section = h('section', { class: 'drawer-section' });
-  section.appendChild(h('div', { class: 'drawer-label', text: 'Properties' }));
+  const labelCount = taskLabelIds(task).length;
+  const estimate = estimateOf(task);
+  const summaryText = [
+    labelCount ? labelCount + ' ' + plural(labelCount, 'label') : 'no labels',
+    estimate === null ? 'no estimate' : 'est ' + fmtHours(estimate),
+    state.planningDatesLoaded ? planningSummaryText(props.planned_start, props.target) : ''
+  ].filter(Boolean).join(' · ');
+  const section = h('details', {
+    class: 'drawer-section props-details',
+    open: Boolean(state.drawer.propsOpen || state.drawer.busy === 'properties'),
+    on: { toggle: (event) => { state.drawer.propsOpen = event.target.open; } }
+  });
+  section.appendChild(h('summary', { class: 'props-summary' },
+    h('span', { class: 'drawer-label', text: 'Properties' }),
+    h('span', { class: 'hint', text: summaryText })));
 
   /* planning dates come from board.json (schema 1.2) via /api/file */
   if (!state.planningDatesLoaded && !state.planningDatesLoading) {
@@ -5951,7 +5932,7 @@ function renderYourWork() {
   const tileGrid = h('div', { class: 'tiles' });
   for (const tile of tiles) {
     tileGrid.appendChild(h('button', {
-      class: 'tile ' + tile.cls, type: 'button',
+      class: 'tile ' + tile.cls + (tile.value ? '' : ' is-zero'), type: 'button',
       title: tile.label + ': ' + tile.value,
       on: {
         click: () => {
@@ -5975,13 +5956,23 @@ function renderYourWork() {
   grid.appendChild(right);
   view.appendChild(grid);
 
-  /* workload by status (mine) */
+  /* The inbox is the actionable feed and comes first; queues with nothing in
+     them are folded into one "all clear" line instead of a card each. */
+  left.appendChild(renderInboxPanel());
+  const queues = [];
+  const quiet = [];
+  const queue = (title, rows, body, options) => {
+    if (rows.length) queues.push(ywCard(title, rows.length, body, options));
+    else quiet.push(title);
+  };
+
+  /* mine, with the workload by status */
   const workload = data.workload || {};
-  const workloadBody = h('div', { class: 'workload' });
   const workloadTotal = Object.keys(workload).reduce((sum, key) => sum + Number(workload[key] || 0), 0);
-  if (!workloadTotal) {
-    workloadBody.appendChild(h('div', { class: 'hint', text: 'No tasks are assigned to ' + me + ' right now.' }));
-  } else {
+  const mineRows = (data.mine || []).map((row) => ywTaskRow(row.id, row.title, null, { status: row.status }));
+  const mineBody = h('div', { class: 'col' });
+  if (workloadTotal) {
+    const workloadBody = h('div', { class: 'workload' });
     for (const status of statusOrder()) {
       const amount = Number(workload[status] || 0);
       if (!amount) continue;
@@ -5992,34 +5983,20 @@ function renderYourWork() {
         progressBar(amount, workloadTotal, ''),
         h('span', { class: 'workload-value', text: String(amount) })));
     }
+    mineBody.appendChild(workloadBody);
   }
-  left.appendChild(ywCard('Workload · mine', workloadTotal, workloadBody));
+  if (mineRows.length) mineBody.appendChild(h('div', { class: 'queue' }, mineRows));
+  queue('Mine', mineRows, mineBody, { id: 'yw-mine' });
 
-  /* mine */
-  const mineRows = (data.mine || []).map((row) => ywTaskRow(row.id, row.title, null, { status: row.status }));
-  left.appendChild(ywCard('Mine', (data.mine || []).length,
-    mineRows.length ? h('div', { class: 'queue' }, mineRows) : h('div', { class: 'hint', text: 'No tasks are assigned to you.' }),
-    { id: 'yw-mine' }));
-
-  /* review queue */
   const reviewRows = (data.reviews || []).map((row) => {
     const verdict = row.review && row.review.verdict;
     return ywTaskRow(row.id, row.title, verdict ? 'verdict: ' + verdict : 'no verdict yet', { status: row.status });
   });
-  left.appendChild(ywCard('Review queue', (data.reviews || []).length,
-    reviewRows.length ? h('div', { class: 'queue' }, reviewRows) : h('div', { class: 'hint', text: 'Nothing waits for a review.' }),
-    { id: 'yw-reviews' }));
+  queue('Review queue', reviewRows, h('div', { class: 'queue' }, reviewRows), { id: 'yw-reviews' });
 
-  /* ready */
   const readyRows = (data.ready || []).map((row) => ywTaskRow(row.id, row.title, 'wave 1', null));
-  left.appendChild(ywCard('Ready now', (data.ready || []).length,
-    readyRows.length ? h('div', { class: 'queue' }, readyRows) : h('div', { class: 'hint', text: 'No task is ready for dispatch.' }),
-    { id: 'yw-ready' }));
+  queue('Ready now', readyRows, h('div', { class: 'queue' }, readyRows), { id: 'yw-ready' });
 
-  /* inbox */
-  right.appendChild(renderInboxPanel());
-
-  /* approvals */
   const approvalRows = (data.approvals || []).map((record) => h('button', {
     class: 'queue-row', type: 'button', title: record.note || '',
     on: { click: () => navigate('approvals') }
@@ -6028,34 +6005,24 @@ function renderYourWork() {
     h('div', { class: 'queue-title', text: (record.id || 'AP') + ' · ' + (record.action || 'approval') }),
     h('div', { class: 'queue-sub', text: (record.task ? record.task + ' · ' : '') + (record.note || 'requested by ' + (record.requested_by || '—')) })),
   h('span', { class: 'pill', text: relTime(record.requested_at) })));
-  right.appendChild(ywCard('Approvals waiting', (data.approvals || []).length,
-    approvalRows.length ? h('div', { class: 'queue' }, approvalRows) : h('div', { class: 'hint', text: 'No pending approvals.' })));
+  queue('Approvals waiting', approvalRows, h('div', { class: 'queue' }, approvalRows));
 
-  /* blocked */
   const blockedRows = (data.blocked || []).map((row) => ywTaskRow(row.id, row.title, row.reason || 'blocked', { status: 'blocked' }));
-  right.appendChild(ywCard('Blocked', (data.blocked || []).length,
-    blockedRows.length ? h('div', { class: 'queue' }, blockedRows) : h('div', { class: 'hint', text: 'No task is blocked.' }),
-    { id: 'yw-blocked' }));
+  queue('Blocked', blockedRows, h('div', { class: 'queue' }, blockedRows), { id: 'yw-blocked' });
 
-  /* budget */
   const budgetRows = (data.budget || []).map((row) => {
     const budget = row.budget || {};
     const sub = (budget.over ? 'over budget' : 'near budget') + (budget.max ? ' · ' + fmtTokens(budget.used || 0) + '/' + fmtTokens(budget.max) : '');
     return ywTaskRow(row.id, row.title, sub, null);
   });
-  right.appendChild(ywCard('Budget watch', (data.budget || []).length,
-    budgetRows.length ? h('div', { class: 'queue' }, budgetRows) : h('div', { class: 'hint', text: 'No task is near its token budget.' }),
-    { id: 'yw-budget' }));
+  queue('Budget watch', budgetRows, h('div', { class: 'queue' }, budgetRows), { id: 'yw-budget' });
 
-  /* claimed */
   const claimedRows = (data.claimed || []).map((row) => {
     const claim = row.claim || {};
     return ywTaskRow(row.id, row.title, 'claimed by ' + (claim.harness || 'session') + (claim.session ? ' · ' + claim.session : ''), null);
   });
-  right.appendChild(ywCard('Claimed now', (data.claimed || []).length,
-    claimedRows.length ? h('div', { class: 'queue' }, claimedRows) : h('div', { class: 'hint', text: 'No live claims.' })));
+  queue('Claimed now', claimedRows, h('div', { class: 'queue' }, claimedRows));
 
-  /* sessions */
   const sessions = data.sessions || [];
   const sessionRows = sessions.slice(0, 8).map((session) => h('button', {
     class: 'session-row', type: 'button', title: 'Open Sessions',
@@ -6066,8 +6033,14 @@ function renderYourWork() {
   session.task ? h('span', { class: 'chip mono', text: session.task }) : null,
   h('span', { class: 'hint', text: (session.role || 'worker') + ' · ' + fmtTokens(session.tokens || 0) + ' tokens' }),
   h('span', { class: 'hint', style: { marginLeft: 'auto' }, text: relTime(session.started) })));
-  right.appendChild(ywCard('Sessions', sessions.length,
-    sessionRows.length ? h('div', { class: 'sessions-strip' }, sessionRows) : h('div', { class: 'hint', text: 'No headless sessions recorded yet.' })));
+  queue('Sessions', sessionRows, h('div', { class: 'sessions-strip' }, sessionRows));
+
+  for (const card of queues) right.appendChild(card);
+  if (quiet.length) {
+    right.appendChild(h('div', { class: 'yw-quiet' },
+      h('span', { class: 'yw-quiet-mark', text: '✓' }),
+      h('span', { text: 'All clear: ' + quiet.join(', ') + '.' })));
+  }
 }
 
 function renderInboxPanel() {
@@ -6126,12 +6099,12 @@ function renderInboxPanel() {
         item.task ? taskChip(item.task) : null,
         h('span', { text: relTime(item.at) }))),
     h('div', { class: 'inbox-side' },
-      item.read ? h('span', { class: 'faint text-sm', text: 'read' }) : h('span', { class: 'badge bg-blue st-blue', text: 'new' }),
-      item.action ? h('span', { class: 'hint text-sm', text: item.action }) : null,
+      item.action ? h('span', { class: 'inbox-action', text: item.action + ' →' }) : null,
       !item.read ? h('button', {
-        class: 'btn btn-sm btn-ghost', type: 'button', text: 'Mark read',
+        class: 'btn btn-sm btn-ghost btn-icon inbox-mark', type: 'button', text: '✓',
         disabled: !canWrite(),
-        title: canWrite() ? 'Mark this item read' : 'The dashboard is read-only',
+        'aria-label': 'Mark "' + (item.title || item.id) + '" read',
+        title: canWrite() ? 'Mark read' : 'The dashboard is read-only',
         on: {
           click: (event) => {
             event.stopPropagation();
@@ -6329,7 +6302,7 @@ function renderSettingsFeatures(ui) {
   return h('section', { class: 'card-panel settings-section' },
     h('div', { class: 'panel-head' },
       h('span', { class: 'panel-title', text: 'Features' }),
-      h('span', { class: 'hint', text: 'Only the current views are on by default; planned views stay off until you enable them.' })),
+      h('span', { class: 'hint', text: 'Turn off the views this project does not need; they disappear from the sidebar and the command palette.' })),
     h('div', { class: 'panel-body' }, grid));
 }
 
@@ -7691,9 +7664,6 @@ function pageCollectionId(page) {
   return page.collection + (page.subcollection ? '/' + page.subcollection : '');
 }
 
-function selectedPageEntry() {
-  return state.pageDetail || (state.pagesSelected ? pageByPath(state.pagesSelected) : null);
-}
 
 function openPage(path, ref) {
   if (!path) return;
@@ -8022,9 +7992,6 @@ function renderPagesReader() {
    2.3 — Intake: proposals, accept/reject and task creation
    ========================================================================= */
 
-function intakeFilterLabel(status) {
-  return status === 'all' ? 'All' : status;
-}
 
 function filteredIntakeEntries() {
   const entries = intakeEntries();
@@ -8539,9 +8506,6 @@ function openRejectModal(entry) {
    2.3 — Task templates: plan editor, save-as-template and settings list
    ========================================================================= */
 
-function buildOwnerInput(value) {
-  return h('input', { class: 'input', type: 'text', placeholder: 'optional owner', value: value || '' });
-}
 
 function labelCheckboxHost(task, templateLabels) {
   const host = h('div', { class: 'editor-labels', 'aria-label': 'Labels' });
@@ -9296,8 +9260,37 @@ function renderGithub() {
 /* ---------- bulk selection ---------- */
 
 function bulkState() {
-  if (!state.bulk) state.bulk = { selected: [], status: 'blocked', note: '', labels: [], estimate: '', labelsOpen: false, busy: false };
+  if (!state.bulk) state.bulk = { mode: false, selected: [], status: 'in_progress', note: '', labels: [], estimate: '', labelsOpen: false, busy: false };
   return state.bulk;
+}
+
+/* Selection is a mode: checkboxes and the bulk bar appear only after "Select". */
+function selectionMode() {
+  if (!canWrite()) return false;
+  const bulk = bulkState();
+  return Boolean(bulk.mode || bulk.selected.length);
+}
+
+function setSelectionMode(on) {
+  const bulk = bulkState();
+  bulk.mode = Boolean(on);
+  if (!on) {
+    bulk.selected = [];
+    bulk.labelsOpen = false;
+  }
+  renderView();
+}
+
+function renderSelectToggle() {
+  if (!canWrite()) return null;
+  const on = selectionMode();
+  return h('button', {
+    class: 'btn btn-sm' + (on ? ' btn-primary' : ''), type: 'button',
+    text: on ? 'Done' : 'Select',
+    'aria-pressed': on ? 'true' : 'false',
+    title: on ? 'Leave selection mode' : 'Select tasks for a bulk action (status, claim, labels, estimate)',
+    on: { click: () => setSelectionMode(!on) }
+  });
 }
 
 function bulkSelected() {
@@ -9331,7 +9324,7 @@ function clearBulkSelection() {
 }
 
 function bulkCheckbox(task) {
-  if (!canWrite()) return null;
+  if (!selectionMode()) return null;
   return h('input', {
     class: 'bulk-check', type: 'checkbox', checked: bulkIsSelected(task.id),
     'aria-label': 'Select task ' + task.id,
@@ -9344,24 +9337,19 @@ function bulkCheckbox(task) {
 }
 
 function renderBulkBar() {
-  if (!canWrite()) return null;
+  if (!selectionMode()) return null;
   const bulk = bulkState();
   const visible = visibleTasks();
   const selected = bulk.selected.filter((taskId) => visible.some((task) => task.id === taskId));
   const allSelected = visible.length > 0 && visible.every((task) => bulk.selected.indexOf(task.id) !== -1);
   const disabled = !selected.length || bulk.busy;
 
-  const bar = h('div', { class: 'bulk-bar' + (selected.length ? ' is-active' : '') });
-  bar.appendChild(h('label', { class: 'checkbox', title: 'Select every task visible with the current filters' },
-    h('input', {
-      type: 'checkbox', checked: allSelected, 'aria-label': 'Select all visible tasks',
-      on: { change: (event) => selectAllVisibleBulk(event.target.checked) }
-    }),
-    h('span', { class: 'bulk-count', text: selected.length ? selected.length + ' selected' : 'Select tasks' })));
+  const bar = h('div', { class: 'bulk-bar' + (selected.length ? ' is-active' : ''), role: 'toolbar', 'aria-label': 'Bulk actions' });
+  bar.appendChild(h('span', { class: 'bulk-count', text: selected.length ? selected.length + ' selected' : 'Tick tasks to select them' }));
   bar.appendChild(h('button', {
-    class: 'btn btn-sm btn-ghost', type: 'button', text: 'Clear',
-    disabled: !selected.length,
-    on: { click: () => clearBulkSelection() }
+    class: 'btn btn-sm btn-ghost', type: 'button',
+    text: allSelected ? 'Select none' : 'Select all ' + visible.length,
+    on: { click: () => selectAllVisibleBulk(!allSelected) }
   }));
   bar.appendChild(h('span', { class: 'bulk-divider' }));
 
@@ -9371,19 +9359,20 @@ function renderBulkBar() {
     if (bulk.status === status) option.selected = true;
     return option;
   }));
-  statusSelect.value = bulk.status || 'blocked';
-  statusSelect.addEventListener('change', (event) => { bulkState().status = event.target.value; });
-  const noteInput = h('input', {
-    class: 'input is-note', type: 'text', placeholder: 'note (required for rework/blocked/failed)',
+  statusSelect.value = bulk.status || 'in_progress';
+  statusSelect.addEventListener('change', (event) => { bulkState().status = event.target.value; renderView(); });
+  const needsNote = NOTE_TARGETS.has(bulk.status || 'in_progress');
+  const noteInput = needsNote ? h('input', {
+    class: 'input is-note', type: 'text', placeholder: 'note (required)',
     'aria-label': 'Bulk note', value: bulk.note || '',
     on: { input: (event) => { bulkState().note = event.target.value; } }
-  });
+  }) : null;
   bar.appendChild(h('div', { class: 'bulk-group' },
-    h('span', { class: 'hint', text: 'Status' }), statusSelect, noteInput,
+    h('span', { class: 'hint', text: 'Move to' }), statusSelect, noteInput,
     h('button', {
       class: 'btn btn-sm btn-primary', type: 'button', text: 'Apply',
       disabled: disabled,
-      on: { click: () => runBulk('state', { status: bulkState().status, note: bulkState().note || undefined }) }
+      on: { click: () => runBulk('state', { status: bulkState().status, note: needsNote ? (bulkState().note || undefined) : undefined }) }
     })));
 
   bar.appendChild(h('span', { class: 'bulk-divider' }));
@@ -9397,24 +9386,40 @@ function renderBulkBar() {
       title: 'Release the selected tasks', on: { click: () => runBulk('release', {}) }
     })));
 
+  if (settingsLabels().length) {
+    bar.appendChild(h('span', { class: 'bulk-divider' }));
+    bar.appendChild(h('button', {
+      class: 'btn btn-sm' + (bulk.labelsOpen ? ' is-on' : ''), type: 'button',
+      text: 'Labels' + (bulk.labels && bulk.labels.length ? ' (' + bulk.labels.length + ')' : '') + ' ▾',
+      disabled: disabled, 'aria-expanded': bulk.labelsOpen ? 'true' : 'false',
+      on: { click: () => { bulkState().labelsOpen = !bulkState().labelsOpen; renderView(); } }
+    }));
+  }
+
   bar.appendChild(h('span', { class: 'bulk-divider' }));
-  const labelsButton = h('button', {
-    class: 'btn btn-sm', type: 'button',
-    text: 'Labels' + (bulk.labels && bulk.labels.length ? ' (' + bulk.labels.length + ')' : ''),
-    disabled: disabled,
-    on: { click: () => { bulkState().labelsOpen = !bulkState().labelsOpen; renderView(); } }
+  const estimateInput = h('input', {
+    class: 'input is-estimate', type: 'number', min: '0', max: '10000', step: '0.5', placeholder: 'est. h',
+    'aria-label': 'Bulk estimate hours', value: bulk.estimate || '', disabled: disabled,
+    on: { input: (event) => { bulkState().estimate = event.target.value; } }
   });
   bar.appendChild(h('div', { class: 'bulk-group' },
-    labelsButton,
+    estimateInput,
     h('button', {
-      class: 'btn btn-sm', type: 'button', text: 'Apply labels', disabled: disabled,
-      on: { click: () => runBulk('labels', { labels: bulkState().labels || [] }) }
+      class: 'btn btn-sm', type: 'button', text: 'Set estimate', disabled: disabled,
+      on: {
+        click: () => {
+          const text = String(bulkState().estimate || '').trim();
+          const value = text === '' ? null : Number(text);
+          if (expandedNumberInvalid(text, value)) { toast('Enter a number for the estimate', 'warn'); return; }
+          runBulk('estimate', { estimate_hours: value });
+        }
+      }
     })));
-  if (bulk.labelsOpen) {
-    const labelHost = h('div', { class: 'bulk-group', style: { flexBasis: '100%' } });
-    const labels = settingsLabels();
-    if (!labels.length) labelHost.appendChild(h('span', { class: 'hint', text: 'No labels defined in Settings.' }));
-    for (const label of labels) {
+  if (bulk.busy) bar.appendChild(h('span', { class: 'hint', text: 'Working…' }));
+
+  if (bulk.labelsOpen && !disabled) {
+    const labelHost = h('div', { class: 'bulk-group bulk-labels' });
+    for (const label of settingsLabels()) {
       labelHost.appendChild(h('label', { class: 'checkbox' },
         h('input', {
           type: 'checkbox', checked: (bulkState().labels || []).indexOf(label.id) !== -1,
@@ -9430,29 +9435,13 @@ function renderBulkBar() {
         }),
         labelChip(label)));
     }
+    labelHost.appendChild(h('button', {
+      class: 'btn btn-sm btn-primary', type: 'button', text: 'Replace labels',
+      title: 'Set exactly these labels on every selected task',
+      on: { click: () => runBulk('labels', { labels: bulkState().labels || [] }) }
+    }));
     bar.appendChild(labelHost);
   }
-
-  bar.appendChild(h('span', { class: 'bulk-divider' }));
-  const estimateInput = h('input', {
-    class: 'input is-estimate', type: 'number', min: '0', max: '10000', step: '0.5', placeholder: 'hours',
-    'aria-label': 'Bulk estimate hours', value: bulk.estimate || '',
-    on: { input: (event) => { bulkState().estimate = event.target.value; } }
-  });
-  bar.appendChild(h('div', { class: 'bulk-group' },
-    estimateInput,
-    h('button', {
-      class: 'btn btn-sm', type: 'button', text: 'Apply estimate', disabled: disabled,
-      on: {
-        click: () => {
-          const text = String(bulkState().estimate || '').trim();
-          const value = text === '' ? null : Number(text);
-          if (expandedNumberInvalid(text, value)) { toast('Enter a number for the estimate', 'warn'); return; }
-          runBulk('estimate', { estimate_hours: value });
-        }
-      }
-    })));
-  if (bulk.busy) bar.appendChild(h('span', { class: 'hint', text: 'Working…' }));
   return bar;
 }
 
@@ -10147,15 +10136,15 @@ function renderGraph() {
       h('div', { class: 'graph-zoom' },
         h('button', {
           class: 'btn btn-sm', type: 'button', text: '−', 'aria-label': 'Zoom out',
-          on: { click: () => { state.graph.zoom = Math.max(0.6, Math.round((state.graph.zoom - 0.2) * 10) / 10); renderView(); } }
+          on: { click: () => { state.graph.zoom = Math.max(0.6, Math.round((graphZoomValue() - 0.2) * 10) / 10); renderView(); } }
         }),
         h('button', {
-          class: 'btn btn-sm', type: 'button', text: 'Reset', 'aria-label': 'Reset zoom',
-          on: { click: () => { state.graph.zoom = 1; renderView(); } }
+          class: 'btn btn-sm' + (state.graph.zoom === 'fit' ? ' is-on' : ''), type: 'button', text: 'Fit', 'aria-label': 'Fit the graph to the width',
+          on: { click: () => { state.graph.zoom = 'fit'; renderView(); } }
         }),
         h('button', {
           class: 'btn btn-sm', type: 'button', text: '+', 'aria-label': 'Zoom in',
-          on: { click: () => { state.graph.zoom = Math.min(1.8, Math.round((state.graph.zoom + 0.2) * 10) / 10); renderView(); } }
+          on: { click: () => { state.graph.zoom = Math.min(1.8, Math.round((graphZoomValue() + 0.2) * 10) / 10); renderView(); } }
         })))));
 
   const graphFilterNote = renderGraphFilterNote();
@@ -10193,8 +10182,12 @@ function renderGraph() {
     h('span', { text: tasks.length + ' ' + plural(tasks.length, 'node') }),
     h('span', { text: (layout.maxDepth + 1) + ' ' + plural(layout.maxDepth + 1, 'column') }),
     h('span', { text: 'stage groups: ' + Array.from(stageCounts.values()).length }),
-    h('span', { text: 'zoom ' + Math.round(state.graph.zoom * 100) + '%' }));
+    h('span', { text: state.graph.zoom === 'fit' ? 'zoom: fit' : 'zoom ' + Math.round(graphZoomValue() * 100) + '%' }));
   dom.view.appendChild(stats);
+}
+
+function graphZoomValue() {
+  return typeof state.graph.zoom === 'number' ? state.graph.zoom : 1;
 }
 
 function buildGraphSvg(layout) {
@@ -10202,13 +10195,16 @@ function buildGraphSvg(layout) {
   const columns = layout.maxDepth + 1;
   const width = GRAPH_PAD * 2 + columns * GRAPH_NODE_W + Math.max(0, columns - 1) * GRAPH_COL_GAP;
   const height = GRAPH_PAD * 2 + rows.length * GRAPH_NODE_H + Math.max(0, rows.length - 1) * GRAPH_ROW_GAP;
-  const zoom = state.graph.zoom || 1;
+  const fit = state.graph.zoom === 'fit';
+  const zoom = graphZoomValue();
 
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  svg.setAttribute('class', 'graph-svg');
+  svg.setAttribute('class', 'graph-svg' + (fit ? ' is-fit' : ''));
   svg.setAttribute('viewBox', '0 0 ' + width + ' ' + height);
-  svg.setAttribute('width', String(Math.round(width * zoom)));
-  svg.setAttribute('height', String(Math.round(height * zoom)));
+  if (!fit) {
+    svg.setAttribute('width', String(Math.round(width * zoom)));
+    svg.setAttribute('height', String(Math.round(height * zoom)));
+  }
   svg.setAttribute('role', 'img');
   svg.setAttribute('aria-label', 'Task dependency graph with ' + rows.length + ' tasks');
 
