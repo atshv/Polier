@@ -66,7 +66,7 @@ from core.jobs import JobManager
 from .assistant import AssistantManager
 from .sessions import SessionManager
 
-VERSION = "2.4.0"
+VERSION = "2.5.0"
 CONFIG = "config.json"
 MAX_BODY = 1_500_000
 # POST endpoints that only read/compute; safe in read-only mode and without the

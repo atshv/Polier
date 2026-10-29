@@ -2,6 +2,26 @@
 
 Each release lists what a running project must do to adopt it. Update between stages, never during a task (see `guide/cheatsheet.md`). The current version is in `VERSION`; projects record theirs in `board.json` → `generator_version`.
 
+## 2.5.0
+
+**A calmer dashboard.** 2.0–2.4 added a view per release until the page had twenty tabs in one row, a bulk bar that was always open and a filter toolbar of three lines. 2.5 changes no API, no file and no rule; it reorganises the page so the common work (look at the board, open a task, decide) takes fewer clicks and less reading.
+
+**Navigation.** The tab row becomes a sidebar with five groups — work (Your Work, Board, Table), **Plan** (Plan editor, Timeline, Cycles, Dependencies, Dispatch), **Track** (Approvals, Activity, Coverage, Modules, Analytics), **Agents** (Sessions, Assistant, Automations, GitHub) and **Knowledge** (Pages, Intake) — with Settings at the bottom. Views switched off in `dashboard.json` disappear from it, counts sit next to Your Work and Approvals. Below 900 px the sidebar turns into a scrolling strip. The header gets a visible **Commands** button for the Ctrl/Cmd+K palette, and the search icon no longer overlaps the placeholder.
+
+**Board and table.**
+- One toolbar row: view, group, sort, `+ Filter`, the task count, `Select` and a density toggle. Filter chips only appear when there are filters; "Save view" only when the current filters, grouping or sort differ from the default.
+- Bulk actions are a mode: `Select` shows the checkboxes and a sticky bulk bar, clicking a card selects it, `Done` or Esc leaves the mode. The note field appears only for Rework/Blocked/Failed; label checkboxes open from a `Labels ▾` button.
+- The stage progress moves from a side panel into a strip above the board, so every Kanban column fits. Empty Rework/Blocked/Failed columns fold into slim rails; Done stays folded until opened.
+- Cards drop the repeated status badge (it is the column) and the zero lines: gates, effort and tokens are one compact row, and only when there is something to show. The table hides the labels column when the project defines no labels.
+
+**Your Work.** The inbox comes first; queues with items get a card, empty ones are summed up in one "All clear" line, zero tiles are dimmed. Inbox rows show their action inline ("Open task →") and a ✓ to mark them read.
+
+**Task drawer.** Properties (labels, estimate, planning dates) fold into one line with a summary until opened; the transition note only appears when a reachable status needs one; claim and the copyable CLI commands share a row.
+
+**Smaller fixes.** The dependency graph fits the width by default (`Fit`, `−`, `+`). The Settings feature note no longer talks about "planned" views. `tools/plan.py` now accepts the documented comma lists (`--labels bug,risk-low`; also `--depends-on`, `--gates`, `--satisfies`) instead of refusing them as one invalid id. Nine unused helpers were removed from `app.js`. The screenshots in `docs/images/` show the new layout.
+
+**Compatibility.** UI only, plus the CLI fix. Deep links (`#/board`, `#/graph`, `#/board/<ID>`, …), the API, MCP tools and every project file are unchanged. Restart the dashboard to load the new page. Plugin users: `git pull`, `dsh plugin --profile <name> add ./polier` again, restart. Claude Code users: replace the package copy. Skill-only users: `./update.sh`.
+
 ## 2.4.0
 
 **Intelligence.** 2.4 puts the project's own evidence to work: an assistant that answers questions about the plan without being able to change it, deterministic automations that turn state into suggestions (dry run, no hidden writes), bulk operations for the owner's repeated actions, a command palette for navigation and a read-only GitHub/CI panel. Everything stays local, file-based and auditable; the assistant runs through the same headless session provider and the same project hooks as every other agent.

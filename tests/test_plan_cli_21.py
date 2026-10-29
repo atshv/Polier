@@ -41,6 +41,20 @@ class PlanCliTest(unittest.TestCase):
         deleted = run_tool("plan.py", "delete", "DASH-01", "--root", str(root))
         self.assertEqual(deleted.returncode, 0, deleted.stderr)
 
+    def test_labels_accept_a_comma_list(self) -> None:
+        root = sample_project()
+        for label in ("docs", "risky"):
+            added = run_tool("settings.py", "label", "add", label, label.title(), "--root", str(root))
+            self.assertEqual(added.returncode, 0, added.stderr)
+        result = run_tool("plan.py", "create", "--root", str(root), "--id", "DASH-03",
+                          "--title", "Two labels", "--goal", "Do it.", "--stage", "surface",
+                          "--scope-write", "docs/", "--acceptance", "A1", "--gates", "board-check",
+                          "--labels", "docs, risky")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        board = json.loads((root / "board.json").read_text(encoding="utf-8"))
+        task = next(entry for entry in board["tasks"] if entry["id"] == "DASH-03")
+        self.assertEqual(task["labels"], ["docs", "risky"])
+
     def test_unknown_label_is_refused(self) -> None:
         root = sample_project()
         result = run_tool("plan.py", "create", "--root", str(root), "--id", "DASH-02",
