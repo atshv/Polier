@@ -385,7 +385,7 @@ border:1px solid var(--line);border-radius:10px;padding:10px 14px}
 .filters select{min-width:140px;padding:5px 7px;border:1px solid var(--line);border-radius:6px;
 background:var(--card);color:var(--fg);font:inherit;font-size:.85rem}
 .view-switch{display:flex}
-.view-switch input{position:absolute;opacity:0;pointer-events:none}
+input[name="view"]{position:absolute;opacity:0;pointer-events:none}
 .view-switch label{padding:5px 15px;border:1px solid var(--line);background:var(--card);
 color:var(--muted);cursor:pointer;font-size:.82rem}
 .view-switch label:first-of-type{border-radius:7px 0 0 7px}
@@ -395,7 +395,7 @@ color:var(--muted);cursor:pointer;font-size:.82rem}
 #view-kanban:checked ~ .views #tasks{display:none}
 #view-table:checked ~ .views #kanban{display:none}
 .kanban{display:flex;gap:10px;overflow-x:auto;padding-bottom:6px;align-items:flex-start}
-.column{flex:0 0 190px;background:var(--chip);border:1px solid var(--line);border-radius:8px;padding:8px;min-height:90px}
+.column{flex:1 1 130px;min-width:120px;background:var(--chip);border:1px solid var(--line);border-radius:8px;padding:8px;min-height:90px}
 .column-head{display:flex;justify-content:space-between;align-items:baseline;padding:1px 3px 7px;
 font-size:.7rem;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
 .column-head b{color:var(--fg)}
@@ -476,7 +476,7 @@ KANBAN_COLUMNS = (
     ("done", "Done", ("done",)),
 )
 
-STAGE_COLORS = ("#1f5f8b", "#2f7d4f", "#a86d0f", "#b4372f", "#d9731a", "#6b4fa0")
+STAGE_COLORS = ("#3b82f6", "#22c55e", "#f59e0b", "#ef4444", "#a855f7", "#06b6d4")
 
 FILTER_SCRIPT = """
 /* Hide table rows and kanban cards that do not match the filters. Without
@@ -1299,14 +1299,14 @@ def _render_token_history(board, root) -> str:
                      f'x2="{plot_right}" y2="{budget_y:.1f}"/>')
         parts.append(f'<text class="axis-label" x="{plot_right}" y="{budget_y - 4:.1f}" '
                      f'text-anchor="end">budget {_esc(f"{budget:,}")}</text>')
-    for index, stage in enumerate(stage_order):
-        color = STAGE_COLORS[index % len(STAGE_COLORS)]
-        parts.append(f'<polyline class="token-line token-stage" '
-                     f'points="{points(stage_points[stage])}" style="stroke:{color}"/>')
     parts.append(f'<polyline class="token-line token-total" points="{points(total_points)}"/>')
     for sequence, value in total_points:
         parts.append(f'<circle class="token-point" cx="{x_at(sequence):.1f}" '
                      f'cy="{y_at(value):.1f}" r="2.5"/>')
+    for index, stage in enumerate(stage_order):
+        color = STAGE_COLORS[index % len(STAGE_COLORS)]
+        parts.append(f'<polyline class="token-line token-stage" '
+                     f'points="{points(stage_points[stage])}" style="stroke:{color}"/>')
     parts.append("</svg>")
     parts.append('<div class="legend">')
     parts.append(f'<span><span class="legend-swatch" style="background:var(--fg)"></span>'
