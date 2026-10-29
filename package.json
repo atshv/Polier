@@ -1,6 +1,6 @@
 {
   "name": "dsh-polier",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Plans an AI coding project before the first line of code, then keeps the agents to the plan: write guard per task, recorded test evidence, checkpoints and approvals. DeepSeek Harness plugin with Claude Code hooks.",
   "license": "MIT",
   "repository": {

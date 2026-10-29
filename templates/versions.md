@@ -13,7 +13,7 @@
 ## Rules
 
 1. Every dependency from `package.json`, `pyproject.toml`, `Cargo.toml`, `go.mod`, `CMakeLists.txt`, lockfiles and CI workflows appears here, including dev dependencies, browsers and build tools.
-2. Versions are exact and come from the manifest or lockfile, or from upstream release notes with a URL. Record the date (`YYYY-MM-DD`) and who checked it.
+2. Versions are exact and come from the manifest or lockfile, or from upstream release notes with a URL. Record the date (`YYYY-MM-DD`) and who checked it. `python3 <package>/tools/research.py versions --lookup --write` confirms every exact npm/PyPI version against the registry and fills its row; ranges and failed lookups stay findings.
 3. `[VERIFY: from manifest/docs]` marks a value still to confirm; `[UNVERIFIED]` marks an unconfirmed claim. Resolve both before tagging — neither belongs in a release.
 4. A version change updates the manifest, the lockfile and this table in the same task. No silent upgrades, no `latest`.
 5. Profile L: `tools/check.py` warns about a manifest dependency missing here; treat the warning as an error before release.

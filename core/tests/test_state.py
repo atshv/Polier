@@ -264,6 +264,21 @@ class Checking(unittest.TestCase):
         self.assertIn("2 task(s) already in_progress", result["errors"][0])
         self.assertTrue(any("wait" == action["action"] for action in result["actions"]))
 
+    def test_open_dependencies_block_in_progress(self):
+        root = policy_project([task("M01", status="pending"),
+                               task("M02", status="pending", depends_on=["M01"])])
+        result = state.check_transition(root, None, "M02", "in_progress")
+        self.assertFalse(result["ok"])
+        self.assertIn("depends on M01, not done yet", result["errors"][0])
+        self.assertIn("depends_on", result["requires"])
+
+    def test_open_dependencies_only_warn_without_policy(self):
+        root = project([task("M01", status="pending"),
+                        task("M02", status="pending", depends_on=["M01"])], repo=False)
+        result = state.check_transition(root, None, "M02", "in_progress")
+        self.assertTrue(result["ok"])
+        self.assertTrue(any("depends on M01" in warning for warning in result["warnings"]))
+
     def test_note_requirements(self):
         root = policy_project([task("M01", status="in_progress")])
         start(root)

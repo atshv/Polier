@@ -51,7 +51,7 @@ evaluates without writing.
 
 | To | Preconditions (hard unless noted) |
 |---|---|
-| `in_progress` | attempts opened < `max_attempts_per_task`; other `in_progress` tasks < `max_in_progress`; stage not stopped, blocking stages complete |
+| `in_progress` | every `depends_on` task done; attempts opened < `max_attempts_per_task`; other `in_progress` tasks < `max_in_progress`; stage not stopped, blocking stages complete |
 | `verifying` | an attempt is open in the run record |
 | `review` | a passing record for every gate (`pass`, exit 0, not `infra`/`busy`/`timeout`) |
 | `done` | review `verdict: pass` (`checks.review_before_done`); 1–3-line `handoff` when depended on (`checks.handoff_before_done`); run record (`checks.run_record`); granted `new_dependency` approval when a manifest is touched (`dependencies.approval`) |

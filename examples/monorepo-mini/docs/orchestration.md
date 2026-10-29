@@ -36,7 +36,7 @@ precondition and the command that records it.
 
 | To | Needs |
 |---|---|
-| `in_progress` | an attempt below 3; fewer than 3 tasks in progress; the stage not stopped or waiting |
+| `in_progress` | every dependency done; an attempt below 3; fewer than 3 tasks in progress; the stage not stopped or waiting |
 | `verifying` | an open attempt in `runs/<ID>.json` |
 | `review` | a passing record for every gate of the task |
 | `done` | review `verdict: pass`; handoff when another task depends on this one; the run record; a granted `new_dependency` approval when a manifest is touched |

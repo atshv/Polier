@@ -6,7 +6,7 @@ The human's operating manual. The generator drafts and writes; you approve, star
 
 | Phase | Generator | You |
 |---|---|---|
-| 0 Interview | tool check, ≤ 10 questions per round, profile proposal | confirm the profile, the runtime resources and the release path |
+| A Interview | tool check, ≤ 10 questions per round, profile proposal | confirm the profile, the runtime resources and the release path |
 | B Recon | repo facts (brownfield) | confirm or correct |
 | C + D | architecture, artifact map, task DAG, package map (L), stages, `policy.json` | approve (S: together; M/L: separately) |
 | E | roles and protocol, worktrees, claims, runtime rules (M/L) | approve |
@@ -23,23 +23,13 @@ The human's operating manual. The generator drafts and writes; you approve, star
 - **Generator copy:** if the package sits inside the project (`.generator/`), it is gitignored and ships `tools/manifest.json`, so `check.py` reports drift.
 - **Policy:** `policy.json` exists, `version: 1`, limits match the profile (S 3/1/3, M 3/2/3, L 3/3/3 for attempts/in progress/rounds), the manifest list matches the project; `docs/orchestration.md` exists and `AGENTS.md` names `policy.json`, `runs/` and the state commands.
 
-## The task loop (1.1)
+## The task loop
 
-The lead runs the transitions; the worker runs the gates and reports, the reviewer writes the review.
+Every status change goes through `tools/state.py set <ID> <status>` in a lead session: `in_progress → verifying → review → done`, or `rework`, `blocked`, `failed` with a note. The full model is `prompt/orchestration.md`; the checklists below are the human side of it.
 
-- [ ] `python3 <package>/tools/dispatch.py`: first wave, blocked tasks, scope conflicts, pending approvals.
-- [ ] Claim the task and, when the board requires one, create its worktree.
-- [ ] `python3 <package>/tools/state.py set <ID> in_progress`: opens attempt N of `max_attempts_per_task`; refuses when the limit is used up, too many tasks run at once, or the stage is stopped or waiting.
-- [ ] Gates: `pl_gate` or `tools/gate.py` for every gate in `board.json`; each run appends a `gate` event to `runs/<ID>.json`.
-- [ ] `python3 <package>/tools/state.py set <ID> verifying`: needs the open attempt.
-- [ ] `python3 <package>/tools/state.py set <ID> review`: needs a passing record for every gate.
-- [ ] Reviewer writes `reviews/<ID>.md`; then `state.py set <ID> done --note "..."`, or `state.py set <ID> rework --note "<finding>"`.
-- [ ] Attempts: never reset by hand; at the cap `state.py` refuses and names the escalate command — set `blocked` with a note, then escalate.
-- [ ] Rounds: `rework` counts one; at `max_review_rounds`, escalate instead of another round.
-- [ ] Approvals: `tools/approve.py request --action <action> --task <ID> --note "<why>"`, then the owner `grant`s or `deny`s. A granted record comes before the action, not after; `list --status pending` shows open ones.
+- [ ] Attempts and review rounds are never reset by hand. At a cap `state.py` refuses and names the escalate command: set `blocked` with a note, then ask the owner.
+- [ ] Risky actions (new dependency, protected path, merge, release, reopen) need a granted `tools/approve.py` record before the action; `list --status pending` shows open ones.
 - [ ] `runs/<ID>.json` is committed with the task and never hand-edited.
-- [ ] `python3 <package>/tools/audit.py .` exits 0; `tools/dispatch.py` shows no conflicts.
-- [ ] After every transition: `python3 <package>/tools/render_status.py .`. `STATUS.md` is generated from `board.json`, `runs/` and `policy.json`, never hand-edited.
 
 ## Before every task
 
@@ -56,7 +46,7 @@ The lead runs the transitions; the worker runs the gates and reports, the review
 - [ ] Every acceptance criterion evidenced.
 - [ ] Diff stays within the scope; no tests changed without approval. Changes from another live claim show up as "foreign changes (task X, harness Y)" — they are not this task's violations.
 - [ ] Independent review in a new session (`/pl reviewer` with the plugin), no open blockers (`reviews/Mxx.md`); set `review` before it and `done`/`rework` after it with `tools/state.py`.
-- [ ] No placeholders, TODOs or `[UNVERIFIED]`.
+- [ ] No placeholders, TODOs or `[UNVERIFIED]`; `tools/research.py check` is green (notes answered and sourced, versions recorded).
 - [ ] As lead: merge `task/<ID>`, run the gates again on the base branch, release the claim and the slot and remove the worktree (`python3 <package>/tools/worktree.py finish <ID>` — refuses a dirty checkout), record paths into the task's `evidence`, `state.py set <ID> done`, `handoff` written, `STATUS.md` regenerated, `check.py` (`pl_check`) and `tools/audit.py` green; commit `<ID>: <title>` including `reviews/evidence/` and `runs/<ID>.json`.
 - [ ] Next task starts from its brief.
 
