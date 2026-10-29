@@ -41,6 +41,13 @@ The human's operating manual. The generator drafts and writes; you approve, star
 - **Analytics:** throughput, cycle time, gate pass rate, rework, blocked age, estimate vs actual, tokens and sessions — all derived; nothing to maintain.
 - **Board schema 1.2** only adds the two optional planning dates; old boards stay valid and the plan editor upgrades on first use.
 
+## Knowledge and intake (2.3)
+
+- **Pages:** read-only Markdown browser over root docs, `docs/`, `tasks/`, `reviews/` and package docs; search, favorites, backlinks and git history/old revisions. CLI `tools/pages.py list|search|show|history|favorite|favorites`.
+- **Intake:** proposals are committed `intake/<id>.json` files (`proposed` → `accepted`/`rejected`). Add via dashboard, `tools/intake.py add`, MCP; accept with a stage and optional template → creates a validated pending task and links it back. Rejections need a reason.
+- **Task templates:** committed `templates/tasks/<id>.json` (scope, acceptance, gates, complexity, labels, estimate). Save one from an existing task (`tools/templates.py save --from-task <ID> --id <id>`), use it in the plan editor, intake accept or `POST /api/plan/tasks` with `template`.
+- **Pages and intake** are feature-flagged in `dashboard.json` (default on). Nothing in the page viewer writes; templates and intake are validated project files.
+
 ## The dashboard (2.0)
 
 - Start it with `python3 tools/serve.py <project> [--port 8765] [--open] [--token …] [--read-only]`; stop it with Ctrl+C. It needs no dependencies and writes only runtime files under `<git-common-dir>/polier/dashboard/`.

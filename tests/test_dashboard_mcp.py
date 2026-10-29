@@ -45,7 +45,9 @@ class McpTest(unittest.TestCase):
         for name in ("polier_settings", "polier_views", "polier_worklog",
                      "polier_me", "polier_inbox", "polier_inbox_read",
                      "polier_timeline", "polier_cycles", "polier_modules",
-                     "polier_coverage", "polier_analytics"):
+                     "polier_coverage", "polier_analytics",
+                     "polier_pages", "polier_page", "polier_pages_search",
+                     "polier_intake", "polier_intake_add", "polier_templates"):
             self.assertIn(name, tools)
         snapshot = json.loads(by_id[3]["result"]["content"][0]["text"])
         self.assertEqual(snapshot["project"]["name"], "canvas-mini")
@@ -108,6 +110,33 @@ class McpTest(unittest.TestCase):
         analytics = json.loads(by_id[5]["result"]["content"][0]["text"])
         self.assertIn("kpis", analytics)
 
+    def test_knowledge_tools(self) -> None:
+        root = sample_project()
+        process, responses = mcp_session(root, [
+            {"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+             "params": {"name": "polier_pages", "arguments": {}}},
+            {"jsonrpc": "2.0", "id": 2, "method": "tools/call",
+             "params": {"name": "polier_page", "arguments": {"path": "README.md"}}},
+            {"jsonrpc": "2.0", "id": 3, "method": "tools/call",
+             "params": {"name": "polier_pages_search", "arguments": {"q": "contract"}}},
+            {"jsonrpc": "2.0", "id": 4, "method": "tools/call",
+             "params": {"name": "polier_intake", "arguments": {}}},
+            {"jsonrpc": "2.0", "id": 5, "method": "tools/call",
+             "params": {"name": "polier_templates", "arguments": {}}},
+        ])
+        self.assertEqual(process.returncode, 0, process.stderr)
+        by_id = {response.get("id"): response for response in responses}
+        pages = json.loads(by_id[1]["result"]["content"][0]["text"])
+        self.assertGreater(pages["counts"]["pages"], 2)
+        page = json.loads(by_id[2]["result"]["content"][0]["text"])
+        self.assertTrue(page["text"])
+        search = json.loads(by_id[3]["result"]["content"][0]["text"])
+        self.assertIn("results", search)
+        entry = json.loads(by_id[4]["result"]["content"][0]["text"])
+        self.assertIn("entries", entry)
+        templates = json.loads(by_id[5]["result"]["content"][0]["text"])
+        self.assertIn("templates", templates)
+
     def test_read_only_refuses_writes(self) -> None:
         root = sample_project()
         process, responses = mcp_session(root, [
@@ -118,6 +147,8 @@ class McpTest(unittest.TestCase):
              "params": {"name": "polier_unknown", "arguments": {}}},
             {"jsonrpc": "2.0", "id": 3, "method": "tools/call",
              "params": {"name": "polier_inbox_read", "arguments": {"all": True}}},
+            {"jsonrpc": "2.0", "id": 4, "method": "tools/call",
+             "params": {"name": "polier_intake_add", "arguments": {"title": "Read-only"}}},
         ], extra=["--read-only"])
         self.assertEqual(process.returncode, 0)
         by_id = {response.get("id"): response for response in responses}
@@ -126,6 +157,7 @@ class McpTest(unittest.TestCase):
         self.assertTrue(by_id[2]["result"]["isError"])
         self.assertTrue(by_id[3]["result"]["isError"])
         self.assertIn("read-only", by_id[3]["result"]["content"][0]["text"])
+        self.assertTrue(by_id[4]["result"]["isError"])
 
 
 if __name__ == "__main__":

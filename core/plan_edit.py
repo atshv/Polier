@@ -170,10 +170,18 @@ def _apply_payload(board: dict, task: dict, payload: dict, *, creating: bool) ->
             raise PolierError("complexity must be a number between 1 and 10")
         task["complexity"] = value
     if "stage" in payload:
-        stage = _text(payload["stage"])
-        if stage and stage not in board_mod.stage_ids(board):
-            raise PolierError(f"unknown stage '{stage}'")
-        task["stage"] = stage or task.get("stage")
+        value = payload["stage"]
+        if isinstance(value, bool):
+            raise PolierError("stage must be a stage id or a positive number")
+        if isinstance(value, int):
+            if value < 1:
+                raise PolierError("stage must be a positive number")
+            task["stage"] = value
+        else:
+            stage = _text(value)
+            if stage and stage not in board_mod.stage_ids(board):
+                raise PolierError(f"unknown stage '{stage}'")
+            task["stage"] = stage or task.get("stage")
     for field in ("owner", "branch", "worktree"):
         if field in payload:
             value = payload[field]
@@ -250,7 +258,8 @@ def create_task(root, payload: dict) -> dict:
             "status": "pending",
             "depends_on": [],
             "complexity": 2,
-            "stage": _text(payload.get("stage")) or (board.get("stages") or [{}])[0].get("id", "foundation"),
+            "stage": payload.get("stage") if payload.get("stage") not in (None, "") else (
+                (board.get("stages") or [{}])[0].get("id") or 1),
             "parallel_group": None,
             "scope_write": [],
             "scope_read": [],
