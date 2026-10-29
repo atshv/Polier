@@ -42,6 +42,7 @@ TASK_FIELDS = (
     "acceptance", "gates", "owner", "branch", "worktree", "round",
     "evidence", "handoff", "scope_write_forbidden", "package", "exclusive",
     "resources", "contract_followups", "labels", "estimate_hours",
+    "planned_start", "target",
 )
 
 
@@ -218,6 +219,10 @@ def _task_view(root: Path, task: dict, *, policy: dict, plan_index: dict, gates:
     next_status = state_mod.NEXT_STATUS.get(_text(task.get("status")) or "")
     return {
         **{key: task.get(key) for key in TASK_FIELDS if key in task},
+        "labels": task.get("labels") or [],
+        "estimate_hours": task.get("estimate_hours"),
+        "planned_start": task.get("planned_start"),
+        "target": task.get("target"),
         "id": task_id,
         "stage_title": stage_titles.get(_text(task.get("stage")), _text(task.get("stage"))),
         "run": run,

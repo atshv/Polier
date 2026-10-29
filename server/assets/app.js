@@ -16,10 +16,15 @@ const VIEWS = [
   { key: 'yourwork', label: 'Your Work', feature: 'inbox' },
   { key: 'board', label: 'Board' },
   { key: 'table', label: 'Table' },
+  { key: 'timeline', label: 'Timeline', feature: 'timeline' },
+  { key: 'cycles', label: 'Cycles', feature: 'cycles' },
+  { key: 'modules', label: 'Modules', feature: 'modules' },
+  { key: 'coverage', label: 'Coverage', feature: 'coverage' },
   { key: 'graph', label: 'Graph' },
   { key: 'dispatch', label: 'Dispatch' },
   { key: 'approvals', label: 'Approvals' },
   { key: 'activity', label: 'Activity' },
+  { key: 'analytics', label: 'Analytics', feature: 'analytics' },
   { key: 'sessions', label: 'Sessions' },
   { key: 'plan', label: 'Plan' },
   { key: 'settings', label: 'Settings' }
@@ -613,12 +618,13 @@ const FEATURE_NOTES = {
   worklog: 'The Worklog drawer tab and effort columns.',
   views: 'The filter builder, saved views, grouping, sorting and density.',
   labels: 'Task labels on cards, rows, the drawer and in Settings.',
-  timeline: 'A horizontal time view of stages and tasks.',
-  cycles: 'Recurring review/work cycles across the board.',
-  modules: 'A module map derived from the package graph.',
+  timeline: 'The plan on a time axis: stage lanes, bars, critical path and today.',
+  cycles: 'Stages as cycles with burndown, exit gates and owner decisions.',
+  modules: 'The package map with health, docs, contracts and effort.',
+  coverage: 'Requirements from docs/quality.md mapped to tasks and evidence.',
+  analytics: 'Throughput, cycle time, gate results and effort charts.',
   pages: 'A documentation reader for the project pages.',
   intake: 'An intake form that turns requests into tasks.',
-  analytics: 'Throughput and effort charts over time.',
   assistant: 'A chat surface for the project assistant.'
 };
 const FEATURE_LABELS = {
@@ -629,9 +635,10 @@ const FEATURE_LABELS = {
   timeline: 'Timeline',
   cycles: 'Cycles',
   modules: 'Modules',
+  coverage: 'Coverage',
+  analytics: 'Analytics',
   pages: 'Pages',
   intake: 'Intake',
-  analytics: 'Analytics',
   assistant: 'Assistant'
 };
 
@@ -1045,6 +1052,7 @@ function applySavedViewPreferences() {
 
 function restorePreferences() {
   state.density = prefGet(PREF_DENSITY, 'comfortable') === 'compact' ? 'compact' : 'comfortable';
+  state.timelineMode = prefGet(PREF_TIMELINE_MODE, 'days') === 'weeks' ? 'weeks' : 'days';
 }
 
 function toggleDensity() {
@@ -1154,13 +1162,9 @@ async function markInboxRead(ids, read) {
 async function markAllInboxRead() {
   if (!feature('inbox')) return;
   try {
-    const data = await api('/api/inbox');
-    const unread = (data.items || []).filter((item) => !item.read).map((item) => item.id);
-    if (!unread.length) {
-      toast('Inbox is already read', 'ok', 2200);
-      return;
-    }
-    await markInboxRead(unread, true);
+    await api('/api/inbox/read', { method: 'POST', body: { all: true } });
+    await Promise.all([loadInbox(), loadInboxCounts()]);
+    if (state.route.view === 'yourwork') renderView();
     toast('Inbox marked read', 'ok', 2200);
   } catch (err) {
     toast('Inbox: ' + describeError(err), 'error');
@@ -1178,6 +1182,229 @@ function openInboxItem(item) {
   if (item.action === 'Open approvals') navigate('approvals');
   else if (item.action === 'Open sessions') navigate('sessions');
   else if (item.task) openTask(item.task);
+}
+
+/* =========================================================================
+   2.2 — Planning loaders, dates and shared helpers
+   ========================================================================= */
+
+const PREF_TIMELINE_MODE = 'polier.timeline.mode';
+
+/* ---------- date helpers (all dates are ISO YYYY-MM-DD from the API) ---------- */
+
+function dateToUtc(value) {
+  if (!value) return null;
+  const text = String(value).slice(0, 10);
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
+  if (!match) return null;
+  return Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+}
+
+function dayIndexOf(date, start) {
+  const a = dateToUtc(date);
+  const b = dateToUtc(start);
+  if (a === null || b === null) return 0;
+  return Math.round((a - b) / 86400000);
+}
+
+function shortDay(value) {
+  const stamp = dateToUtc(value);
+  if (stamp === null) return '—';
+  const date = new Date(stamp);
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' });
+}
+
+function fullDay(value) {
+  const stamp = dateToUtc(value);
+  if (stamp === null) return '—';
+  const date = new Date(stamp);
+  return date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+}
+
+function monthLabel(value) {
+  const stamp = dateToUtc(value);
+  if (stamp === null) return '';
+  return new Date(stamp).toLocaleDateString(undefined, { month: 'short', year: 'numeric', timeZone: 'UTC' });
+}
+
+function weekdayInitial(weekday) {
+  return ['M', 'T', 'W', 'T', 'F', 'S', 'S'][Number(weekday) || 0] || '';
+}
+
+function timelineMode() {
+  return state.timelineMode === 'weeks' ? 'weeks' : 'days';
+}
+
+function setTimelineMode(mode) {
+  state.timelineMode = mode === 'weeks' ? 'weeks' : 'days';
+  prefSet(PREF_TIMELINE_MODE, state.timelineMode);
+  renderView();
+}
+
+/* ---------- 2.2 data loaders ---------- */
+
+async function loadTimeline() {
+  state.timelineLoading = true;
+  try {
+    state.timeline = await api('/api/timeline');
+    state.timelineLoaded = true;
+    state.timelineError = null;
+  } catch (err) {
+    state.timelineError = err;
+    if (err.status === 409) state.noBoard = true;
+  }
+  state.timelineLoading = false;
+}
+
+async function loadCycles() {
+  state.cyclesLoading = true;
+  try {
+    state.cycles = await api('/api/cycles');
+    state.cyclesLoaded = true;
+    state.cyclesError = null;
+  } catch (err) {
+    state.cyclesError = err;
+  }
+  state.cyclesLoading = false;
+}
+
+async function loadModules() {
+  state.modulesLoading = true;
+  try {
+    state.modules = await api('/api/modules');
+    state.modulesLoaded = true;
+    state.modulesError = null;
+  } catch (err) {
+    state.modulesError = err;
+  }
+  state.modulesLoading = false;
+}
+
+async function loadCoverage() {
+  state.coverageLoading = true;
+  try {
+    state.coverage = await api('/api/coverage');
+    state.coverageLoaded = true;
+    state.coverageError = null;
+  } catch (err) {
+    state.coverageError = err;
+  }
+  state.coverageLoading = false;
+}
+
+async function loadAnalytics() {
+  state.analyticsLoading = true;
+  try {
+    state.analytics = await api('/api/analytics');
+    state.analyticsLoaded = true;
+    state.analyticsError = null;
+  } catch (err) {
+    state.analyticsError = err;
+  }
+  state.analyticsLoading = false;
+}
+
+/* Planning dates (board schema 1.2) are not part of the snapshot task view yet;
+   read them from board.json via the read-only file endpoint. */
+async function loadPlanningDates(force) {
+  if (state.planningDatesLoaded && !force) return state.planningDates;
+  if (state.planningDatesLoading) return state.planningDates;
+  state.planningDatesLoading = true;
+  try {
+    const file = await api('/api/file?path=board.json');
+    const board = JSON.parse((file && file.text) || '{}');
+    const map = {};
+    for (const task of Array.isArray(board.tasks) ? board.tasks : []) {
+      if (!task || !task.id) continue;
+      map[task.id] = {
+        planned_start: typeof task.planned_start === 'string' ? task.planned_start : null,
+        target: typeof task.target === 'string' ? task.target : null
+      };
+    }
+    state.planningDates = map;
+    state.planningDatesLoaded = true;
+    state.planningDatesError = null;
+  } catch (err) {
+    state.planningDatesError = err;
+  } finally {
+    state.planningDatesLoading = false;
+  }
+  return state.planningDates;
+}
+
+function planningFor(taskId) {
+  const map = state.planningDates || {};
+  return map[taskId] || { planned_start: null, target: null };
+}
+
+function setPlanningFor(taskId, plannedStart, target) {
+  if (!state.planningDates) state.planningDates = {};
+  state.planningDates[taskId] = {
+    planned_start: typeof plannedStart === 'string' && plannedStart ? plannedStart : null,
+    target: typeof target === 'string' && target ? target : null
+  };
+  state.planningDatesLoaded = true;
+}
+
+/* ---------- small view helpers ---------- */
+
+function tileValue(label, value, options) {
+  const opts = options || {};
+  const tile = h('div', { class: 'kpi-tile' },
+    h('div', { class: 'kpi-label', text: label }),
+    h('div', { class: 'kpi-value ' + (opts.tone || ''), text: String(value) }),
+    opts.sub ? h('div', { class: 'kpi-sub', text: opts.sub }) : null);
+  return tile;
+}
+
+function statTile(label, value, options) {
+  const opts = options || {};
+  return h('button', {
+    class: 'tile ' + (opts.tone || ''),
+    type: 'button',
+    title: opts.title || label + ': ' + value,
+    on: { click: opts.onClick || (() => {}) }
+  }, h('span', { class: 'tile-value', text: String(value) }),
+    h('span', { class: 'tile-label', text: label }),
+    opts.sub ? h('span', { class: 'tile-sub', text: opts.sub }) : null);
+}
+
+function percentText(value) {
+  const number = Number(value);
+  if (!isFinite(number)) return '—';
+  return Math.round(number * 1000) / 10 + '%';
+}
+
+function countText(value) {
+  const number = Number(value);
+  return isFinite(number) ? String(number) : '—';
+}
+
+function viewLoadingOrError(container, loaded, error, label) {
+  if (!loaded && !error) {
+    container.appendChild(loadingRow(label || 'Loading…'));
+    return true;
+  }
+  if (!loaded && error) {
+    container.appendChild(errorCallout(error));
+    container.appendChild(h('div', { style: { marginTop: '10px' } },
+      h('button', {
+        class: 'btn', type: 'button', text: 'Retry',
+        on: { click: () => { loadCurrentPlanningView(); } }
+      })));
+    return true;
+  }
+  return false;
+}
+
+function loadCurrentPlanningView() {
+  const view = state.route.view;
+  if (view === 'timeline') loadTimeline().then(renderView);
+  else if (view === 'cycles') loadCycles().then(renderView);
+  else if (view === 'modules') loadModules().then(renderView);
+  else if (view === 'coverage') loadCoverage().then(renderView);
+  else if (view === 'analytics') loadAnalytics().then(renderView);
+  else renderView();
 }
 
 /* =========================================================================
@@ -1269,7 +1496,36 @@ const state = {
   inboxError: null,
   worklog: null,
   worklogLoaded: false,
-  worklogError: null
+  worklogError: null,
+
+  /* 2.2 planning views */
+  timeline: null,
+  timelineLoaded: false,
+  timelineLoading: false,
+  timelineError: null,
+  timelineMode: 'days',
+  cycles: null,
+  cyclesLoaded: false,
+  cyclesLoading: false,
+  cyclesError: null,
+  cyclesBusy: null,
+  modules: null,
+  modulesLoaded: false,
+  modulesLoading: false,
+  modulesError: null,
+  coverage: null,
+  coverageLoaded: false,
+  coverageLoading: false,
+  coverageError: null,
+  coverageFilter: 'all',
+  analytics: null,
+  analyticsLoaded: false,
+  analyticsLoading: false,
+  analyticsError: null,
+  planningDates: {},
+  planningDatesLoaded: false,
+  planningDatesLoading: false,
+  planningDatesError: null
 };
 
 const dom = {
@@ -1829,6 +2085,7 @@ function scheduleRefresh() {
 async function refreshAll() {
   await loadConfig();
   await loadSnapshot();
+  state.planningDatesLoaded = false;
   if (!state.packageOptions && !state.noBoard) await loadPackageOptions();
   await loadSettings();
   if (!state.viewsLoaded) await loadViews();
@@ -1844,6 +2101,11 @@ async function refreshAll() {
   else if (view === 'sessions') await loadSessions({ quiet: true });
   else if (view === 'yourwork') await Promise.all([loadYourWork(), loadInbox()]);
   else if (view === 'settings') await loadHealth();
+  else if (view === 'timeline') await loadTimeline();
+  else if (view === 'cycles') await loadCycles();
+  else if (view === 'modules') await loadModules();
+  else if (view === 'coverage') await loadCoverage();
+  else if (view === 'analytics') await loadAnalytics();
   if ((view === 'board' || view === 'table') && feature('worklog')) await loadWorklog();
   renderView();
   renderJobsTray();
@@ -1853,6 +2115,11 @@ async function refreshAll() {
 async function loadViewData(view) {
   const startedView = view;
   const rerender = () => { if (state.route.view === startedView) renderView(); };
+  const viewDef = VIEWS.find((entry) => entry.key === view);
+  if (viewDef && viewDef.feature && !feature(viewDef.feature)) {
+    if (!state.snapshot && !state.noBoard && !state.snapshotError) await loadSnapshot();
+    return renderView();
+  }
 
   if (view === 'dispatch') { await loadDispatch(); return rerender(); }
   if (view === 'approvals') {
@@ -1870,6 +2137,14 @@ async function loadViewData(view) {
     await Promise.all([loadSettings(), loadConfig(), loadSnapshot(), loadViews(), loadHealth(), loadFilterFields()]);
     return rerender();
   }
+  if (view === 'timeline') {
+    await Promise.all([loadSnapshot(), loadTimeline()]);
+    return rerender();
+  }
+  if (view === 'cycles') { await Promise.all([loadSnapshot(), loadCycles()]); return rerender(); }
+  if (view === 'modules') { await Promise.all([loadSnapshot(), loadModules()]); return rerender(); }
+  if (view === 'coverage') { await Promise.all([loadSnapshot(), loadCoverage()]); return rerender(); }
+  if (view === 'analytics') { await Promise.all([loadSnapshot(), loadAnalytics()]); return rerender(); }
 
   if (!state.snapshot && !state.noBoard && !state.snapshotError) await loadSnapshot();
   if (!state.packageOptions && !state.noBoard) await loadPackageOptions();
@@ -1890,16 +2165,16 @@ function renderView() {
   const focus = captureFocus();
   clear(dom.view);
   const view = state.route.view;
+  const viewDef = VIEWS.find((entry) => entry.key === view);
 
-  if (view === 'settings') {
-    renderSettings();
-    restoreFocus(focus);
-    return;
-  }
-  if (view === 'yourwork' && !feature('inbox')) {
+  if (viewDef && viewDef.feature && !feature(viewDef.feature)) {
     state.route = { view: 'board', taskId: null };
     try { history.replaceState(null, '', '#/board'); } catch (err) { location.hash = '#/board'; }
-    renderBoard();
+    renderView();
+    return;
+  }
+  if (view === 'settings') {
+    renderSettings();
     restoreFocus(focus);
     return;
   }
@@ -1936,10 +2211,15 @@ function renderView() {
     case 'yourwork': renderYourWork(); break;
     case 'board': renderBoard(); break;
     case 'table': renderTable(); break;
+    case 'timeline': renderTimeline(); break;
+    case 'cycles': renderCycles(); break;
+    case 'modules': renderModules(); break;
+    case 'coverage': renderCoverage(); break;
     case 'graph': renderGraph(); break;
     case 'dispatch': renderDispatch(); break;
     case 'approvals': renderApprovals(); break;
     case 'activity': renderActivity(); break;
+    case 'analytics': renderAnalytics(); break;
     case 'sessions': renderSessions(); break;
     default: renderBoard();
   }
@@ -3890,15 +4170,32 @@ function drawerBriefTab(task, detail) {
   return body;
 }
 function drawerPropsState(task) {
-  if (!state.drawer.props || !state.drawer.props.init) {
+  if (!state.drawer.props || !state.drawer.props.init || state.drawer.props.taskId !== task.id) {
+    const planning = planningFor(task.id);
     state.drawer.props = {
       init: true,
+      taskId: task.id,
       labels: taskLabelIds(task).slice(),
       estimate: estimateOf(task) === null ? '' : String(estimateOf(task)),
+      planned_start: planning.planned_start || '',
+      target: planning.target || '',
+      datesReady: Boolean(state.planningDatesLoaded),
       open: false
     };
   }
-  return state.drawer.props;
+  const props = state.drawer.props;
+  if (!props.datesReady && state.planningDatesLoaded) {
+    const planning = planningFor(task.id);
+    props.planned_start = planning.planned_start || '';
+    props.target = planning.target || '';
+    props.datesReady = true;
+  }
+  return props;
+}
+
+function planningSummaryText(plannedStart, target) {
+  if (!plannedStart && !target) return 'no planning dates';
+  return (plannedStart || '—') + ' → ' + (target || '—');
 }
 
 function renderTaskProperties(task, detail) {
@@ -3907,6 +4204,20 @@ function renderTaskProperties(task, detail) {
   const section = h('section', { class: 'drawer-section' });
   section.appendChild(h('div', { class: 'drawer-label', text: 'Properties' }));
 
+  /* planning dates come from board.json (schema 1.2) via /api/file */
+  if (!state.planningDatesLoaded && !state.planningDatesLoading) {
+    loadPlanningDates().then(() => { if (state.drawer.id === task.id) renderDrawer(); });
+  }
+  const planningReady = state.planningDatesLoaded;
+  const planningText = planningSummaryText(props.planned_start, props.target);
+  const timelineLink = feature('timeline') && (props.planned_start || props.target)
+    ? h('button', {
+      class: 'btn btn-sm btn-ghost', type: 'button', text: 'Show in timeline',
+      title: 'Open the timeline view',
+      on: { click: () => navigate('timeline') }
+    })
+    : null;
+
   if (readOnly) {
     section.appendChild(h('div', { class: 'props' },
       h('div', { class: 'props-current' },
@@ -3914,6 +4225,7 @@ function renderTaskProperties(task, detail) {
           ? taskLabelIds(task).map((id) => labelById(id) ? labelChip(labelById(id)) : h('span', { class: 'chip mono', text: id }))
           : h('span', { class: 'hint', text: 'No labels' })),
       h('div', { class: 'hint', text: 'Estimate: ' + (estimateOf(task) === null ? 'none' : fmtHours(estimateOf(task))) }),
+      h('div', { class: 'hint', text: 'Timeline: ' + (planningReady ? planningText : 'loading…') }),
       h('div', { class: 'hint', text: task.status === 'done'
         ? 'A done task is reopened through the state machine before its plan is edited.'
         : 'The dashboard is read-only.' })));
@@ -3953,6 +4265,18 @@ function renderTaskProperties(task, detail) {
     value: props.estimate, placeholder: 'none',
     on: { input: (event) => { state.drawer.props.estimate = event.target.value; } }
   });
+  const startInput = h('input', {
+    class: 'input', type: 'date', value: props.planned_start,
+    'aria-label': 'Planned start', disabled: !planningReady,
+    title: planningReady ? '' : 'Loading the planning dates from board.json…',
+    on: { input: (event) => { state.drawer.props.planned_start = event.target.value; } }
+  });
+  const targetInput = h('input', {
+    class: 'input', type: 'date', value: props.target,
+    'aria-label': 'Target date', disabled: !planningReady,
+    title: planningReady ? '' : 'Loading the planning dates from board.json…',
+    on: { input: (event) => { state.drawer.props.target = event.target.value; } }
+  });
 
   const details = h('details', {
     open: props.open,
@@ -3967,15 +4291,25 @@ function renderTaskProperties(task, detail) {
 
   section.appendChild(h('div', { class: 'props' },
     details,
+    h('div', { class: 'hint', text: 'Timeline: ' + (planningReady ? planningText : 'loading planning dates…') }),
     h('div', { class: 'props-row' },
       h('label', { class: 'field' },
         h('span', { class: 'field-label', text: 'Estimate (hours)' }), estimateInput,
-        h('span', { class: 'field-help', text: 'Leave empty to clear the estimate.' })),
+        h('span', { class: 'field-help', text: 'Empty clears the estimate.' })),
+      h('label', { class: 'field' },
+        h('span', { class: 'field-label', text: 'Planned start' }), startInput,
+        h('span', { class: 'field-help', text: 'Empty clears the date.' })),
+      h('label', { class: 'field' },
+        h('span', { class: 'field-label', text: 'Target' }), targetInput,
+        h('span', { class: 'field-help', text: 'Must not be before the planned start.' }))),
+    h('div', { class: 'form-actions' },
       h('button', {
         class: 'btn btn-sm btn-primary', type: 'button', text: 'Save properties',
         disabled: state.drawer.busy === 'properties',
         on: { click: () => saveTaskProperties() }
-      }))));
+      }),
+      timelineLink,
+      state.planningDatesError ? h('span', { class: 'hint st-amber', text: 'planning dates unavailable: ' + describeError(state.planningDatesError) }) : null)));
   if (state.drawer.actionError) section.appendChild(errorCallout(state.drawer.actionError, { class: 'inline-error' }));
   return section;
 }
@@ -3985,9 +4319,11 @@ async function saveTaskProperties() {
   const props = state.drawer.props || {};
   if (!task || !canWrite()) return;
   if (task.status === 'done') { toast('Done tasks are reopened before their plan is edited', 'warn'); return; }
-  const payload = { labels: (props.labels || []).slice(), estimate_hours: null };
+  const payload = { labels: (props.labels || []).slice() };
   const estimateText = String(props.estimate === undefined || props.estimate === null ? '' : props.estimate).trim();
-  if (estimateText !== '') {
+  if (estimateText === '') {
+    payload.estimate_hours = null;
+  } else {
     const number = Number(estimateText);
     if (!isFinite(number) || number < 0 || number > 10000) {
       state.drawer.actionError = new ApiError('Estimate must be a number between 0 and 10000.', 400, null);
@@ -3996,16 +4332,47 @@ async function saveTaskProperties() {
     }
     payload.estimate_hours = number;
   }
+  /* Only touch planning dates once board.json was read; otherwise a
+     label-only save would silently clear dates the snapshot does not expose. */
+  const datesReady = props.datesReady === true || state.planningDatesLoaded === true;
+  const plannedStart = datesReady ? (String(props.planned_start || '').trim() || null) : undefined;
+  const target = datesReady ? (String(props.target || '').trim() || null) : undefined;
+  if (plannedStart && !/^\d{4}-\d{2}-\d{2}$/.test(plannedStart)) {
+    state.drawer.actionError = new ApiError('Planned start must be an ISO date (YYYY-MM-DD).', 400, null);
+    renderDrawer();
+    return;
+  }
+  if (target && !/^\d{4}-\d{2}-\d{2}$/.test(target)) {
+    state.drawer.actionError = new ApiError('Target must be an ISO date (YYYY-MM-DD).', 400, null);
+    renderDrawer();
+    return;
+  }
+  if (plannedStart && target && target < plannedStart) {
+    state.drawer.actionError = new ApiError('Target must not be before the planned start.', 400, null);
+    renderDrawer();
+    return;
+  }
+  if (datesReady) {
+    payload.planned_start = plannedStart;
+    payload.target = target;
+  }
+
   state.drawer.busy = 'properties';
   state.drawer.actionError = null;
   renderDrawer();
   try {
-    await api('/api/plan/tasks/' + encodeURIComponent(task.id), { method: 'PATCH', body: payload });
+    const saved = await api('/api/plan/tasks/' + encodeURIComponent(task.id), { method: 'PATCH', body: payload });
+    setPlanningFor(task.id, saved && saved.planned_start, saved && saved.target);
+    if (saved && Object.prototype.hasOwnProperty.call(saved, 'planned_start') && !saved.planned_start) {
+      setPlanningFor(task.id, null, saved.target);
+    }
     toast('Properties saved', 'ok');
     state.drawer.props = null;
     await loadSnapshot();
     renderHeader();
     renderView();
+    if (state.route.view === 'timeline') await loadTimeline();
+    if (state.route.view === 'timeline') renderView();
     if (state.drawer.id) await loadDrawer(state.drawer.id, true);
     if (feature('worklog')) loadWorklog();
   } catch (err) {
@@ -4940,7 +5307,7 @@ function renderInboxPanel() {
    ========================================================================= */
 
 const FEATURE_ORDER = ['inbox', 'worklog', 'views', 'labels', 'timeline', 'cycles',
-  'modules', 'pages', 'intake', 'analytics', 'assistant'];
+  'modules', 'coverage', 'analytics', 'pages', 'intake', 'assistant'];
 
 function settingsUI() {
   if (!state.settingsUI) {
@@ -5528,6 +5895,948 @@ function renderSettingsAbout(project, config, health, settingsErrors) {
         h('dt', { text: 'Token' }), h('dd', { text: config.token_required ? 'required' : 'not required' }),
         h('dt', { text: 'dashboard.json' }), h('dd', { text: settingsErrors.length ? settingsErrors.length + ' problem(s)' : 'valid' })),
       h('p', { class: 'hint', text: 'dashboard.json is committed project settings; sessions, gate commands and inbox read state live in the git-common runtime folder.' })));
+}
+
+/* =========================================================================
+   2.2 — Timeline: stages on a time axis
+   ========================================================================= */
+
+function clampIndex(value, length) {
+  if (!length) return 0;
+  return Math.max(0, Math.min(length - 1, value));
+}
+
+function layoutTimelineStage(stage, dayCount, start) {
+  const slots = [];
+  const bars = [];
+  const tasks = (stage.tasks || []).slice().sort((a, b) => {
+    const byStart = String(a.start || '').localeCompare(String(b.start || ''));
+    return byStart !== 0 ? byStart : String(a.id || '').localeCompare(String(b.id || ''));
+  });
+  for (const task of tasks) {
+    const rawStart = dayIndexOf(task.start, start);
+    const rawEnd = dayIndexOf(task.end, start);
+    const startIndex = clampIndex(rawStart, dayCount);
+    const endIndex = clampIndex(Math.max(rawEnd, rawStart), dayCount);
+    let slot = slots.findIndex((last) => startIndex > last);
+    if (slot === -1) {
+      slot = slots.length;
+      slots.push(endIndex);
+    } else {
+      slots[slot] = endIndex;
+    }
+    bars.push({ task: task, start: startIndex, end: endIndex, slot: slot });
+  }
+  return { bars: bars, slots: Math.max(1, slots.length) };
+}
+
+function dayCellClasses(day, weekStarts, todayIndex, index) {
+  const classes = ['tl-cell'];
+  if (Number(day.weekday) >= 5) classes.push('is-weekend');
+  if (weekStarts.has(day.date) || Number(day.weekday) === 0) classes.push('is-week');
+  if (index === todayIndex) classes.push('is-today');
+  return classes.join(' ');
+}
+
+function renderTimeline() {
+  const view = h('div', { class: 'timeline', dataset: { mode: timelineMode() } });
+  dom.view.appendChild(view);
+  const data = state.timeline;
+  const mode = timelineMode();
+  const dayWidth = mode === 'weeks' ? 12 : 28;
+
+  view.appendChild(h('div', { class: 'view-head' },
+    h('div', {},
+      h('h1', { class: 'view-title', text: 'Timeline' }),
+      h('p', {
+        class: 'view-sub',
+        text: data
+          ? 'The plan on a time axis · ' + data.totals.tasks + ' tasks · ' + data.hours_per_day + ' h/day · today ' + shortDay(data.today)
+          : 'The plan on a time axis'
+      })),
+    h('div', { class: 'view-actions' },
+      h('div', { class: 'seg mode-toggle', role: 'group', 'aria-label': 'Timeline density' },
+        h('label', { class: 'seg-option' },
+          h('input', {
+            type: 'radio', name: 'timeline-mode', value: 'days', checked: mode === 'days',
+            on: { change: () => setTimelineMode('days') }
+          }),
+          h('span', { text: 'Days' })),
+        h('label', { class: 'seg-option' },
+          h('input', {
+            type: 'radio', name: 'timeline-mode', value: 'weeks', checked: mode === 'weeks',
+            on: { change: () => setTimelineMode('weeks') }
+          }),
+          h('span', { text: 'Weeks' }))),
+      h('button', {
+        class: 'btn btn-sm', type: 'button', text: 'Refresh',
+        on: { click: () => loadTimeline().then(() => renderView()) }
+      }))));
+
+  if (viewLoadingOrError(view, state.timelineLoaded, state.timelineError, 'Building the timeline…')) return;
+  if (!data) return;
+
+  const days = Array.isArray(data.days) ? data.days : [];
+  const stages = Array.isArray(data.stages) ? data.stages : [];
+  const todayIndex = days.findIndex((day) => day.today);
+  const weekStarts = new Set((data.weeks || []).map((week) => week.start));
+
+  view.appendChild(h('div', { class: 'tl-toolbar' },
+    h('div', { class: 'tl-totals' },
+      h('span', {}, h('strong', { text: String(data.totals.scheduled) }), ' scheduled'),
+      h('span', {}, h('strong', { text: String(data.totals.days) }), ' days'),
+      h('span', {}, h('strong', { text: fmtHours(data.totals.hours) }), ' planned'),
+      h('span', {}, h('strong', { text: String(data.totals.explicit) }), ' explicit dates'),
+      h('span', {}, h('strong', { text: String(data.totals.critical_path_tasks) }), ' critical-path tasks')),
+    h('div', { class: 'tl-controls' },
+      h('span', { class: 'tl-note', text: data.hours_per_day + ' h per working day' }))));
+
+  const legend = h('div', { class: 'tl-legend' });
+  for (const status of Object.keys(STATUS)) {
+    const color = STATUS[status].color;
+    legend.appendChild(h('span', { class: 'tl-legend-item' },
+      h('span', {
+        class: 'tl-legend-swatch',
+        style: {
+          background: 'var(--st-' + color + '-bg)',
+          borderLeftColor: 'var(--st-' + color + ')',
+          borderLeftWidth: '3px',
+          borderLeftStyle: 'solid'
+        }
+      }),
+      STATUS[status].label));
+  }
+  legend.appendChild(h('span', { class: 'tl-legend-item' },
+    h('span', { class: 'tl-legend-mark is-critical', text: '◆' }), 'critical path'));
+  legend.appendChild(h('span', { class: 'tl-legend-item' },
+    h('span', { class: 'tl-legend-mark is-explicit', text: '✎' }), 'explicit dates'));
+  legend.appendChild(h('span', { class: 'tl-legend-item' },
+    h('span', { class: 'tl-legend-mark is-overdue', text: '!' }), 'overdue'));
+  legend.appendChild(h('span', { class: 'tl-legend-item' },
+    h('span', { class: 'tl-legend-swatch', style: { background: 'var(--accent)', opacity: '0.55' } }), 'today'));
+  view.appendChild(legend);
+
+  if ((data.unscheduled || []).length) {
+    const callout = h('div', { class: 'callout callout-warn' },
+      h('div', { class: 'callout-stack' },
+        h('div', { text: (data.unscheduled || []).length + ' task(s) could not be scheduled:' }),
+        h('div', { class: 'tl-unscheduled' }, (data.unscheduled || []).map((id) => taskChip(id)))));
+    view.appendChild(callout);
+  }
+
+  if (!days.length || !data.totals.scheduled) {
+    view.appendChild(emptyState('Nothing scheduled yet',
+      'The timeline needs tasks with a stage. Add tasks in the Plan view or set planning dates in a task drawer.',
+      h('button', { class: 'btn', type: 'button', text: 'Open plan', on: { click: () => navigate('plan') } })));
+    return;
+  }
+
+  /* month spans */
+  const months = [];
+  let current = null;
+  days.forEach((day, index) => {
+    const label = monthLabel(day.date);
+    if (!current || current.label !== label) {
+      current = { label: label, start: index, count: 1 };
+      months.push(current);
+    } else {
+      current.count += 1;
+    }
+  });
+
+  const grid = h('div', {
+    class: 'tl-grid',
+    style: { '--tl-day': dayWidth + 'px', '--tl-label': '212px' }
+  });
+
+  const axisWidth = days.length * dayWidth;
+  const monthRow = h('div', { class: 'tl-months' });
+  for (const month of months) {
+    monthRow.appendChild(h('div', {
+      class: 'tl-month',
+      style: { width: month.count * dayWidth + 'px' },
+      text: month.label
+    }));
+  }
+  const dayRow = h('div', { class: 'tl-days' });
+  days.forEach((day, index) => {
+    const headCell = h('div', {
+      class: 'tl-day-head'
+        + (Number(day.weekday) >= 5 ? ' is-weekend' : '')
+        + (weekStarts.has(day.date) || Number(day.weekday) === 0 ? ' is-week' : '')
+        + (index === todayIndex ? ' is-today' : ''),
+      style: { width: dayWidth + 'px' },
+      title: fullDay(day.date) + (index === todayIndex ? ' · today' : '')
+    },
+      h('span', { class: 'tl-weekday', text: weekdayInitial(day.weekday) }),
+      h('span', { class: 'tl-daynum', text: String(Number(String(day.date).slice(8, 10))) }));
+    dayRow.appendChild(headCell);
+  });
+
+  grid.appendChild(h('div', { class: 'tl-head' },
+    h('div', { class: 'tl-label' },
+      h('span', { class: 'tl-corner-title', text: 'Stages' }),
+      h('span', { class: 'tl-corner-sub', text: days.length + ' days · ' + shortDay(data.start) + ' → ' + shortDay(data.end) })),
+    h('div', { class: 'tl-axis', style: { width: axisWidth + 'px' } }, monthRow, dayRow)));
+
+  for (const stage of stages) {
+    const layout = layoutTimelineStage(stage, days.length, data.start);
+    const laneHeight = Math.max(44, layout.slots * 33 + 10);
+    const label = h('div', { class: 'tl-label tl-stage' },
+      h('div', { class: 'tl-stage-top' },
+        h('span', { class: 'tl-stage-index', text: '#' + stage.index }),
+        h('span', { class: 'tl-stage-title', text: stage.title || stage.id, title: stage.goal || '' })),
+      h('div', { class: 'tl-stage-meta' },
+        stage.owner_decision
+          ? h('span', { class: 'chip', title: 'Owner decision: ' + stage.owner_decision, text: stage.owner_decision })
+          : null,
+        h('span', { class: 'tl-stage-count', text: (stage.counts && stage.counts.done ? stage.counts.done : 0) + '/' + ((stage.tasks || []).length) + ' · ' + percentText(stage.progress) })),
+      progressBar(stage.progress * 100, 100, stage.progress >= 1 ? 'is-ok' : ''));
+
+    const lane = h('div', { class: 'tl-lane', style: { width: axisWidth + 'px', height: laneHeight + 'px' } });
+    days.forEach((day, index) => {
+      lane.appendChild(h('div', {
+        class: dayCellClasses(day, weekStarts, todayIndex, index),
+        style: { left: index * dayWidth + 'px', width: dayWidth + 'px' }
+      }));
+    });
+    if (todayIndex >= 0) {
+      lane.appendChild(h('div', { class: 'tl-today-line', style: { left: (todayIndex * dayWidth + dayWidth / 2) + 'px' } }));
+    }
+
+    if (!layout.bars.length) {
+      lane.appendChild(h('div', { class: 'tl-empty-lane', text: 'No tasks in this stage.' }));
+    }
+    for (const bar of layout.bars) {
+      const task = bar.task;
+      const color = stMeta(task.status).color;
+      const width = Math.max(dayWidth - 4, (bar.end - bar.start + 1) * dayWidth - 4);
+      const marks = [];
+      if (task.critical) marks.push(h('span', { class: 'tl-bar-mark is-critical', title: 'On the critical path', text: '◆' }));
+      if (task.explicit) marks.push(h('span', { class: 'tl-bar-mark is-explicit', title: 'Explicit planning dates', text: '✎' }));
+      if (task.overdue) marks.push(h('span', { class: 'tl-bar-mark is-overdue', title: 'Overdue (target date passed)', text: '!' }));
+      const title = task.id + ' · ' + (task.title || '') +
+        '\n' + task.status + (task.explicit ? ' · explicit' : '') +
+        (task.critical ? ' · critical path' : '') +
+        (task.overdue ? ' · overdue' : '') +
+        '\n' + shortDay(task.start) + ' → ' + shortDay(task.end) +
+        ' · ' + fmtHours(task.hours) +
+        (task.estimate_hours !== null && task.estimate_hours !== undefined ? ' (estimate ' + fmtHours(task.estimate_hours) + ')' : '') +
+        (task.labels && task.labels.length ? '\nlabels: ' + task.labels.map(labelTitle).join(', ') : '');
+      lane.appendChild(h('button', {
+        class: 'tl-bar status-' + color + (task.critical ? ' is-critical' : ''),
+        type: 'button',
+        style: { left: (bar.start * dayWidth + 2) + 'px', width: width + 'px', top: (bar.slot * 33 + 7) + 'px' },
+        title: title,
+        dataset: { taskId: task.id },
+        on: { click: () => openTask(task.id) }
+      },
+        h('span', { class: 'tl-bar-id', text: task.id }),
+        h('span', { class: 'tl-bar-title', text: task.title || '' }),
+        marks.length ? h('span', { class: 'tl-bar-mark', style: { marginLeft: 'auto', display: 'inline-flex', gap: '2px' } }, marks) : null));
+    }
+
+    grid.appendChild(h('div', { class: 'tl-row' }, label, lane));
+  }
+
+  view.appendChild(h('div', { class: 'tl-scroll' }, grid));
+  view.appendChild(h('p', { class: 'tl-note', style: { marginTop: '8px' },
+    text: 'Bars are derived from dependencies, estimates and the stage order; ✎ marks owner-set dates, ◆ the critical path. Click a bar to open the task.' }));
+}
+
+/* =========================================================================
+   2.2 — Cycles: stages as execution units, with burndown and decisions
+   ========================================================================= */
+
+function svgEl(tag, attrs, text) {
+  const node = document.createElementNS('http://www.w3.org/2000/svg', tag);
+  if (attrs) {
+    for (const key of Object.keys(attrs)) {
+      if (attrs[key] === null || attrs[key] === undefined) continue;
+      node.setAttribute(key, String(attrs[key]));
+    }
+  }
+  if (text !== null && text !== undefined) node.textContent = String(text);
+  return node;
+}
+
+function cycleStatusTone(status) {
+  if (status === 'completed') return 'green';
+  if (status === 'active') return 'blue';
+  if (status === 'stopped') return 'red';
+  return 'neutral';
+}
+
+function burndownSvg(points, options) {
+  const opts = options || {};
+  const rows = Array.isArray(points) ? points : [];
+  const width = 320;
+  const height = 82;
+  const left = 28;
+  const right = 8;
+  const top = 8;
+  const bottom = 16;
+  const svg = svgEl('svg', {
+    viewBox: '0 0 ' + width + ' ' + height,
+    role: 'img',
+    'aria-label': opts.label || 'Burndown: remaining and completed tasks over time'
+  });
+  if (!rows.length) {
+    svg.appendChild(svgEl('text', { x: width / 2, y: height / 2, 'text-anchor': 'middle', class: 'g-title' }, 'Burndown appears after the first done task'));
+    return svg;
+  }
+  const max = Math.max(1, ...rows.map((row) => Number(row.remaining) || 0), ...rows.map((row) => Number(row.done) || 0));
+  const span = Math.max(1, rows.length - 1);
+  const step = (width - left - right) / span;
+  const yOf = (value) => top + (height - top - bottom) * (1 - (Number(value) || 0) / max);
+
+  for (const fraction of [0, 0.5, 1]) {
+    const value = max * fraction;
+    const y = yOf(value);
+    svg.appendChild(svgEl('line', { x1: left, x2: width - right, y1: y, y2: y, stroke: 'var(--border)', 'stroke-width': '1' }));
+    svg.appendChild(svgEl('text', { x: left - 4, y: y + 3, 'text-anchor': 'end', class: 'g-title', 'font-size': '8' }, String(Math.round(value))));
+  }
+  const polyline = (key, color) => {
+    const points = rows.map((row, index) => (left + index * step) + ',' + yOf(row[key])).join(' ');
+    return svgEl('polyline', { points: points, fill: 'none', stroke: color, 'stroke-width': '1.6', 'stroke-linejoin': 'round' });
+  };
+  svg.appendChild(polyline('remaining', 'var(--accent)'));
+  svg.appendChild(polyline('done', 'var(--st-green)'));
+  rows.forEach((row, index) => {
+    if (rows.length <= 2 || index === 0 || index === rows.length - 1) {
+      svg.appendChild(svgEl('circle', { cx: left + index * step, cy: yOf(row.remaining), r: '1.8', fill: 'var(--accent)' }));
+      svg.appendChild(svgEl('circle', { cx: left + index * step, cy: yOf(row.done), r: '1.8', fill: 'var(--st-green)' }));
+    }
+  });
+  svg.appendChild(svgEl('text', { x: left, y: height - 3, class: 'g-title', 'font-size': '8' }, shortDay(rows[0].date)));
+  svg.appendChild(svgEl('text', { x: width - right, y: height - 3, 'text-anchor': 'end', class: 'g-title', 'font-size': '8' }, shortDay(rows[rows.length - 1].date)));
+  return svg;
+}
+
+function renderCycles() {
+  const view = h('div', { class: 'cycles' });
+  dom.view.appendChild(view);
+  const data = state.cycles;
+
+  view.appendChild(h('div', { class: 'view-head' },
+    h('div', {},
+      h('h1', { class: 'view-title', text: 'Cycles' }),
+      h('p', { class: 'view-sub', text: data ? data.totals.cycles + ' cycles · ' + data.totals.completed + ' completed · active: ' + (data.active || '—') : 'Stages as execution units' })),
+    h('div', { class: 'view-actions' },
+      h('button', { class: 'btn btn-sm', type: 'button', text: 'Refresh', on: { click: () => loadCycles().then(() => renderView()) } }))));
+
+  if (viewLoadingOrError(view, state.cyclesLoaded, state.cyclesError, 'Reading the cycles…')) return;
+  if (!data) return;
+  const cycles = data.cycles || [];
+  if (!cycles.length) {
+    view.appendChild(emptyState('No cycles yet', 'Cycles are the board stages. Add stages in the Plan view.', null));
+    return;
+  }
+
+  const totals = data.totals || {};
+  const active = cycles.find((cycle) => cycle.status === 'active');
+  view.appendChild(h('div', { class: 'tile-row' },
+    statTile('Active cycle', active ? active.title : '—', { tone: 'tile-blue', sub: active ? '#' + active.index + ' · ' + percentText(active.progress) : 'none active' }),
+    statTile('Completed', (totals.completed || 0) + ' / ' + (totals.cycles || 0), { tone: 'tile-green', sub: 'stages finished' }),
+    statTile('Tasks done', (totals.done || 0) + ' / ' + (totals.tasks || 0), { tone: 'tile-accent', sub: 'across all cycles' }),
+    statTile('Effort', fmtHours(totals.estimate_hours) + ' est', { tone: 'tile-violet', sub: fmtHours(totals.actual_hours) + ' actual' }),
+    statTile('Tokens', fmtTokens(totals.tokens || 0), { tone: 'tile-accent', sub: 'recorded usage' })));
+
+  const grid = h('div', { class: 'cycles-grid' });
+  for (const cycle of cycles) {
+    const tone = cycleStatusTone(cycle.status);
+    const card = h('section', {
+      class: 'card-panel cycle-card' + (data.active === cycle.id ? ' is-active' : ''),
+      id: 'cycle-' + cycle.id
+    });
+
+    const decisionControls = h('div', { class: 'cycle-actions' },
+      h('span', { class: 'hint', text: 'owner' }),
+      ['continue', 'pending', 'stop'].map((decision) => h('button', {
+        class: 'seg-chip', type: 'button',
+        'aria-pressed': cycle.owner_decision === decision ? 'true' : 'false',
+        disabled: !canWrite() || state.cyclesBusy === cycle.id,
+        title: canWrite() ? 'Set the owner decision to ' + decision : 'The dashboard is read-only',
+        on: { click: () => changeCycleDecision(cycle, decision) }
+      }, decision === 'stop' ? 'stop' : decision === 'pending' ? 'pending' : 'continue')));
+
+    card.appendChild(h('div', { class: 'cycle-head' },
+      h('span', { class: 'cycle-index', text: '#' + cycle.index }),
+      h('div', { class: 'cycle-title-wrap' },
+        h('div', { class: 'cycle-title', text: cycle.title || cycle.id }),
+        cycle.goal ? h('div', { class: 'cycle-goal', text: cycle.goal }) : null),
+      h('div', { class: 'cycle-meta' },
+        h('span', { class: 'badge bg-' + tone + ' st-' + tone },
+          h('span', { class: 'dot' }), cycle.status),
+        cycle.owner_decision ? h('span', { class: 'pill', text: 'decision: ' + cycle.owner_decision }) : null)));
+
+    card.appendChild(h('div', { class: 'cycle-progress' },
+      h('div', { class: 'cycle-progress-line' },
+        h('span', { text: cycle.done + ' / ' + cycle.total + ' tasks done' }),
+        h('span', { class: 'mono', text: percentText(cycle.progress) })),
+      progressBar(cycle.done, cycle.total, cycle.progress >= 1 ? 'is-ok' : '')));
+
+    const gates = cycle.exit_gates || [];
+    if (gates.length) {
+      card.appendChild(h('div', { class: 'cycle-gates' },
+        gates.map((gate) => h('span', {
+          class: 'chip ' + (gate.passed ? 'chip-pass' : 'chip-miss'),
+          title: gate.passed ? 'Gate has a passing record' : 'Gate is still missing',
+          text: gate.name
+        }))));
+    }
+
+    card.appendChild(decisionControls);
+
+    card.appendChild(h('div', { class: 'burndown' },
+      burndownSvg(cycle.burndown, { label: 'Burndown for ' + (cycle.title || cycle.id) }),
+      h('div', { class: 'burndown-caption' },
+        h('span', {}, h('span', { class: 'chart-legend-dot', style: { background: 'var(--accent)' } }), 'remaining'),
+        h('span', {}, h('span', { class: 'chart-legend-dot', style: { background: 'var(--st-green)' } }), 'done'))));
+
+    card.appendChild(h('div', { class: 'cycle-effort' },
+      h('span', {}, 'tokens ', h('strong', { text: fmtTokens(cycle.tokens || 0) })),
+      h('span', {}, 'estimate ', h('strong', { text: fmtHours(cycle.estimate_hours) })),
+      h('span', {}, 'actual ', h('strong', { text: fmtHours(cycle.actual_hours) })),
+      h('span', {}, 'sessions ', h('strong', { text: String(cycle.sessions || 0) })),
+      cycle.tasks_open && cycle.tasks_open.length
+        ? h('span', { class: 'cycle-task-open', text: cycle.tasks_open.length + ' open' })
+        : null));
+
+    const taskList = h('div', { class: 'cycle-tasks' });
+    for (const task of cycle.tasks || []) {
+      taskList.appendChild(h('button', {
+        class: 'cycle-task', type: 'button', title: 'Open ' + task.id,
+        on: { click: () => openTask(task.id) }
+      },
+        h('span', { class: 'queue-main' },
+          h('div', { class: 'queue-title', text: task.title || task.id }),
+          h('div', { class: 'queue-sub', text: task.id + (task.owner ? ' · ' + task.owner : '') })),
+        statusPill(task.status)));
+    }
+    if (!(cycle.tasks || []).length) taskList.appendChild(h('div', { class: 'hint', text: 'No tasks in this cycle.' }));
+    card.appendChild(taskList);
+    grid.appendChild(card);
+  }
+  view.appendChild(grid);
+  view.appendChild(h('p', { class: 'tl-note', style: { marginTop: '10px' },
+    text: 'Burndown uses the state events in runs/: done dates are real, not planned.' }));
+}
+
+async function changeCycleDecision(cycle, decision) {
+  if (!cycle || decision === cycle.owner_decision) return;
+  if (decision === 'stop') {
+    const confirmed = await confirmDialog({
+      title: 'Stop cycle "' + (cycle.title || cycle.id) + '"?',
+      message: 'A stopped stage blocks dispatch for its tasks until the owner continues it again.',
+      confirmLabel: 'Stop cycle'
+    });
+    if (!confirmed) return;
+  }
+  state.cyclesBusy = cycle.id;
+  renderView();
+  try {
+    await api('/api/plan/stages/' + encodeURIComponent(cycle.id) + '/decision', {
+      method: 'POST',
+      body: { decision: decision }
+    });
+    toast('Cycle ' + cycle.id + ' decision: ' + decision, 'ok');
+    await Promise.all([loadCycles(), loadSnapshot()]);
+    if (state.route.view === 'cycles') renderView();
+  } catch (err) {
+    toast('Cycle decision failed: ' + describeError(err), 'error');
+  } finally {
+    state.cyclesBusy = null;
+    renderView();
+  }
+}
+
+/* =========================================================================
+   2.2 — Modules: the package map as the structural view
+   ========================================================================= */
+
+function moduleHealthTone(health) {
+  if (health === 'attention') return 'attention';
+  if (health === 'watch') return 'watch';
+  if (health === 'done') return 'done';
+  return 'ok';
+}
+
+function renderModules() {
+  const view = h('div', { class: 'modules' });
+  dom.view.appendChild(view);
+  const data = state.modules;
+
+  view.appendChild(h('div', { class: 'view-head' },
+    h('div', {},
+      h('h1', { class: 'view-title', text: 'Modules' }),
+      h('p', { class: 'view-sub', text: data ? data.totals.modules + ' modules · ' + data.totals.tasks + ' tasks · ' + data.totals.attention + ' need attention · ' + data.totals.watch + ' to watch' : 'The package map' })),
+    h('div', { class: 'view-actions' },
+      h('button', { class: 'btn btn-sm', type: 'button', text: 'Refresh', on: { click: () => loadModules().then(() => renderView()) } }))));
+
+  if (viewLoadingOrError(view, state.modulesLoaded, state.modulesError, 'Reading the package map…')) return;
+  if (!data) return;
+
+  const totals = data.totals || {};
+  view.appendChild(h('div', { class: 'tile-row' },
+    statTile('Modules', totals.modules || 0, { tone: 'tile-blue', sub: 'packages on the board' }),
+    statTile('Module tasks', totals.tasks || 0, { tone: 'tile-accent', sub: (totals.done || 0) + ' done' }),
+    statTile('Attention', totals.attention || 0, { tone: 'tile-red', sub: 'blocked or failed' }),
+    statTile('Watch', totals.watch || 0, { tone: 'tile-amber', sub: 'missing docs or gates' }),
+    statTile('Unassigned', (data.unassigned && data.unassigned.count) || 0, { tone: 'tile-violet', sub: 'tasks without a package' })));
+
+  const modules = data.modules || [];
+  if (!modules.length) {
+    view.appendChild(emptyState('No modules declared',
+      'The board has no packages[] entries yet. The Plan view edits stages and tasks, and the generator writes the package map.',
+      null));
+  } else {
+    const grid = h('div', { class: 'module-grid' });
+    for (const module of modules) {
+      const health = moduleHealthTone(module.health);
+      const counts = module.counts || {};
+      const totalsRow = module.totals || {};
+      const card = h('section', { class: 'card-panel module-card' });
+
+      card.appendChild(h('div', { class: 'module-head' },
+        h('span', { class: 'module-path', text: module.path || '(no path)', title: module.path || '' }),
+        h('span', { class: 'chip', text: module.kind || 'module' }),
+        h('span', { class: 'pill health-' + health, title: (module.health_reasons || []).join(', ') || 'all good', text: module.health })));
+
+      card.appendChild(h('div', { class: 'cycle-progress' },
+        h('div', { class: 'cycle-progress-line' },
+          h('span', { text: (totalsRow.done || 0) + ' / ' + (totalsRow.tasks || 0) + ' tasks done' }),
+          h('span', { class: 'mono', text: percentText(module.progress) })),
+        progressBar(totalsRow.done || 0, totalsRow.tasks || 0, module.progress >= 1 ? 'is-ok' : '')));
+
+      const countsRow = h('div', { class: 'module-chips' });
+      for (const status of Object.keys(counts)) {
+        const meta = stMeta(status);
+        countsRow.appendChild(h('span', { class: 'chip' },
+          h('span', { class: 'dot st-' + meta.color }), meta.label + ' ' + counts[status]));
+      }
+      if (!Object.keys(counts).length) countsRow.appendChild(h('span', { class: 'hint', text: 'No tasks' }));
+      card.appendChild(countsRow);
+
+      card.appendChild(h('div', { class: 'module-stats' },
+        h('span', {}, 'tokens ', h('strong', { text: fmtTokens(totalsRow.tokens || 0) })),
+        h('span', {}, 'estimate ', h('strong', { text: fmtHours(totalsRow.estimate_hours) })),
+        h('span', {}, 'actual ', h('strong', { text: fmtHours(totalsRow.actual_hours) })),
+        module.waiting ? h('span', {}, h('strong', { class: 'st-amber', text: String(module.waiting) }), ' waiting') : null));
+
+      if ((module.health_reasons || []).length) {
+        card.appendChild(h('div', { class: 'module-stats' },
+          h('span', { class: 'st-amber', text: 'watch: ' + module.health_reasons.join(' · ') })));
+      }
+
+      if ((module.docs || []).length) {
+        card.appendChild(h('div', { class: 'module-subhead', text: 'Docs' }));
+        card.appendChild(h('div', { class: 'module-chips' },
+          module.docs.map((doc) => h('span', {
+            class: 'doc-chip ' + (doc.present ? 'is-present' : 'is-missing'),
+            title: doc.path
+          }, doc.present ? '✓' : '○', ' ', basename(doc.path)))));
+      }
+
+      if ((module.contracts || []).length) {
+        card.appendChild(h('div', { class: 'module-subhead', text: 'Contracts' }));
+        card.appendChild(h('div', { class: 'module-chips' },
+          module.contracts.map((contract) => h('span', {
+            class: 'chip', title: (contract.path || '') + (contract.schema_files ? ' · ' + contract.schema_files + ' schema files' : '')
+          }, (contract.name || 'contract') + (contract.version ? ' v' + contract.version : '')))));
+      }
+
+      if ((module.may_import || []).length) {
+        card.appendChild(h('div', { class: 'module-imports' }, 'may import ', h('code', { text: module.may_import.join(', ') })));
+      }
+
+      card.appendChild(h('div', { class: 'module-subhead', text: 'Tasks' }));
+      const taskChips = h('div', { class: 'module-chips' });
+      for (const task of module.tasks || []) {
+        const meta = stMeta(task.status);
+        taskChips.appendChild(h('button', {
+          class: 'chip chip-link req-task-chip', type: 'button',
+          title: (task.title || task.id) + ' · ' + meta.label + (task.gates_missing && task.gates_missing.length ? ' · missing gates: ' + task.gates_missing.join(', ') : ''),
+          on: { click: () => openTask(task.id) }
+        },
+          h('span', { class: 'req-task-status st-' + meta.color, style: { background: 'currentColor' } }),
+          h('span', { class: 'mono', text: task.id })));
+      }
+      if (!(module.tasks || []).length) taskChips.appendChild(h('span', { class: 'hint', text: 'No tasks assigned to this module.' }));
+      card.appendChild(taskChips);
+
+      grid.appendChild(card);
+    }
+    view.appendChild(grid);
+  }
+
+  /* unassigned tasks */
+  const unassigned = (data.unassigned && data.unassigned.tasks) || [];
+  const unassignedCard = h('section', { class: 'card-panel', style: { marginTop: '16px' } },
+    h('div', { class: 'panel-head' },
+      h('span', { class: 'panel-title', text: 'Unassigned tasks' }),
+      h('span', { class: 'pill', text: String(unassigned.length) })),
+    h('div', { class: 'panel-body' }));
+  if (!unassigned.length) {
+    unassignedCard.querySelector('.panel-body').appendChild(h('div', { class: 'hint', text: 'Every task has a module.' }));
+  } else {
+    const chips = h('div', { class: 'module-chips' });
+    for (const task of unassigned) {
+      const meta = stMeta(task.status);
+      chips.appendChild(h('button', {
+        class: 'chip chip-link', type: 'button',
+        title: (task.title || task.id) + (task.package ? ' · ' + task.package : ''),
+        on: { click: () => openTask(task.id) }
+      }, h('span', { class: 'dot st-' + meta.color }), task.id));
+    }
+    unassignedCard.querySelector('.panel-body').appendChild(h('div', { class: 'col', style: { gap: '8px' } },
+      h('div', { class: 'hint', text: 'Tasks without a board package. Assign a package in the task properties or the plan editor.' }),
+      chips));
+  }
+  view.appendChild(unassignedCard);
+  view.appendChild(h('p', { class: 'tl-note', style: { marginTop: '10px' },
+    text: 'Health is derived: attention = blocked or failed tasks, watch = missing gates or package docs, done = all tasks done.' }));
+}
+
+/* =========================================================================
+   2.2 — Coverage: requirements, tasks and evidence
+   ========================================================================= */
+
+function coverageStateTone(stateName) {
+  if (stateName === 'covered') return 'green';
+  if (stateName === 'partial') return 'amber';
+  if (stateName === 'open') return 'blue';
+  if (stateName === 'missing') return 'red';
+  return 'neutral';
+}
+
+function renderCoverage() {
+  const view = h('div', { class: 'coverage' });
+  dom.view.appendChild(view);
+  const data = state.coverage;
+
+  view.appendChild(h('div', { class: 'view-head' },
+    h('div', {},
+      h('h1', { class: 'view-title', text: 'Coverage' }),
+      h('p', { class: 'view-sub', text: data ? data.summary.defined + ' defined requirements · ' + data.summary.covered + ' covered · ' + data.summary.uncovered + ' uncovered · ' + data.summary.undefined.length + ' undefined' : 'Requirements mapped to tasks and evidence' })),
+    h('div', { class: 'view-actions' },
+      h('button', { class: 'btn btn-sm', type: 'button', text: 'Refresh', on: { click: () => loadCoverage().then(() => renderView()) } }))));
+
+  if (viewLoadingOrError(view, state.coverageLoaded, state.coverageError, 'Reading the requirements…')) return;
+  if (!data) return;
+  const summary = data.summary || {};
+  const requirements = data.requirements || [];
+
+  view.appendChild(h('div', { class: 'tile-row' },
+    statTile('Defined', summary.defined || 0, { tone: 'tile-accent', sub: 'in docs/quality.md' }),
+    statTile('Covered', summary.covered || 0, { tone: 'tile-green', sub: 'all linked tasks done' }),
+    statTile('Partial', summary.partial || 0, { tone: 'tile-amber', sub: 'some work done' }),
+    statTile('Open', summary.open || 0, { tone: 'tile-blue', sub: 'tasks not finished' }),
+    statTile('Missing', summary.missing || 0, { tone: 'tile-red', sub: 'no linked tasks' }),
+    statTile('Undefined', (summary.undefined || []).length, { tone: 'tile-violet', sub: 'referenced, not defined' })));
+
+  if ((summary.undefined || []).length) {
+    view.appendChild(h('div', { class: 'callout callout-warn' },
+      h('div', { class: 'callout-stack' },
+        h('div', { text: 'Tasks reference requirements that docs/quality.md does not define:' }),
+        h('div', { class: 'undefined-list' },
+          summary.undefined.map((requirementId) => h('span', { class: 'chip', text: requirementId })),
+          h('span', { class: 'hint', text: 'Add a "**' + (summary.undefined[0] || 'D9') + '** text" line to the quality document.' })))));
+  }
+
+  const counts = {
+    all: requirements.length,
+    covered: summary.covered || 0,
+    partial: summary.partial || 0,
+    open: summary.open || 0,
+    missing: summary.missing || 0
+  };
+  const filter = state.coverageFilter || 'all';
+  const chips = h('div', { class: 'seg-chips', style: { marginBottom: '12px' } });
+  for (const key of ['all', 'covered', 'partial', 'open', 'missing']) {
+    chips.appendChild(h('button', {
+      class: 'seg-chip', type: 'button',
+      'aria-pressed': filter === key ? 'true' : 'false',
+      on: { click: () => { state.coverageFilter = key; renderView(); } }
+    }, capitalize(key), h('span', { class: 'faint', text: String(counts[key] || 0) })));
+  }
+  view.appendChild(chips);
+
+  const filtered = requirements.filter((requirement) => filter === 'all' || requirement.state === filter);
+  if (!filtered.length) {
+    view.appendChild(emptyState('No requirements match',
+      filter === 'all'
+        ? 'Add "**D1** text" requirement lines to docs/quality.md and reference them from tasks with satisfies.'
+        : 'Switch the filter to see the other requirements.',
+      null));
+    return;
+  }
+
+  const list = h('div', { class: 'coverage-list' });
+  for (const requirement of filtered) {
+    const tone = coverageStateTone(requirement.state);
+    const card = h('section', {
+      class: 'card-panel req-card' + (requirement.defined ? '' : ' req-undefined'),
+      id: 'req-' + requirement.id
+    });
+
+    card.appendChild(h('div', { class: 'req-head' },
+      h('span', { class: 'req-id', text: requirement.id }),
+      h('div', { class: 'req-main' },
+        h('div', { class: 'req-title', text: requirement.title || requirement.id }),
+        requirement.defined && requirement.definition && requirement.definition !== requirement.title
+          ? h('div', { class: 'req-claim', text: truncate(requirement.definition, 220) })
+          : null),
+      h('div', { class: 'row-wrap' },
+        requirement.defined ? null : h('span', { class: 'pill pill-warn', text: 'undefined' }),
+        h('span', { class: 'badge bg-' + tone + ' st-' + tone }, h('span', { class: 'dot' }), requirement.state))));
+
+    card.appendChild(h('div', { class: 'req-progress' },
+      progressBar(requirement.coverage * 100, 100, requirement.state === 'covered' ? 'is-ok' : ''),
+      h('span', { class: 'req-count', text: requirement.done + '/' + requirement.total + ' done · ' + requirement.active + ' active · ' + requirement.evidence + ' evidence' })));
+
+    const taskChips = h('div', { class: 'req-tasks' });
+    for (const task of requirement.tasks || []) {
+      const meta = stMeta(task.status);
+      taskChips.appendChild(h('button', {
+        class: 'chip chip-link req-task-chip', type: 'button',
+        title: (task.title || task.id) + ' · ' + meta.label + (task.owner ? ' · ' + task.owner : ''),
+        on: { click: () => openTask(task.id) }
+      },
+        h('span', { class: 'req-task-status st-' + meta.color, style: { background: 'currentColor' } }),
+        h('span', { class: 'mono', text: task.id }),
+        task.evidence ? h('span', { class: 'req-evidence', title: task.evidence + ' passing gate record(s)', text: '✓' + task.evidence }) : null));
+    }
+    if (!(requirement.tasks || []).length) taskChips.appendChild(h('span', { class: 'hint', text: 'No task references this requirement.' }));
+    card.appendChild(taskChips);
+    list.appendChild(card);
+  }
+  view.appendChild(list);
+  view.appendChild(h('p', { class: 'tl-note', style: { marginTop: '10px' },
+    text: 'Requirements come from docs/quality.md; tasks link them with satisfies. Evidence counts passing gate records.' }));
+}
+
+/* =========================================================================
+   2.2 — Analytics: throughput, cycle time, gates, effort
+   ========================================================================= */
+
+function chartCard(title, body, options) {
+  const opts = options || {};
+  const card = h('section', { class: 'card-panel' + (opts.span ? ' span-2' : '') },
+    h('div', { class: 'panel-head' },
+      h('span', { class: 'panel-title', text: title }),
+      opts.note ? h('span', { class: 'hint', text: opts.note }) : null),
+    h('div', { class: 'panel-body' }, body));
+  return card;
+}
+
+function throughputChart(rows) {
+  const width = 640;
+  const height = 170;
+  const left = 32;
+  const right = 10;
+  const top = 10;
+  const bottom = 24;
+  const data = Array.isArray(rows) ? rows : [];
+  const max = Math.max(1, ...data.map((row) => Number(row.done) || 0));
+  const svg = svgEl('svg', {
+    viewBox: '0 0 ' + width + ' ' + height,
+    role: 'img',
+    'aria-label': 'Tasks completed per ISO week, last ' + data.length + ' weeks (total ' + data.reduce((sum, row) => sum + Number(row.done || 0), 0) + ')'
+  });
+  const plotWidth = width - left - right;
+  const plotHeight = height - top - bottom;
+  for (const fraction of [0, 0.5, 1]) {
+    const y = top + plotHeight * (1 - fraction);
+    svg.appendChild(svgEl('line', { x1: left, x2: width - right, y1: y, y2: y, stroke: 'var(--border)', 'stroke-width': '1' }));
+    svg.appendChild(svgEl('text', { x: left - 5, y: y + 3, 'text-anchor': 'end', class: 'g-title', 'font-size': '9' }, String(Math.round(max * fraction))));
+  }
+  const slot = data.length ? plotWidth / data.length : plotWidth;
+  const barWidth = Math.max(4, Math.min(30, slot - 6));
+  data.forEach((row, index) => {
+    const value = Number(row.done) || 0;
+    const barHeight = plotHeight * (value / max);
+    const x = left + slot * index + (slot - barWidth) / 2;
+    const y = top + plotHeight - barHeight;
+    svg.appendChild(svgEl('rect', {
+      x: x, y: y, width: barWidth, height: Math.max(0, barHeight),
+      rx: '2', fill: value ? 'var(--accent)' : 'var(--surface-3)'
+    }));
+    svg.appendChild(svgEl('title', {}, row.week + ': ' + value + ' done'));
+    if (index % 3 === 0 || index === data.length - 1) {
+      const label = String(row.week || '').replace(/^\d{4}-/, '');
+      svg.appendChild(svgEl('text', {
+        x: left + slot * index + slot / 2, y: height - 6, 'text-anchor': 'middle',
+        class: 'g-title', 'font-size': '9'
+      }, label));
+    }
+  });
+  return svg;
+}
+
+function horizontalBars(rows, options) {
+  const opts = options || {};
+  const data = Array.isArray(rows) ? rows : [];
+  if (!data.length) return h('div', { class: 'chart-empty', text: opts.emptyText || 'No data yet.' });
+  const max = Math.max(1, ...data.map((row) => Number(row.value) || 0));
+  const box = h('div', { class: 'hbars', role: 'img', 'aria-label': opts.label || 'Bar chart' });
+  for (const row of data) {
+    const value = Number(row.value) || 0;
+    box.appendChild(h('div', { class: 'hbar-row' },
+      h('span', { class: 'hbar-label', title: row.label, text: row.label }),
+      h('div', { class: 'hbar-track' },
+        h('div', {
+          class: 'hbar-fill',
+          style: { width: Math.max(value ? 2 : 0, (value / max) * 100) + '%', background: row.color || 'var(--accent)' }
+        })),
+      h('span', { class: 'hbar-value', text: row.display !== undefined ? String(row.display) : String(value) })));
+  }
+  return box;
+}
+
+function gateResultColor(result) {
+  if (result === 'pass') return 'var(--st-green)';
+  if (result === 'fail') return 'var(--st-red)';
+  if (result === 'infra' || result === 'timeout') return 'var(--st-amber)';
+  if (result === 'busy') return 'var(--st-orange)';
+  return 'var(--st-neutral)';
+}
+
+function groupedEffortBars(rows) {
+  const data = Array.isArray(rows) ? rows : [];
+  if (!data.length) return h('div', { class: 'chart-empty', text: 'No stage effort recorded yet.' });
+  const max = Math.max(1, ...data.map((row) => Math.max(Number(row.estimate_hours) || 0, Number(row.actual_hours) || 0)));
+  const box = h('div', { class: 'grouped-bars', role: 'img', 'aria-label': 'Estimate and actual hours per stage' });
+  for (const row of data) {
+    const estimate = Number(row.estimate_hours) || 0;
+    const actual = Number(row.actual_hours) || 0;
+    box.appendChild(h('div', { class: 'grouped-row' },
+      h('span', { class: 'hbar-label', title: row.stage, text: row.stage || '(none)' }),
+      h('div', { class: 'grouped-bars-track' },
+        h('div', { class: 'grouped-bar' },
+          h('span', { class: 'chart-legend-dot', style: { background: 'var(--st-blue)' } }),
+          h('div', { class: 'hbar-track' },
+            h('div', { class: 'hbar-fill', style: { width: Math.max(estimate ? 2 : 0, (estimate / max) * 100) + '%', background: 'var(--st-blue)' } })),
+          h('span', { class: 'hbar-value', text: fmtHours(estimate) })),
+        h('div', { class: 'grouped-bar' },
+          h('span', { class: 'chart-legend-dot', style: { background: 'var(--st-green)' } }),
+          h('div', { class: 'hbar-track' },
+            h('div', { class: 'hbar-fill', style: { width: Math.max(actual ? 2 : 0, (actual / max) * 100) + '%', background: 'var(--st-green)' } })),
+          h('span', { class: 'hbar-value', text: fmtHours(actual) })))));
+  }
+  return box;
+}
+
+function renderAnalytics() {
+  const view = h('div', { class: 'analytics' });
+  dom.view.appendChild(view);
+  const data = state.analytics;
+
+  view.appendChild(h('div', { class: 'view-head' },
+    h('div', {},
+      h('h1', { class: 'view-title', text: 'Analytics' }),
+      h('p', { class: 'view-sub', text: data ? 'Derived from board state, runs/ and evidence · ' + data.kpis.tasks_total + ' tasks · ' + data.today : 'Project health from evidence' })),
+    h('div', { class: 'view-actions' },
+      h('button', { class: 'btn btn-sm', type: 'button', text: 'Refresh', on: { click: () => loadAnalytics().then(() => renderView()) } }))));
+
+  if (viewLoadingOrError(view, state.analyticsLoaded, state.analyticsError, 'Computing analytics…')) return;
+  if (!data) return;
+  const kpis = data.kpis || {};
+
+  const completion = Number(kpis.completion) || 0;
+  const gateRate = kpis.gate_pass_rate;
+  const reworkRate = Number(kpis.rework_rate) || 0;
+  const delta = Number(kpis.estimate_delta_hours) || 0;
+  view.appendChild(h('div', { class: 'analytics-kpis' },
+    tileValue('Completion', percentText(completion), {
+      tone: completion >= 1 ? 'is-good' : (completion > 0 ? '' : ''),
+      sub: (kpis.tasks_done || 0) + ' of ' + (kpis.tasks_total || 0) + ' tasks done'
+    }),
+    tileValue('Gate pass rate', gateRate === null || gateRate === undefined ? '—' : percentText(gateRate), {
+      tone: gateRate === null || gateRate === undefined ? '' : (gateRate >= 0.9 ? 'is-good' : (gateRate >= 0.6 ? 'is-warn' : 'is-bad')),
+      sub: (data.gate_results || []).reduce((sum, row) => sum + Number(row.count || 0), 0) + ' gate records'
+    }),
+    tileValue('Rework rate', percentText(reworkRate), {
+      tone: reworkRate > 0.3 ? 'is-bad' : (reworkRate > 0 ? 'is-warn' : 'is-good'),
+      sub: (kpis.rework_tasks || 0) + ' task(s) reworked'
+    }),
+    tileValue('Blocked now', countText(kpis.blocked_now), {
+      tone: kpis.blocked_now ? 'is-warn' : 'is-good',
+      sub: 'avg ' + Number(kpis.blocked_avg_days || 0).toFixed(1) + 'd · max ' + Number(kpis.blocked_max_days || 0).toFixed(1) + 'd'
+    }),
+    tileValue('Estimate vs actual', (delta > 0 ? '+' : '') + fmtHours(delta), {
+      tone: delta > 0 ? 'is-warn' : (delta < 0 ? 'is-good' : ''),
+      sub: 'est ' + fmtHours(kpis.estimate_hours) + ' · act ' + fmtHours(kpis.actual_hours)
+    }),
+    tileValue('Tokens', fmtTokens(kpis.tokens_total || 0), {
+      sub: (kpis.attempts_total || 0) + ' attempts'
+    }),
+    tileValue('Sessions', countText(kpis.sessions_total), {
+      sub: fmtTokens(data.sessions ? data.sessions.tokens : 0) + ' tokens · ' + fmtDuration((data.sessions && data.sessions.total_seconds) || 0)
+    })));
+
+  const statusChips = h('div', { class: 'row-wrap', style: { marginBottom: '14px' } },
+    h('span', { class: 'hint', text: 'Status:' }));
+  for (const status of Object.keys(kpis.status_counts || {})) {
+    const meta = stMeta(status);
+    statusChips.appendChild(h('span', { class: 'chip' },
+      h('span', { class: 'dot st-' + meta.color }), meta.label + ' ' + kpis.status_counts[status]));
+  }
+  view.appendChild(statusChips);
+
+  const grid = h('div', { class: 'analytics-grid' });
+
+  const throughputBody = h('div', {},
+    h('div', { class: 'chart' }, throughputChart(data.throughput || [])),
+    h('div', { class: 'chart-legend' },
+      h('span', { class: 'chart-legend-item' },
+        h('span', { class: 'chart-legend-dot', style: { background: 'var(--accent)' } }),
+        data.throughput_total + ' done in the last 12 weeks')));
+  grid.appendChild(chartCard('Throughput', throughputBody, { span: true, note: 'tasks completed per ISO week' }));
+
+  grid.appendChild(chartCard('Cycle time per stage',
+    horizontalBars((data.cycle_time || []).map((row) => ({
+      label: row.stage + ' (' + row.tasks + ')',
+      value: Number(row.avg_days) || 0,
+      display: Number(row.avg_days).toFixed(1) + 'd',
+      color: 'var(--st-violet)'
+    })), { emptyText: 'No finished task has a start and done event yet.', label: 'Average cycle time per stage in days' }),
+    { note: 'first work event → done' }));
+
+  grid.appendChild(chartCard('Gate results',
+    horizontalBars((data.gate_results || []).map((row) => ({
+      label: row.result,
+      value: Number(row.count) || 0,
+      color: gateResultColor(row.result)
+    })), { emptyText: 'No gate records yet.', label: 'Gate results by outcome' }),
+    { note: 'evidence records' }));
+
+  grid.appendChild(chartCard('Estimate vs actual per stage',
+    groupedEffortBars((data.effort && data.effort.stages) || []),
+    { span: true, note: 'hours · estimate is planned, actual comes from runs and sessions' }));
+
+  grid.appendChild(chartCard('Tokens per stage',
+    horizontalBars(((data.effort && data.effort.stages) || []).map((row) => ({
+      label: row.stage,
+      value: Number(row.tokens) || 0,
+      display: fmtTokens(row.tokens || 0),
+      color: 'var(--st-teal)'
+    })), { emptyText: 'No token usage recorded yet.', label: 'Token usage per stage' })));
+
+  grid.appendChild(chartCard('Sessions',
+    h('div', { class: 'grouped-bars' },
+      ...(Object.keys((data.sessions && data.sessions.counts) || {}).length
+        ? Object.keys(data.sessions.counts).map((status) => h('div', { class: 'between' },
+          h('span', { class: 'chart-legend-item' }, statusPill(status)),
+          h('span', { class: 'mono', text: String(data.sessions.counts[status]) })))
+        : [h('div', { class: 'chart-empty', text: 'No headless sessions recorded yet.' })]),
+      h('div', { class: 'between', style: { marginTop: '8px' } },
+        h('span', { class: 'hint', text: 'Total session time' }),
+        h('span', { class: 'mono', text: fmtDuration((data.sessions && data.sessions.total_seconds) || 0) })))));
+
+  view.appendChild(grid);
+  view.appendChild(h('p', { class: 'tl-note', style: { marginTop: '10px' },
+    text: 'Every number is derived from files Polier already writes; there is no separate metrics store.' }));
 }
 
 /* =========================================================================

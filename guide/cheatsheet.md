@@ -32,6 +32,15 @@ The human's operating manual. The generator drafts and writes; you approve, star
 - **Worklog:** attempts, gate records, sessions and tokens are the timesheet; `estimate_hours` is compared with the derived actual hours. No manual time tracking.
 - **CLI parity:** `tools/plan.py` (tasks, labels, estimates, stage decisions), `tools/settings.py`, `tools/views.py`; MCP read tools `polier_settings`, `polier_views`, `polier_worklog`, `polier_me`, `polier_inbox` (+ `polier_inbox_read`).
 
+## The planning views (2.2)
+
+- **Timeline:** derived from dependencies and estimates (`defaults.hours_per_day` in `dashboard.json`); optional board schema 1.2 dates `planned_start`/`target` (`YYYY-MM-DD`) override one task. Set them with `tools/plan.py update <ID> --planned-start … --target …` or in the task drawer; they are cleared with null.
+- **Cycles:** stages are the cycles; the view shows progress, exit gates, owner decision, effort and a burndown from run events. Stage decisions go through `tools/plan.py stage <id> decision --decision continue|stop|pending` (or the view).
+- **Modules:** `packages[]` with tasks, health, docs (README/ARCHITECTURE), contracts and effort; tasks without a package stay visible.
+- **Coverage:** requirement definitions from `docs/quality.md` (`**Dn** …`) joined with task `satisfies` and passing evidence; undefined codes are reported.
+- **Analytics:** throughput, cycle time, gate pass rate, rework, blocked age, estimate vs actual, tokens and sessions — all derived; nothing to maintain.
+- **Board schema 1.2** only adds the two optional planning dates; old boards stay valid and the plan editor upgrades on first use.
+
 ## The dashboard (2.0)
 
 - Start it with `python3 tools/serve.py <project> [--port 8765] [--open] [--token …] [--read-only]`; stop it with Ctrl+C. It needs no dependencies and writes only runtime files under `<git-common-dir>/polier/dashboard/`.

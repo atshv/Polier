@@ -42,13 +42,14 @@ class Dashboard21Test(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(settings["me"], "owner")
         self.assertTrue(settings["features"]["inbox"])
-        self.assertFalse(settings["features"]["timeline"])
+        self.assertTrue(settings["features"]["timeline"])
+        self.assertTrue(settings["features"]["analytics"])
         status, updated = request(self.base, "/api/settings", "PUT",
-                                  {"features": {"timeline": True}}, ACTION)
+                                  {"features": {"timeline": False}}, ACTION)
         self.assertEqual(status, 200, updated)
-        self.assertTrue(updated["features"]["timeline"])
+        self.assertFalse(updated["features"]["timeline"])
         status, settings = request(self.base, "/api/settings")
-        self.assertTrue(settings["project"]["features"]["timeline"])
+        self.assertFalse(settings["project"]["features"]["timeline"])
         self.assertTrue((self.root / "dashboard.json").is_file())
 
     def test_label_crud(self) -> None:

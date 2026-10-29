@@ -18,11 +18,11 @@ class SettingsTest(unittest.TestCase):
         value = settings.load(root)
         self.assertEqual(value["version"], 1)
         self.assertTrue(settings.features(value)["inbox"])
-        self.assertEqual(settings.features(value)["timeline"], False)
-        saved = settings.save(root, {"features": {"timeline": True}})
-        self.assertTrue(settings.enabled(saved, "timeline"))
+        self.assertTrue(settings.features(value)["timeline"])
+        saved = settings.save(root, {"features": {"timeline": False}})
+        self.assertFalse(settings.enabled(saved, "timeline"))
         self.assertTrue((root / "dashboard.json").is_file())
-        self.assertEqual(settings.load(root)["features"]["timeline"], True)
+        self.assertEqual(settings.load(root)["features"]["timeline"], False)
 
     def test_validation(self) -> None:
         self.assertTrue(settings.errors({"version": 7}))
@@ -35,6 +35,14 @@ class SettingsTest(unittest.TestCase):
                                                    "color": "red", "group": "nope"}]}))
         with self.assertRaises(PolierError):
             settings.save(tempfile.mkdtemp(), {"defaults": {"me": ""}})
+
+    def test_hours_per_day(self) -> None:
+        root = Path(tempfile.mkdtemp(prefix="pl-settings-"))
+        self.assertEqual(settings.hours_per_day(settings.load(root)), 4.0)
+        saved = settings.save(root, {"defaults": {"me": "owner", "hours_per_day": 6}})
+        self.assertEqual(settings.hours_per_day(saved), 6.0)
+        with self.assertRaises(PolierError):
+            settings.save(root, {"defaults": {"hours_per_day": 40}})
 
     def test_label_lifecycle_and_usage(self) -> None:
         root = sample_project()
