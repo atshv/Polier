@@ -1,10 +1,10 @@
 {
-  "version": "1.3.0",
+  "version": "1.4.0",
   "generated": "2026-10-29",
   "files": {
-    "CHANGELOG.md": "f99b292c15bb8ee1bcfbb529263105826012833e386d20c76227c3c3e7c64b68",
+    "CHANGELOG.md": "f8fa77fcd3cce527c15daf8fcab1f32ff6c77eb77b1d70a11cb60c34d80c6ac7",
     "SKILL.md": "fa9b3a296d078d34bdf826e031a6c52f0d5496c1117086ce6ff3820157d70f8b",
-    "VERSION": "64d23f858ef51b0f996e4966d4e27c0371b437e2d2787890b1f7ad22d4ec5663",
+    "VERSION": "78b591400c56b7b67b8cb3b2b8a8e65e9093897f02ce0878e6b5405c68620fa7",
     "adapters/claude-code/README.md": "403dc5af8034040d6261e7969dc6eacecc8501aac9002b4693d1f099a26e682b",
     "adapters/claude-code/hook.py": "1afb4eb7da66ac4e6c7159029fa297c2525d1a72fd28f8987f9ec457b026fc34",
     "adapters/claude-code/settings.example.json": "c4f916b9a03c5bc38430e0e2007f700ffec9f227b89a4cceafcf5462d7bb4c37",
@@ -161,7 +161,7 @@
     "tools/gate.py": "a576e6b7819d13400f7092176326fe0449dfaeb6f92ffd5f459bf568ce99f275",
     "tools/manifest.py": "c44211152afcd09a5660c8ce9a8bb8a88ae3e1d568ec8a6962e4406dccb20824",
     "tools/release_check.py": "5c1c7a09a920dfe766eabc6b0c8f362e0dbc7c6a7b029c0a7db1b8541c3bd2e5",
-    "tools/render_status.py": "3d787b5c955e45a44ddebbcc96fb5de54c6d7bdca54d97154917b29595eb623e",
+    "tools/render_status.py": "d56df507ab610bf941acde378c15cb5b1b2db3f937e65a0b3f8e30b2b71543f5",
     "tools/research.py": "3cf578408b5a8efd0fd41e83d644327f83ca30da02e525631e3e5ac4a3419ba7",
     "tools/scope_check.py": "18839ce180311671300676d02b566774f4582fd03fdd86e46626c2497c3d9e74",
     "tools/slot.py": "bbe7af251abb18f9984c1f6bb9a160cdbb8dfad8d3b8508a7e2f7c9eec2b9740",
