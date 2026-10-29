@@ -38,18 +38,23 @@ from core import audit as audit_mod
 from core import board as board_mod
 from core import claims as claims_mod
 from core import dashboard as dashboard_mod
+from core import filters as filters_mod
+from core import inbox as inbox_mod
 from core import plans as plans_mod
 from core import plan_edit
 from core import policy as policy_mod
 from core import runtime as runtime_mod
+from core import settings as settings_mod
 from core import state as state_mod
+from core import views as views_mod
+from core import worklog as worklog_mod
 from core.errors import PolierError
 from core.gates import suggest_gate_commands
 from core.jobs import JobManager
 
 from .sessions import SessionManager
 
-VERSION = "2.0.0"
+VERSION = "2.1.0"
 CONFIG = "config.json"
 MAX_BODY = 1_500_000
 ASSETS = Path(__file__).resolve().parent / "assets"
@@ -142,8 +147,9 @@ class DashboardApp:
     def signature(self) -> str:
         parts: List[str] = []
         root = self.root
-        for rel in ("board.json", "policy.json"):
+        for rel in ("board.json", "policy.json", "dashboard.json"):
             parts.append(_stamp(root / rel))
+        parts.append(_dir_stamp(root / "views"))
         for folder in ("runs", "tasks", "reviews"):
             parts.append(_dir_stamp(root / folder))
         parts.append(_dir_stamp(root / "reviews" / "evidence"))
@@ -279,7 +285,10 @@ class DashboardApp:
                         raise ApiError(400, "gate_commands must be an object of strings")
                     config["gate_commands"] = gate_commands
                 if "session" in payload:
-                    self.sessions.update_settings(payload["session"])
+                    try:
+                        self.sessions.update_settings(payload["session"])
+                    except PolierError as exc:
+                        raise ApiError(400, str(exc))
                     config["session"] = self.sessions.settings()
                 if "ui" in payload and isinstance(payload["ui"], dict):
                     config["ui"] = payload["ui"]
@@ -544,6 +553,135 @@ class DashboardApp:
             self.bus.publish("state", {"plan": f"stage-{verb}", "stage": stage_id})
             self.invalidate()
             return 200, result
+        # settings, labels, views, worklog, inbox (2.1) -------------------
+        if path == "/api/settings" and method == "GET":
+            project = settings_mod.load(self.root, strict=False)
+            return 200, {
+                "project": project,
+                "errors": settings_mod.errors(project),
+                "features": settings_mod.features(project),
+                "feature_defaults": dict(settings_mod.FEATURES),
+                "labels": settings_mod.label_list(project),
+                "palette": list(settings_mod.PALETTE),
+                "groups": list(settings_mod.GROUPS),
+                "me": settings_mod.me(project),
+                "local": self.config_view(),
+            }
+        if path == "/api/settings" and method in ("PUT", "POST"):
+            payload = self._json(body)
+            unknown = set(payload) - {"features", "defaults", "labels"}
+            if unknown:
+                raise ApiError(400, "unknown settings field(s): " + ", ".join(sorted(unknown)))
+            project = settings_mod.load(self.root, strict=False)
+            if isinstance(payload.get("features"), dict):
+                merged = dict(project.get("features") or {})
+                merged.update(payload["features"])
+                project["features"] = merged
+            if isinstance(payload.get("defaults"), dict):
+                merged = dict(project.get("defaults") or {})
+                merged.update(payload["defaults"])
+                project["defaults"] = merged
+            if payload.get("labels") is not None:
+                project["labels"] = payload["labels"]
+            try:
+                project = settings_mod.save(self.root, project)
+            except PolierError as exc:
+                raise ApiError(400, str(exc))
+            self.bus.publish("settings", {"settings": project})
+            self.invalidate()
+            return 200, {"project": project, "features": settings_mod.features(project),
+                         "labels": settings_mod.label_list(project),
+                         "me": settings_mod.me(project)}
+        if path == "/api/settings/labels" and method == "POST":
+            payload = self._json(body)
+            try:
+                result = settings_mod.add_label(self.root, payload)
+            except PolierError as exc:
+                raise ApiError(400, str(exc))
+            self.bus.publish("settings", {"label": result.get("label")})
+            self.invalidate()
+            return 200, result
+        match = re.fullmatch(r"/api/settings/labels/([a-z][a-z0-9-]{0,40})", path)
+        if match and method in ("PUT", "PATCH"):
+            payload = self._json(body)
+            try:
+                result = settings_mod.update_label(self.root, match.group(1), payload)
+            except KeyError:
+                raise ApiError(404, "unknown label")
+            except PolierError as exc:
+                raise ApiError(400, str(exc))
+            self.bus.publish("settings", {"label": result.get("label")})
+            self.invalidate()
+            return 200, result
+        if match and method == "DELETE":
+            payload = self._json(body)
+            try:
+                result = settings_mod.delete_label(self.root, match.group(1),
+                                                   force=bool(payload.get("force")))
+            except KeyError:
+                raise ApiError(404, "unknown label")
+            except PolierError as exc:
+                raise ApiError(400, str(exc))
+            self.bus.publish("settings", {"deleted_label": match.group(1)})
+            self.invalidate()
+            return 200, result
+        if path == "/api/filters/fields" and method == "GET":
+            return 200, {"fields": filters_mod.FIELDS, "operators": filters_mod.OPERATORS,
+                         "group_by": list(filters_mod.GROUP_BY),
+                         "sortable": list(filters_mod.SORTABLE),
+                         "status_order": list(filters_mod.STATUS_ORDER)}
+        if path == "/api/views" and method == "GET":
+            me = settings_mod.me(settings_mod.load(self.root, strict=False))
+            return 200, {"builtin": filters_mod.builtin_views(me),
+                         "saved": views_mod.load_all(self.root),
+                         "all": views_mod.all_views(self.root, me)}
+        match = re.fullmatch(r"/api/views/([a-z][a-z0-9-]{0,40})", path)
+        if match and method in ("PUT", "POST"):
+            payload = self._json(body)
+            payload["id"] = match.group(1)
+            payload.setdefault("created_by", self.role)
+            try:
+                view = views_mod.save(self.root, payload)
+            except PolierError as exc:
+                raise ApiError(400, str(exc))
+            self.bus.publish("views", {"view": view})
+            return 200, view
+        if match and method == "DELETE":
+            try:
+                result = views_mod.delete(self.root, match.group(1))
+            except KeyError:
+                raise ApiError(404, "unknown view")
+            except PolierError as exc:
+                raise ApiError(400, str(exc))
+            self.bus.publish("views", {"deleted": match.group(1)})
+            return 200, result
+        if path == "/api/worklog" and method == "GET":
+            if query.get("task"):
+                try:
+                    detail = dashboard_mod.task_detail(self.root, query["task"])
+                except KeyError:
+                    raise ApiError(404, "unknown task")
+                return 200, detail["worklog"]
+            snapshot = self.snapshot()
+            return 200, worklog_mod.project_worklog(self.root, snapshot["tasks"])
+        if path == "/api/me" and method == "GET":
+            return 200, inbox_mod.your_work(self.root, snapshot=self.snapshot())
+        if path == "/api/inbox" and method == "GET":
+            summary = inbox_mod.inbox_summary(self.root, snapshot=self.snapshot())
+            items = summary["items"]
+            if query.get("unread") in ("1", "true", "yes"):
+                items = [item for item in items if not item.get("read")]
+            return 200, {"items": items, "counts": summary["counts"]}
+        if path == "/api/inbox/read" and method == "POST":
+            payload = self._json(body)
+            ids = payload.get("ids") if isinstance(payload.get("ids"), list) else []
+            state = inbox_mod.mark_read(self.root, [str(item) for item in ids],
+                                        read=bool(payload.get("read", True)),
+                                        all_items=bool(payload.get("all")),
+                                        reset=bool(payload.get("reset")))
+            self.bus.publish("inbox", {"counts": inbox_mod.inbox_summary(
+                self.root, snapshot=self.snapshot())["counts"]})
+            return 200, state
         # files / audit ----------------------------------------------------
         if path == "/api/files" and method == "GET":
             try:

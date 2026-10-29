@@ -2,6 +2,26 @@
 
 Each release lists what a running project must do to adopt it. Update between stages, never during a task (see `guide/cheatsheet.md`). The current version is in `VERSION`; projects record theirs in `board.json` → `generator_version`.
 
+## 2.1.0
+
+**The project cockpit.** 2.0 made the dashboard a control plane; 2.1 turns it into the place where the owner actually works. It adds committed project settings, labels, structured filters with saved views, a personal cockpit ("Your Work" and an inbox), and a worklog that derives real effort from the evidence Polier already writes. All of it is optional and additive: the CLI, the guards and existing projects keep working unchanged.
+
+**Settings (`dashboard.json`).** A new committed file next to `board.json` and `policy.json` holds what the project decides: `features` (which optional dashboard views exist; future views default off), `labels` (the label definitions tasks may use, with a palette name and a group), and `defaults` (`me` = the owner handle for "Your Work"). Machine-local settings (session provider, gate commands, theme, inbox read state) stay in the git-common runtime folder, never in the repository. `tools/settings.py show|init|feature|me|label …` edits it from the CLI; the dashboard Settings view uses the same validation.
+
+**Board schema 1.1 (optional).** Tasks may carry `labels` (lowercase label ids defined in `dashboard.json`) and `estimate_hours` (a planning estimate). Both are additive; every 0.9 and 1.0 board stays valid, and the plan editor upgrades the board to 1.1 automatically when one of them is set. `templates/board.schema.json`, `core/board.py` and the test suite cover the new fields.
+
+**Filters and saved views.** The dashboard's filter builder composes bounded conditions (field, operator, value) instead of a query language: text, status, label, number, boolean and budget fields with explainable operators (`is`, `any_of`, `none_of`, `contains`, `gt`, `empty`, …). Views are committed files in `views/<id>.json` (`name`, `kind`, `filters`, `group_by`, `sort`, `columns`); built-in views ("Ready now", "Blocked", "Review queue", "Over budget", "No estimate", "Mine") are generated and never overwrite user data. `tools/views.py list|builtin|show|save|delete` covers the CLI.
+
+**Your Work and Inbox.** A personal cockpit derives the owner's queue from the board: my tasks, review queue, pending approvals, claims, blocked tasks, budget warnings, ready tasks and running sessions. The inbox is a single feed of actionable items (approvals, failed gates, blocked tasks, budget, reviews, finished sessions) with a local read/unread state; nothing is stored as project state. `GET /api/me`, `GET /api/inbox`, `POST /api/inbox/read` and the MCP tools `polier_me`, `polier_inbox`, `polier_inbox_read` expose it.
+
+**Worklog and estimates.** `core/worklog.py` turns the existing evidence into a worklog: attempts, gate records, sessions, token usage and durations, per task and per stage. `estimate_hours` (schema 1.1) is compared with actual hours (session time when sessions exist, otherwise the attempt window; never both). The task drawer gets a Worklog tab; `GET /api/worklog[?task=ID]`, `polier_worklog` and the table's effort columns read it.
+
+**CLI parity.** `tools/plan.py` (create/update/delete tasks with labels and estimates, stage decisions, `suggest-id`), `tools/settings.py` and `tools/views.py` mirror every dashboard write; labels are validated against `dashboard.json` and a 0.9/1.0 board is upgraded to 1.1 on first use.
+
+**Tests and docs.** New suites cover the board 1.1 fields, settings and label lifecycle, the filter engine, saved views, worklog derivation, Your Work/Inbox, the three CLIs and the 2.1 HTTP API. `docs/dashboard.md`, `guide/cheatsheet.md`, `SKILL.md` and `templates/dashboard.json` document the cockpit.
+
+**Migration.** Additive and optional. To use labels and estimates, set `"schema_version": "1.1"` (or let the plan editor do it) and copy [`templates/dashboard.json`](templates/dashboard.json) to the project root when you want explicit settings; without the file the defaults apply. Commit `dashboard.json` and `views/` with the project. Start the dashboard as before (`python3 tools/serve.py <project>`). Plugin users: `git pull`, `dsh plugin --profile <name> add ./polier` again, restart. Claude Code users: replace the package copy; the MCP server gains the 2.1 tools automatically. Skill-only users: `./update.sh`.
+
 ## 2.0.0
 
 **The dashboard.** 1.4 showed the project in a static page; 2.0 makes it a control plane. `tools/serve.py` starts a local HTTP + Server-Sent Events server (Python standard library only, loopback by default) that serves one self-contained page and a small JSON API over the same files the CLI uses. Nothing changes for projects that do not start it: the CLI, the guards and `STATUS.html` keep working, and no board field changes.

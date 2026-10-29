@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from . import board as board_mod
+from . import settings as settings_mod
 from .errors import PolierError
 from .runs import FileLock
 
@@ -28,8 +29,9 @@ EDITABLE = frozenset({
     "title", "goal", "why", "satisfies", "depends_on", "complexity", "stage",
     "parallel_group", "scope_write", "scope_read", "acceptance", "gates",
     "owner", "branch", "worktree", "scope_write_forbidden", "package",
-    "exclusive", "resources",
+    "exclusive", "resources", "labels", "estimate_hours",
 })
+LABEL_ID = re.compile(r"^[a-z][a-z0-9-]{0,40}$")
 REQUIRED_EDIT = ("title", "goal", "scope_write", "acceptance", "gates")
 MAX_TEXT = 20_000
 
@@ -44,6 +46,25 @@ def _strings(value: Any, field: str) -> List[str]:
     if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
         raise PolierError(f"{field} must be a list of strings")
     return [item.strip() for item in value if item.strip()]
+
+
+def _ensure_schema(root: Path, board: dict, payload: dict) -> None:
+    """Upgrade a 0.9/1.0 board to 1.1 when labels or an estimate are added."""
+    if not any(field in payload for field in ("labels", "estimate_hours")):
+        return
+    if board_mod.schema_version(board) in (board_mod.SCHEMA_09, board_mod.SCHEMA_10):
+        board["schema_version"] = board_mod.SCHEMA_11
+
+
+def _check_labels(root: Path, task: dict) -> None:
+    labels = task.get("labels") or []
+    if not labels:
+        return
+    known = set(settings_mod.label_map(settings_mod.load(root, strict=False)))
+    unknown = [label for label in labels if label not in known]
+    if unknown:
+        raise PolierError("unknown label(s): " + ", ".join(unknown)
+                          + " — define them in dashboard.json first")
 
 
 def _write_board(root: Path, board: dict) -> None:
@@ -148,6 +169,12 @@ def _apply_payload(board: dict, task: dict, payload: dict, *, creating: bool) ->
         if stage and stage not in board_mod.stage_ids(board):
             raise PolierError(f"unknown stage '{stage}'")
         task["stage"] = stage or task.get("stage")
+    for field in ("owner", "branch", "worktree"):
+        if field in payload:
+            value = payload[field]
+            if value is not None and not isinstance(value, str):
+                raise PolierError(f"{field} must be a string or null")
+            task[field] = value
     if "parallel_group" in payload:
         task["parallel_group"] = _text(payload["parallel_group"]) or None
     if "package" in payload:
@@ -159,6 +186,22 @@ def _apply_payload(board: dict, task: dict, payload: dict, *, creating: bool) ->
         if value is not None and not isinstance(value, dict):
             raise PolierError("resources must be an object")
         task["resources"] = value
+    if "labels" in payload:
+        labels = _strings(payload["labels"], "labels")
+        if any(not LABEL_ID.match(label) for label in labels):
+            raise PolierError("labels must be lowercase ids (e.g. 'bug', 'risk-high')")
+        if len(set(labels)) != len(labels):
+            raise PolierError("labels must not repeat")
+        task["labels"] = labels
+    if "estimate_hours" in payload:
+        estimate = payload["estimate_hours"]
+        if estimate is None:
+            task.pop("estimate_hours", None)
+        elif isinstance(estimate, bool) or not isinstance(estimate, (int, float)) \
+                or estimate < 0 or estimate > 10_000:
+            raise PolierError("estimate_hours must be a number between 0 and 10000, or null to clear it")
+        else:
+            task["estimate_hours"] = estimate
     if creating:
         for field in REQUIRED_EDIT:
             if field not in payload or (field not in ("scope_write", "acceptance", "gates")
@@ -205,7 +248,9 @@ def create_task(root, payload: dict) -> dict:
             "scope_write_forbidden": [],
         }
         _apply_payload(board, task, payload, creating=True)
+        _check_labels(root, task)
         board.setdefault("tasks", []).append(task)
+        _ensure_schema(root, board, payload)
         _validate(root, board)
         _write_board(root, board)
         return task
@@ -219,6 +264,8 @@ def update_task(root, task_id: str, payload: dict) -> dict:
         if task.get("status") == "done":
             raise PolierError("a done task is reopened through the state API before its plan is edited")
         _apply_payload(board, task, payload, creating=False)
+        _check_labels(root, task)
+        _ensure_schema(root, board, payload)
         _validate(root, board)
         _write_board(root, board)
         return task

@@ -23,6 +23,15 @@ The human's operating manual. The generator drafts and writes; you approve, star
 - **Generator copy:** if the package sits inside the project (`.generator/`), it is gitignored and ships `tools/manifest.json`, so `check.py` reports drift.
 - **Policy:** `policy.json` exists, `version: 1`, limits match the profile (S 3/1/3, M 3/2/3, L 3/3/3 for attempts/in progress/rounds), the manifest list matches the project; `docs/orchestration.md` exists and `AGENTS.md` names `policy.json`, `runs/` and the state commands.
 
+## The project cockpit (2.1)
+
+- **Settings:** the committed `dashboard.json` holds feature flags, labels and defaults (`me`). Edit it in the dashboard Settings view or `python3 <package>/tools/settings.py show|init|feature|me|label …`; never hand-edit it while the dashboard is writing.
+- **Labels & estimates:** optional task fields of board schema 1.1. `tools/plan.py create|update … --labels bug --estimate-hours 4`; labels must exist in `dashboard.json`. The plan editor upgrades a 0.9/1.0 board to 1.1 on first use. Labels never change the write scope.
+- **Views:** structured filters (field, operator, value), grouping and sorting can be saved as committed `views/<id>.json` with `tools/views.py save`; built-in views come from the code.
+- **Your Work / Inbox:** the dashboard derives the owner's queue (my tasks, reviews, approvals, claims, blocked, budget, ready, sessions) and one actionable feed (approvals, failed gates, blocked tasks, budget, review requests, failed sessions). Read marks are local only.
+- **Worklog:** attempts, gate records, sessions and tokens are the timesheet; `estimate_hours` is compared with the derived actual hours. No manual time tracking.
+- **CLI parity:** `tools/plan.py` (tasks, labels, estimates, stage decisions), `tools/settings.py`, `tools/views.py`; MCP read tools `polier_settings`, `polier_views`, `polier_worklog`, `polier_me`, `polier_inbox` (+ `polier_inbox_read`).
+
 ## The dashboard (2.0)
 
 - Start it with `python3 tools/serve.py <project> [--port 8765] [--open] [--token …] [--read-only]`; stop it with Ctrl+C. It needs no dependencies and writes only runtime files under `<git-common-dir>/polier/dashboard/`.
