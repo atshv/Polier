@@ -67,6 +67,20 @@ The five views are controlled by `dashboard.json` → `features` (default on). `
 
 The pages view and intake are controlled by `dashboard.json` → `features.pages` / `features.intake` (default on). Favorites are local; intake entries and templates are committed.
 
+## Intelligence (2.4)
+
+- **Assistant** — a read-only chat over the project's own state. `core/assistant.py` builds a compact briefing (project, stages, next wave, blocked tasks, approvals, claims, sessions, intake, task list); `server/assistant.py` runs one headless provider session per question and stores the conversation in the dashboard runtime. Answers may carry structured **proposals** (`state`, `plan_task`, `gate`, `session`, `note`); the UI applies one only after confirmation via `POST /api/assistant/apply`, which dispatches to the validated state machine, plan editor, gate job or session starter. The assistant cannot write files by itself. CLI `tools/assistant.py ask|list|show|delete`.
+- **Automations** — committed `automations.json` rules with a `when` kind (`gate_failed`, `task_blocked`, `budget_over`, `review_ready`, `session_failed`, `intake_proposed`, `stage_decision_pending`, `task_ready`) and suggested actions (`state`, `session`, `open`, `note`). `core/automations.py` evaluates on demand as a **dry run**: it returns matches and suggestions, changes nothing; applying a suggestion happens in the UI through the normal validated API. `GET/PUT /api/automations`, `POST /api/automations/run`; CLI `tools/automations.py`; example rules in `templates/automations.json`.
+- **Bulk operations** — `POST /api/bulk` applies `state`, `claim`, `release`, `labels` or `estimate` to up to 100 tasks and returns a per-task result (invalid transitions are reported, not hidden); the UI's board/table get multi-select and a bulk bar. All writes go through the same core functions and the audit trail.
+- **Command palette** — Cmd/Ctrl+K in the UI: every view, the current tasks and quick actions (new task, new intake, ask the assistant, run automations, refresh, settings).
+- **GitHub/CI** — `core/github.py` lists open PRs and recent workflow runs through the authenticated `gh` CLI and maps them to tasks by branch (`task/<ID>` or the task's branch), cached for 30 s. Without a GitHub remote, `gh` or auth the panel says why; nothing fails and no credentials are stored. `GET /api/github`, MCP `polier_github`, CLI `tools/github.py status`.
+
+![Assistant](images/dashboard-assistant.png)
+![Automations](images/dashboard-automations.png)
+![GitHub](images/dashboard-github.png)
+
+All three features are controlled by `dashboard.json` → `features.assistant` / `features.automations` / `features.github` (default on). Assistant conversations are local runtime files; automation rules are committed; the GitHub panel is read-only.
+
 Reading the page without live updates: add `?noevents=1` (static mode) and
 `?theme=light|dark` to freeze the theme; deep links are `#/board`, `#/table`,
 `#/graph`, `#/dispatch`, `#/approvals`, `#/activity`, `#/sessions`, `#/plan`
@@ -191,6 +205,10 @@ the `errors`/`actions` the CLI would print.
 | `GET /api/pages`, `/api/page?path=&ref=`, `/api/page/history`, `/api/pages/search`, `PUT /api/pages/favorites` | Markdown knowledge layer: collections, content, revisions, search, favorites |
 | `GET/POST /api/intake`, `PATCH /api/intake/<id>`, `POST /api/intake/<id>/accept\|reject` | intake proposals and triage into validated tasks |
 | `GET/POST /api/task-templates`, `DELETE /api/task-templates/<id>` | reusable task templates |
+| `GET/POST /api/assistant`, `/api/assistant/chat`, `/api/assistant/<id>`, `/api/assistant/apply` | read-only assistant conversations and validated proposal application |
+| `GET/PUT /api/automations`, `POST /api/automations/run` | deterministic rules and their dry-run matches |
+| `POST /api/bulk` | bulk state/claim/release/labels/estimate with per-task results |
+| `GET /api/github` | read-only PRs, CI runs and task-to-branch mapping via `gh` |
 | `GET /api/events` | Server-Sent Events (`state`, `job`, `session`, `approval`, `claim`, `plan`, `inbox`, `views`, `settings`, `ready`, `lag`) |
 
 The dashboard also reads gate commands from the project's own table in
@@ -209,12 +227,14 @@ page falls back to `.polier-dashboard/`):
 | `views/<id>.json` (project root, committed) | saved filters, grouping, sorting and columns |
 | `intake/<id>.json` (project root, committed) | intake proposals and their decisions |
 | `templates/tasks/<id>.json` (project root, committed) | reusable task templates |
+| `automations.json` (project root, committed) | deterministic automation rules (evaluated as a dry run) |
 | `config.json` (runtime) | provider command/settings, gate-command overrides, UI preferences |
 | `plan.json`, `plan/` | interview answers and the last generator prompt |
 | `jobs/<id>.log` | full output of gate/check/audit jobs |
 | `sessions/<id>/` | prompt, generated Claude settings, transcript, session log, meta |
 | `inbox.json` | read state of the inbox items |
 | `pages.json` | local page favorites |
+| `assistant/<id>.json` | local assistant conversations |
 
 Deleting the folder loses transcripts, job logs and read marks only; `dashboard.json` and `views/` are project files and survive.
 
@@ -238,7 +258,12 @@ Deleting the folder loses transcripts, job logs and read marks only; `dashboard.
   session span. It is a comparison aid for estimates, not payroll time.
 - The inbox is a derived feed, not a store; only its read marks are local.
 - Pages are read-only: the viewer never edits a document, and old revisions are
-  read from git. Intake and task templates are the only new committed files.
+  read from git. Intake, task templates and automation rules are the committed
+  additions; the assistant never writes and only proposes validated actions.
+- Automations are suggestions, not a daemon: nothing runs in the background and
+  a dry run changes no project file.
+- The GitHub panel depends on the local `gh` login; it is read-only and caches for
+  30 seconds.
 - The timeline is a derived schedule unless `planned_start`/`target` are set; it
   is a planning aid, not a promise. Cycles are stages by evidence, not calendar
   periods, and Coverage only knows the D-codes the project documents.

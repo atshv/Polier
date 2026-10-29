@@ -44,7 +44,7 @@ DEFAULT_SESSION = {
     "max_concurrent": 2,
     "env": {},
 }
-ROLES = ("worker", "reviewer", "lead", "generator")
+ROLES = ("worker", "reviewer", "lead", "generator", "assistant")
 MAX_LOG_LINES = 5000
 
 

@@ -40,10 +40,12 @@ from core import board as board_mod  # noqa: E402
 from core import claims as claims_mod  # noqa: E402
 from core import dashboard as dashboard_mod  # noqa: E402
 from core import analytics as analytics_mod  # noqa: E402
+from core import automations as automations_mod  # noqa: E402
 from core import coverage as coverage_mod  # noqa: E402
 from core import cycles as cycles_mod  # noqa: E402
 from core import filters as filters_mod  # noqa: E402
 from core import gate as gate_mod  # noqa: E402
+from core import github as github_mod  # noqa: E402
 from core import inbox as inbox_mod  # noqa: E402
 from core import runs as runs_mod  # noqa: E402
 from core import runtime as runtime_mod  # noqa: E402
@@ -60,7 +62,7 @@ from core.errors import PolierError  # noqa: E402
 from core.gates import suggest_gate_commands  # noqa: E402
 
 PROTOCOL = "2024-11-05"
-SERVER = {"name": "polier", "version": "2.3.0"}
+SERVER = {"name": "polier", "version": "2.4.0"}
 
 
 def _text(value: Any) -> str:
@@ -100,6 +102,10 @@ class Server:
                  "task": {"type": "string"}, "name": {"type": "string"},
                  "command": {"type": "string"}, "timeout": {"type": "integer"}},
                  "required": ["task", "name"]}},
+            {"name": "polier_automations", "description": "Deterministic automation rules and a dry-run of their matches.",
+             "inputSchema": {"type": "object", "properties": {"run": {"type": "boolean"}}}},
+            {"name": "polier_github", "description": "Read-only GitHub/CI status: open PRs, recent workflow runs and task-to-branch mapping.",
+             "inputSchema": {"type": "object", "properties": {}}},
             {"name": "polier_pages", "description": "The Markdown knowledge layer: collections, pages, word counts and favorites.",
              "inputSchema": {"type": "object", "properties": {}}},
             {"name": "polier_page", "description": "One page with content, links, backlinks and git history; ref reads an old revision.",
@@ -229,6 +235,15 @@ class Server:
                 "log": str(result.get("log_path")),
                 "summary": gate_mod.summary(result, tail=10, max_errors=10),
             }
+        if name == "polier_automations":
+            value = automations_mod.load(self.root, strict=False)
+            result = {"automations": value, "errors": automations_mod.errors(value),
+                      "kinds": list(automations_mod.KINDS)}
+            if arguments.get("run"):
+                result["evaluation"] = automations_mod.evaluate(self.root)
+            return result
+        if name == "polier_github":
+            return github_mod.status(self.root)
         if name == "polier_pages":
             return pages_mod.index(self.root)
         if name == "polier_page":

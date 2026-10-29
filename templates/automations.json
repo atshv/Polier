@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "rules": [
+    {
+      "id": "gate-failed",
+      "name": "A failed gate needs attention",
+      "enabled": true,
+      "when": {
+        "kind": "gate_failed"
+      },
+      "actions": [
+        {
+          "type": "state",
+          "status": "blocked",
+          "note": "A gate failed; fix it before continuing."
+        },
+        {
+          "type": "open"
+        }
+      ]
+    },
+    {
+      "id": "review-waiting",
+      "name": "A task waits for review",
+      "enabled": true,
+      "when": {
+        "kind": "review_ready"
+      },
+      "actions": [
+        {
+          "type": "session",
+          "role": "reviewer",
+          "note": "Review the diff, acceptance criteria and gate records."
+        }
+      ]
+    },
+    {
+      "id": "stage-decision",
+      "name": "A stage is ready for the owner decision",
+      "enabled": true,
+      "when": {
+        "kind": "stage_decision_pending"
+      },
+      "actions": [
+        {
+          "type": "open"
+        }
+      ]
+    }
+  ]
+}

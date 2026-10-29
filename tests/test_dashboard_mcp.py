@@ -47,7 +47,8 @@ class McpTest(unittest.TestCase):
                      "polier_timeline", "polier_cycles", "polier_modules",
                      "polier_coverage", "polier_analytics",
                      "polier_pages", "polier_page", "polier_pages_search",
-                     "polier_intake", "polier_intake_add", "polier_templates"):
+                     "polier_intake", "polier_intake_add", "polier_templates",
+                     "polier_automations", "polier_github"):
             self.assertIn(name, tools)
         snapshot = json.loads(by_id[3]["result"]["content"][0]["text"])
         self.assertEqual(snapshot["project"]["name"], "canvas-mini")
@@ -136,6 +137,22 @@ class McpTest(unittest.TestCase):
         self.assertIn("entries", entry)
         templates = json.loads(by_id[5]["result"]["content"][0]["text"])
         self.assertIn("templates", templates)
+
+    def test_intelligence_tools(self) -> None:
+        root = sample_project()
+        process, responses = mcp_session(root, [
+            {"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+             "params": {"name": "polier_automations", "arguments": {"run": True}}},
+            {"jsonrpc": "2.0", "id": 2, "method": "tools/call",
+             "params": {"name": "polier_github", "arguments": {}}},
+        ])
+        self.assertEqual(process.returncode, 0, process.stderr)
+        by_id = {response.get("id"): response for response in responses}
+        automations = json.loads(by_id[1]["result"]["content"][0]["text"])
+        self.assertIn("automations", automations)
+        self.assertIn("evaluation", automations)
+        github = json.loads(by_id[2]["result"]["content"][0]["text"])
+        self.assertIn("available", github)
 
     def test_read_only_refuses_writes(self) -> None:
         root = sample_project()

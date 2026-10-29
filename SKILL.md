@@ -42,6 +42,10 @@ python3 <skill-folder>/tools/plan.py create --help
 python3 <skill-folder>/tools/pages.py list --root <project>
 python3 <skill-folder>/tools/intake.py list --root <project>
 python3 <skill-folder>/tools/templates.py list --root <project>
+# 2.4 intelligence (read-only)
+python3 <skill-folder>/tools/assistant.py ask "What is blocking?" --root <project>
+python3 <skill-folder>/tools/automations.py run --root <project>
+python3 <skill-folder>/tools/github.py status --root <project>
 # 2.2 planning view data (read-only): timeline, cycles, modules, coverage, analytics
 python3 -c "print('see tools/serve.py for the dashboard; board schema 1.2 adds planned_start/target')"
 # profile L only
