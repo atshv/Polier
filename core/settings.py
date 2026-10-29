@@ -47,7 +47,9 @@ FEATURES: Dict[str, bool] = {
     "analytics": True,
     "pages": True,
     "intake": True,
-    "assistant": False,
+    "assistant": True,
+    "automations": True,
+    "github": True,
 }
 
 DEFAULT_LABELS: List[Dict[str, str]] = [

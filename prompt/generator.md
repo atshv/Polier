@@ -278,6 +278,7 @@ Briefs for the next 3–5 tasks only, from `templates/task-brief.md`, 400–900 
 ├── views/               # optional 2.1: saved task views
 ├── intake/              # optional 2.3: triage proposals (idea/issue/request)
 ├── templates/tasks/     # optional 2.3: reusable task templates
+├── automations.json     # optional 2.4: deterministic automation rules (dry-run)
 ├── runs/                # 1.1: one execution record per started task
 ├── .gitignore           # mandatory: OS, editor, caches, secrets, language, .polier-slot, STATUS.html
 ├── README.md            # optional: purpose, quickstart, file map

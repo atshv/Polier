@@ -2,6 +2,24 @@
 
 Each release lists what a running project must do to adopt it. Update between stages, never during a task (see `guide/cheatsheet.md`). The current version is in `VERSION`; projects record theirs in `board.json` → `generator_version`.
 
+## 2.4.0
+
+**Intelligence.** 2.4 puts the project's own evidence to work: an assistant that answers questions about the plan without being able to change it, deterministic automations that turn state into suggestions (dry run, no hidden writes), bulk operations for the owner's repeated actions, a command palette for navigation and a read-only GitHub/CI panel. Everything stays local, file-based and auditable; the assistant runs through the same headless session provider and the same project hooks as every other agent.
+
+**Assistant.** `core/assistant.py` builds a compact read-only briefing (project, stages, next wave, blocked tasks, approvals, claims, sessions, intake, task list), stores conversations in the dashboard runtime and parses answers with an optional structured proposal block (`state`, `plan_task`, `gate`, `session`, `note`). `server/assistant.py` runs one provider session per question in the background and stores the answer and proposals. The UI shows the chat, the proposals and applies them only after confirmation through `POST /api/assistant/apply` (validated state machine, plan editor, gate job or session start). Conversations never touch the project. `GET/POST /api/assistant`, `/api/assistant/chat`, `/api/assistant/<id>`, `/api/assistant/<id>/cancel`, `/api/assistant/apply`; CLI `tools/assistant.py ask|list|show|delete`.
+
+**Automations.** Committed `automations.json` rules with a `when` kind (`gate_failed`, `task_blocked`, `budget_over`, `review_ready`, `session_failed`, `intake_proposed`, `stage_decision_pending`, `task_ready`) and suggested actions (`state`, `session`, `open`, `note`). `core/automations.py` evaluates them on demand — a **dry run** that returns matches and suggested actions; nothing is executed, and applying a suggestion goes through the normal validated API. `GET/PUT /api/automations`, `POST /api/automations/run`; MCP `polier_automations`; CLI `tools/automations.py list|validate|run|save|init`; example rules in `templates/automations.json`.
+
+**Bulk operations.** `POST /api/bulk` performs `state`, `claim`, `release`, `labels` or `estimate` on up to 100 tasks and returns a per-task result (conflicts are reported per task, not silently dropped). The board and table views get multi-select and a bulk bar; every write still goes through the same core functions and the audit trail.
+
+**Command palette.** A client-side Cmd/Ctrl+K palette over all views, the current tasks and the quick actions (new task, new intake, ask the assistant, run the automations dry run, refresh, settings).
+
+**GitHub/CI panel.** `core/github.py` reads the open pull requests and the recent workflow runs through the authenticated `gh` CLI and maps them to tasks by `task/<ID>`/`branch`; results are cached for 30 seconds. Without a GitHub remote, `gh` or auth the panel explains why it is unavailable — it never fails the dashboard and never stores credentials. `GET /api/github`, MCP `polier_github`, CLI `tools/github.py status`.
+
+**Settings.** `dashboard.json` features `assistant`, `automations` and `github` now default to on; all planned views are implemented.
+
+**Compatibility.** Additive: `automations.json` is optional, assistant conversations are local runtime files, and no board/policy/run/review file changes shape. Start the dashboard as before. Plugin users: `git pull`, `dsh plugin --profile <name> add ./polier` again, restart. Claude Code users: replace the package copy; MCP gains the automation and GitHub tools. Skill-only users: `./update.sh`.
+
 ## 2.3.0
 
 **Knowledge and intake.** 2.2 put the plan on a time axis; 2.3 connects the two ends of the work: the project's Markdown (architecture, docs, ADRs, briefs, reviews, package docs) becomes a browsable knowledge layer, and ideas reach the plan through an explicit intake with triage. Task templates make recurring shapes reusable. Everything stays file-based, committed and read-only where it can be.
