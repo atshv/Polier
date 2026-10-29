@@ -68,6 +68,9 @@ def _show_text(status: dict, title: str = "") -> None:
     print(f"  status: {status.get('status')} (board) · run: {status.get('state')}")
     print(f"  attempt: {attempt}{limit} · round: {status.get('round', 0)}"
           + (f" · stage: {status.get('stage')}" if status.get("stage") else ""))
+    if status.get("tokens") or status.get("max_tokens"):
+        cap = f"/{status['max_tokens']:,}" if status.get("max_tokens") else ""
+        print(f"  tokens: {status.get('tokens', 0):,}{cap}")
     print(f"  gates: {_gate_line(status)}")
     print(f"  review: {_review_line(status)}")
     print(f"  handoff: {_list([line for line in status.get('handoff') or [] if line])}")

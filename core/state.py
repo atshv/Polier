@@ -30,9 +30,9 @@ from . import evidence
 from .approvals import has_grant, load_all, pending as pending_approvals
 from .board import (BOARD, load_board, stage_report, task_stage_id, tasks_of)
 from .errors import PolierError
-from .policy import (DEFAULTS, checks as policy_checks, enabled as policy_enabled,
+from .policy import (DEFAULTS, budget as policy_budget, checks as policy_checks, enabled as policy_enabled,
                      limits as policy_limits, load_policy, manifest_match)
-from .runs import (FileLock, append_event, attempt_count, finish_attempt, load_run,
+from .runs import (FileLock, append_event, attempt_count, finish_attempt, load_run, usage_total,
                    run_path, run_state, start_attempt)
 
 TRANSITIONS: Dict[str, Tuple[str, ...]] = {
@@ -352,6 +352,7 @@ def check_transition(root, board, task, new_status, *, actor: str = "lead",
             else:
                 result["warnings"].append(f"{task_id}: depends on {waiting}, not done yet "
                                           "(no policy.json: not enforced)")
+        _check_budget(root, policy, task_id, allowed, pre, result["warnings"], req, need)
 
     elif new_status == "verifying":
         record = load_run(root, task_id)
@@ -450,6 +451,26 @@ def check_transition(root, board, task, new_status, *, actor: str = "lead",
     else:
         hard.extend(pre)
     return finish()
+
+
+def _check_budget(root, policy, task_id: str, allowed, pre: List[str],
+                  warnings: List[str], req, need) -> None:
+    """Refuse another start when the task used its token budget; warn near it."""
+    limit = policy_budget(policy)["max_tokens_per_task"]
+    if not limit:
+        return
+    used = usage_total(root, task_id)
+    if used >= limit:
+        pre.append(f"{task_id}: token budget used ({used:,}/{limit:,}) — escalate, do not retry")
+        req("budget")
+        if "blocked" in allowed:
+            need("escalate", _state_hint(task_id, "blocked") + ' --note "..."',
+                 f"token budget {used:,}/{limit:,} used; mark the task blocked and ask the owner")
+        need("state_override", _request_hint("state_override", task_id),
+             "only to continue beyond the token budget anyway")
+    elif used >= limit * policy_budget(policy)["warn_at"]:
+        warnings.append(f"{task_id}: {used:,} of {limit:,} tokens used "
+                        f"({used * 100 // limit} %)")
 
 
 def _check_gates(root, task: dict, task_id: str, policy_on: bool, pre: List[str],
@@ -608,6 +629,8 @@ def status_of(root, task_id) -> dict:
         "approvals_granted": approved,
         "events": len(record["events"]),
         "last_event": record["events"][-1] if record["events"] else None,
+        "tokens": sum(entry["tokens"] for entry in record["usage"].values()),
+        "max_tokens": policy_budget(policy)["max_tokens_per_task"],
         "policy": policy_on,
         "updated": record["updated"],
     }

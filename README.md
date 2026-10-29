@@ -7,9 +7,33 @@
   <a href="https://github.com/atshv/Polier/actions/workflows/test.yml"><img alt="tests" src="https://img.shields.io/github/actions/workflow/status/atshv/Polier/test.yml?branch=main&style=flat-square&label=tests"></a>
   <img alt="license" src="https://img.shields.io/badge/license-MIT-2f7d4f?style=flat-square">
   <img alt="python" src="https://img.shields.io/badge/python-3.9%2B-1f5f8b?style=flat-square">
+  <img alt="no telemetry" src="https://img.shields.io/badge/telemetry-none-2f7d4f?style=flat-square">
 </p>
 
-Polier is a plugin for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) with hooks for Claude Code. It interviews you, writes a one-page architecture and a task plan, and sets up the project after your approval. While agents build, it blocks writes outside the current task, accepts only recorded test runs as proof, and commits a record of every attempt, approval and review round.
+<p align="center">
+  <a href="#install"><b>Install</b></a> ·
+  <a href="#start">Start</a> ·
+  <a href="examples/monorepo-mini/">Example project</a> ·
+  <a href="#faq">FAQ</a> ·
+  <a href="CHANGELOG.md">Changelog</a> ·
+  <a href="https://github.com/atshv/Polier/releases">Releases</a>
+</p>
+
+Polier works with [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) as a plugin and with Claude Code as hooks. It interviews you, writes a one-page architecture and a task plan, and sets up the project after your approval. While agents build, it blocks writes outside the current task, accepts only recorded test runs as proof, and commits a record of every attempt, approval and review round.
+
+<p align="center"><img src="docs/images/demo.gif" alt="A recorded session: a task with an open dependency is refused, ENG-01 starts, and review is refused until every gate has a passing record" width="100%"></p>
+
+## Why
+
+| Without Polier | With Polier |
+|---|---|
+| An agent "quickly fixes" files that belong to another task | The write guard blocks every file outside the task's list |
+| "Tests pass" is a sentence in the chat | Only a recorded gate run with exit code and log hash counts |
+| A task is marked done without review | `done` needs a passing review, a handoff and the gate records |
+| The next task starts before the one it builds on is finished | `in_progress` is refused while a dependency is open |
+| A stuck agent retries forever and burns tokens | Attempts and the token budget are capped; then it escalates |
+| `git push` or `npm publish` from an agent session | Denied for every role, releases run in CI from tags |
+| Nobody knows later why something was decided | Run records, approvals and reviews are committed with the task |
 
 ## How it works
 
@@ -19,7 +43,7 @@ The rules live once, in `core/` (Python, standard library only). The DeepSeek Ha
 
 ## What it looks like
 
-All four screens are real output from the reference project [`examples/monorepo-mini`](examples/monorepo-mini/).
+Every screen is real output from the reference project [`examples/monorepo-mini`](examples/monorepo-mini/).
 
 **The write guard** stops an agent at the first file outside its task, and a denied command stays denied for every role.
 
@@ -36,6 +60,10 @@ All four screens are real output from the reference project [`examples/monorepo-
 **Research** checks every pinned version against npm and PyPI and keeps findings with dated sources in `docs/research/`.
 
 <img src="docs/images/research.png" alt="research.py versions --lookup confirms versions and lists open VERIFY markers" width="100%">
+
+**The status page** shows the whole project at a glance: stages, every task with attempts, gate records, review verdict and tokens against the budget. `render_status.py --html` writes it as one file without a server. The token counts in this picture are example values.
+
+<img src="docs/images/status-page.png" alt="STATUS.html with summary tiles, stages, a task table with token bars, blocked tasks and a pending approval" width="100%">
 
 ## Install
 
@@ -89,7 +117,8 @@ The plugin also gives agents the tools `pl_status`, `pl_gate`, `pl_scope_check`,
 | `tools/dispatch.py` | the dispatch plan: waves, blocked tasks, conflicts, pending approvals |
 | `tools/audit.py` | compliance view of every task against policy, runs, gates and reviews |
 | `tools/research.py` | dependencies, versions checked against npm and PyPI, research notes with sources |
-| `tools/render_status.py` | regenerate `STATUS.md` from `board.json`, `runs/` and `policy.json` |
+| `tools/usage.py` | token use per task against `budget.max_tokens_per_task` |
+| `tools/render_status.py` | regenerate `STATUS.md`; with `--html` also the status page `STATUS.html` |
 | `tools/scope_check.py` | changed files against the task's scope, with foreign-change detection |
 | `tools/claim.py` · `slot.py` · `worktree.py` | one live session per task, ports and test databases per worktree, task checkouts |
 | `tools/boundaries.py` · `contracts.py` | import boundaries and contract schemas (profile L) |
@@ -111,6 +140,13 @@ my-project/
 ├── docs/             module map, orchestration, quality, versions, research
 └── packages/ services/ apps/   profile L only
 ```
+
+## What Polier is not
+
+- **Not an agent.** It does not write code. It plans the work and keeps the agent you already use within it.
+- **Not a server.** Everything is files in your repository and a few Python scripts. Nothing runs in the background and nothing needs a database or an account.
+- **Not a sandbox.** The guard stops honest mistakes, not an attacker; the list below names its gaps.
+- **Not telemetry.** Polier sends nothing anywhere. The only network calls are the registry lookups of `research.py versions --lookup`, and only when you run them.
 
 ## What the guard does not cover
 
@@ -138,6 +174,20 @@ For hard limits, run workers in a sandbox or a container with write access to th
 
 </details>
 
+## FAQ
+
+**Do I need to know how to program?** No. You describe the project in plain words, answer the interview and approve the plan. The agent writes the code; Polier keeps it on the plan.
+
+**Which agents does it work with?** DeepSeek Harness with the full plugin (`/pl` commands and `pl_*` tools) and Claude Code through two hooks. The command-line tools work in any shell, so any other agent can use them, without the automatic guard.
+
+**Can I add Polier to an existing project?** Yes. The interview has a brownfield mode that reads the repository first (phase B) and plans the next stage from what is there.
+
+**What does a token budget do?** `budget.max_tokens_per_task` in `policy.json` caps what one task may spend over all its attempts. Claude Code records its use automatically; at 80 % the tools warn, at 100 % the task cannot start again without the owner's approval.
+
+**What happens when I update Polier?** Running projects keep their `generator_version`. The [changelog](CHANGELOG.md) says for every version what a project must change; update between stages, never during a task.
+
+**Is it free?** Yes, MIT license.
+
 ## Package layout
 
 | Folder | What it holds |
@@ -155,7 +205,7 @@ Run all tests with `npm test`; the core alone with `python3 -m unittest discover
 
 ## What's new
 
-**1.2** adds `tools/research.py`, refuses `in_progress` while a dependency is open, and publishes releases automatically. **1.1** added orchestration: `policy.json`, checkpoints, run records, approvals, dispatch and audit. **1.0** added board schema 1.0, runtime slots, exclusive gates, claims, worktrees and profile L.
+**1.3** adds a token budget per task (`tools/usage.py`, recorded automatically in Claude Code) and the status page `STATUS.html`. **1.2** added `tools/research.py`, a checkpoint that holds a task until its dependencies are done, and automatic releases. **1.1** added orchestration: `policy.json`, checkpoints, run records, approvals, dispatch and audit. **1.0** added board schema 1.0, runtime slots, exclusive gates, claims, worktrees and profile L.
 
 Details and migration steps: [`CHANGELOG.md`](CHANGELOG.md) and [Releases](https://github.com/atshv/Polier/releases).
 

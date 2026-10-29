@@ -5,6 +5,11 @@ attempts (one per run), the append-only event list (start, gate, review, state,
 approval, note, escalate), the last result and the last update. One file per
 task, committed, so a task can be audited after the fact.
 
+``usage`` holds the token use per session (``{session: {tokens, updated,
+source}}``). A session reports its running total for the task, so a repeated
+report replaces the older one instead of adding to it; the task total is the
+sum over sessions. It is kept outside the event list, which is capped at 500.
+
 Every write is atomic (temp file + ``os.replace``) under a ``<file>.lock``
 created with ``O_CREAT | O_EXCL``; a lock older than 60 s is treated as
 abandoned and removed, the pattern of ``core.claims``. A reader tolerates a
@@ -107,7 +112,7 @@ def run_path(root, task) -> Path:
 
 def _skeleton(task: str) -> dict:
     return {"task": task, "state": "idle", "attempt": 0, "attempts": [], "events": [],
-            "updated": None}
+            "usage": {}, "updated": None}
 
 
 def _is_int(value) -> bool:
@@ -157,6 +162,16 @@ def _clean(task: str, raw) -> dict:
         cleaned = [_clean_event(entry) for entry in events]
         record["events"] = [entry for entry in cleaned if entry is not None][-MAX_EVENTS:]
     record["attempt"] = max(record["attempt"], len(record["attempts"]))
+    usage = raw.get("usage")
+    if isinstance(usage, dict):
+        for session, entry in usage.items():
+            if isinstance(session, str) and isinstance(entry, dict) and _is_int(entry.get("tokens")) \
+                    and entry["tokens"] >= 0:
+                record["usage"][session] = {
+                    "tokens": entry["tokens"],
+                    "updated": entry.get("updated") if isinstance(entry.get("updated"), str) else None,
+                    "source": entry.get("source") if isinstance(entry.get("source"), str) else None,
+                }
     updated = raw.get("updated")
     record["updated"] = updated if isinstance(updated, str) else None
     return record
@@ -313,6 +328,37 @@ def record_gate(root, task, gate, result, record) -> Optional[dict]:
         return None
 
 
+def record_usage(root, task, tokens, session=None, source="manual") -> dict:
+    """Store the token use of one session for `task` and return the stored record.
+
+    With a `session` the value is that session's running total for the task
+    and replaces the earlier report (a smaller value never lowers it). Without
+    one the value is added as a separate manual entry.
+    """
+    if not _is_int(tokens) or tokens < 0:
+        raise PolierError(f"tokens must be a non-negative integer (is {tokens!r})")
+    task = _task_id(task)
+    moment = timestamp()
+    source = source if isinstance(source, str) and source.strip() else "manual"
+
+    def change(record: dict) -> None:
+        usage = record.setdefault("usage", {})
+        if session:
+            key = str(session)
+            old = usage.get(key, {}).get("tokens", 0)
+            usage[key] = {"tokens": max(old, tokens), "updated": moment, "source": source}
+        else:
+            index = 1 + sum(1 for key in usage if key.startswith("manual-"))
+            usage[f"manual-{index}"] = {"tokens": tokens, "updated": moment, "source": source}
+
+    return _update(root, task, change, moment)
+
+
+def usage_total(root, task) -> int:
+    """Tokens the task has used across all sessions (0 without reports)."""
+    return sum(entry["tokens"] for entry in load_run(root, task)["usage"].values())
+
+
 def summary(root, task) -> dict:
     """The condensed run record: task, state, attempt, attempts, last_event, updated."""
     record = load_run(root, task)
@@ -323,5 +369,6 @@ def summary(root, task) -> dict:
         "attempt": record["attempt"],
         "attempts": record["attempts"],
         "last_event": events[-1] if events else None,
+        "tokens": sum(entry["tokens"] for entry in record["usage"].values()),
         "updated": record["updated"],
     }

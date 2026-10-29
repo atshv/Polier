@@ -4,6 +4,12 @@
 Usage:
     python3 tools/render_status.py examples/minimal-cli
     python3 tools/render_status.py examples/minimal-cli --out STATUS.md
+    python3 tools/render_status.py examples/minimal-cli --html    # also STATUS.html
+
+`--html` writes the same state as a self-contained web page: summary, stages,
+every task with attempts, gate records, review verdict, tokens and audit
+findings, the next wave, blocked tasks and pending approvals. It shows token
+counts, which change every turn, so keep STATUS.html out of git.
 """
 from __future__ import annotations
 
@@ -141,6 +147,8 @@ def _short_blocked_reason(reason) -> str:
     text = reason.strip() if isinstance(reason, str) else ""
     if text.startswith("attempts "):
         return "attempts exhausted"
+    if text.startswith("token budget"):
+        return "token budget used"
     if "stage stopped" in text:
         return "stopped stage"
     if text.startswith("stage waits"):
@@ -327,14 +335,163 @@ def render(board: dict, root=None, with_claims: bool = True) -> str:
     return "\n".join(lines)
 
 
+# ---------------------------------------------------------------------------
+# STATUS.html: the same state as a page, with tokens and evidence per task
+# ---------------------------------------------------------------------------
+
+HTML_CSS = """
+:root{--bg:#f4f6f8;--card:#fff;--fg:#17212b;--muted:#5d6b78;--line:#d9e0e6;--accent:#d9731a;
+--ok:#2f7d4f;--warn:#a86d0f;--bad:#b4372f;--info:#1f5f8b;--chip:#eef2f5}
+@media (prefers-color-scheme:dark){:root{--bg:#121a22;--card:#19242f;--fg:#e2e9ee;--muted:#93a3b1;
+--line:#2c3b48;--accent:#f08a2c;--ok:#6fc796;--warn:#e6b450;--bad:#f0786e;--info:#7fb3dc;--chip:#223140}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);
+font:15px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif;padding:24px max(16px,env(safe-area-inset-left))}
+main{max-width:1080px;margin:0 auto;display:flex;flex-direction:column;gap:22px}
+header{display:flex;flex-direction:column;gap:4px;border-top:6px solid var(--accent);padding-top:14px}
+h1{font-size:1.7rem;margin:0}h2{font-size:1.05rem;margin:0 0 10px}
+.meta,.small{color:var(--muted);font-size:.88rem}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.tile{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.tile b{display:block;font-size:1.6rem;font-variant-numeric:tabular-nums}
+.tile span{color:var(--muted);font-size:.85rem}
+section{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px}
+.wrap{overflow-x:auto}table{border-collapse:collapse;width:100%;min-width:720px;font-size:.9rem}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:.72rem;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+td.num{font-variant-numeric:tabular-nums;white-space:nowrap}tr:last-child td{border-bottom:0}
+code{font:.85em ui-monospace,SFMono-Regular,Menlo,monospace}
+.pill{display:inline-block;padding:1px 9px;border-radius:99px;font-size:.78rem;background:var(--chip);
+border:1px solid var(--line);white-space:nowrap}
+.done{color:var(--ok);border-color:var(--ok)}.blocked,.failed{color:var(--bad);border-color:var(--bad)}
+.in_progress,.verifying,.review,.claimed{color:var(--info);border-color:var(--info)}
+.rework{color:var(--warn);border-color:var(--warn)}
+.bar{height:6px;border-radius:3px;background:var(--chip);overflow:hidden;margin-top:4px;min-width:80px}
+.bar i{display:block;height:100%;background:var(--info)}.bar i.warn{background:var(--warn)}.bar i.over{background:var(--bad)}
+ul.list{margin:0;padding-left:1.1em}ul.list li{margin:2px 0}
+.stages{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
+.stage{border:1px solid var(--line);border-radius:8px;padding:10px 12px}
+"""
+
+
+def _esc(value) -> str:
+    import html
+    return html.escape("" if value is None else str(value))
+
+
+def render_html(board: dict, root) -> str:
+    """A self-contained STATUS.html: summary, stages, tasks with evidence and tokens, plan."""
+    from core.audit import audit
+    from core.dispatch import plan
+    from core import runs as _runs
+    root = Path(root)
+    tasks = [t for t in board.get("tasks") or [] if isinstance(t, dict)]
+    try:
+        report = plan(root, board)
+    except Exception:  # noqa: BLE001  the page still renders without a plan
+        report = {}
+    try:
+        checked = {entry["task"]: entry for entry in audit(root, board)["tasks"]}
+    except Exception:  # noqa: BLE001
+        checked = {}
+    running = {entry.get("id"): entry for entry in report.get("running") or []}
+    max_tokens = next((entry.get("max_tokens") for entry in running.values()), None)
+    if max_tokens is None:
+        try:
+            from core.policy import budget, load_policy
+            max_tokens = budget(load_policy(root))["max_tokens_per_task"]
+        except Exception:  # noqa: BLE001
+            max_tokens = None
+
+    done = sum(1 for t in tasks if t.get("status") == "done")
+    active = sum(1 for t in tasks if t.get("status") in ("in_progress", "verifying", "review", "rework"))
+    blocked = report.get("blocked") or []
+    pending = report.get("approvals_pending") or []
+    tokens_total = 0
+    rows = []
+    for t in tasks:
+        tid = str(t.get("id"))
+        status = str(t.get("status"))
+        info = checked.get(tid, {})
+        try:
+            used = _runs.usage_total(root, tid)
+        except Exception:  # noqa: BLE001
+            used = 0
+        tokens_total += used
+        gates = info.get("gates") or [g for g in t.get("gates") or [] if isinstance(g, str)]
+        passed = [g for g in gates if g in (info.get("passed") or [])]
+        verdict = (info.get("review") or {}).get("verdict")
+        if max_tokens:
+            share = min(100, used * 100 // max_tokens)
+            level = "over" if used >= max_tokens else ("warn" if share >= 80 else "")
+            token_cell = (f"{used:,}<div class='bar'><i class='{level}' style='width:{share}%'></i></div>")
+        else:
+            token_cell = f"{used:,}" if used else "–"
+        findings = len(info.get("errors") or []) + len(info.get("warnings") or [])
+        rows.append(
+            f"<tr><td><code>{_esc(tid)}</code></td><td>{_esc(t.get('title'))}</td>"
+            f"<td><span class='pill {_esc(status)}'>{_esc(status)}</span></td>"
+            f"<td class='num'>{info.get('attempts', 0)}/{info.get('max_attempts', '?')}</td>"
+            f"<td class='num'>{len(passed)}/{len(gates)}</td>"
+            f"<td>{_esc(verdict or '–')}</td><td class='num'>{token_cell}</td>"
+            f"<td class='num'>{findings or '–'}</td></tr>")
+
+    tiles = [(f"{done}/{len(tasks)}", "tasks done"), (str(active), "in progress"),
+             (str(len(blocked)), "blocked"), (str(len(pending)), "approvals pending")]
+    if tokens_total:
+        tiles.append((f"{tokens_total:,}", "tokens recorded"))
+
+    stage_html = ""
+    stages = stage_report(board, root) if board.get("stages") else []
+    if stages:
+        cards = []
+        for entry in stages:
+            total = len(entry.get("tasks") or [])
+            open_ = len(entry.get("tasks_open") or [])
+            state = ("complete" if entry.get("complete") else "stopped" if entry.get("stopped")
+                     else "waiting" if entry.get("incomplete_deps") else "open")
+            cards.append(f"<div class='stage'><b>{_esc(entry.get('id'))}</b> "
+                         f"<span class='small'>{_esc(entry.get('title'))}</span>"
+                         f"<div class='small'>{state} · {total - open_}/{total} tasks done</div></div>")
+        stage_html = f"<section><h2>Stages</h2><div class='stages'>{''.join(cards)}</div></section>"
+
+    wave = ", ".join(f"<code>{_esc(i)}</code>" for i in report.get("next") or []) or "nothing is ready"
+    blocked_html = "".join(f"<li><code>{_esc(b.get('id'))}</code> {_esc(b.get('reason'))}</li>"
+                           for b in blocked) or "<li>none</li>"
+    approvals_html = "".join(f"<li><code>{_esc(a.get('id'))}</code> {_esc(a.get('action'))}"
+                             f"{' for ' + _esc(a.get('task')) if a.get('task') else ''}</li>"
+                             for a in pending) or "<li>none</li>"
+    budget_note = f"{max_tokens:,} tokens per task" if max_tokens else "no token budget"
+    return f"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{_esc(board.get('project') or 'Project')} status</title><style>{HTML_CSS}</style></head>
+<body><main>
+<header><h1>{_esc(board.get('project') or 'Project')}</h1>
+<div class="meta">Profile {_esc(board.get('profile') or '?')} · {budget_note} · generated from board.json, runs/ and policy.json by Polier; do not edit by hand</div></header>
+<div class="tiles">{''.join(f"<div class='tile'><b>{v}</b><span>{_esc(k)}</span></div>" for v, k in tiles)}</div>
+{stage_html}
+<section><h2>Tasks</h2><div class="wrap"><table>
+<thead><tr><th>ID</th><th>Title</th><th>Status</th><th>Attempts</th><th>Gates</th><th>Review</th><th>Tokens</th><th>Findings</th></tr></thead>
+<tbody>{''.join(rows)}</tbody></table></div></section>
+<section><h2>Next</h2><p>Next wave: {wave}</p>
+<h2 style="margin-top:12px">Blocked</h2><ul class="list">{blocked_html}</ul>
+<h2 style="margin-top:12px">Approvals pending</h2><ul class="list">{approvals_html}</ul></section>
+</main></body></html>
+"""
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("project", help="project folder containing board.json")
     parser.add_argument("--out", default="STATUS.md")
+    parser.add_argument("--html", nargs="?", const="STATUS.html", default=None, metavar="FILE",
+                        help="also write the status as a web page (default STATUS.html)")
     args = parser.parse_args()
 
     root = Path(args.project).resolve()
     board = json.loads((root / "board.json").read_text(encoding="utf-8"))
+    if args.html:
+        (root / args.html).write_text(render_html(board, root), encoding="utf-8")
+        print(f"STATUS page written: {root / args.html}")
     text = render(board, root, with_claims=True)
     (root / args.out).write_text(text, encoding="utf-8")
     print(f"STATUS written: {root / args.out}")

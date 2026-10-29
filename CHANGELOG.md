@@ -2,6 +2,24 @@
 
 Each release lists what a running project must do to adopt it. Update between stages, never during a task (see `guide/cheatsheet.md`). The current version is in `VERSION`; projects record theirs in `board.json` → `generator_version`.
 
+## 1.3.0
+
+**Token budget and status page.**
+
+**Token budget.**
+- `policy.json` gets an optional `budget` section: `max_tokens_per_task` (`null` = off, otherwise 1,000–1,000,000,000) and `warn_at` (0.1–1.0, default 0.8). It caps what one task may spend over all its attempts and sessions.
+- `runs/<ID>.json` stores the token use per session under `usage`; a session reports its running total, so a repeated report replaces the older one. New `core.runs.record_usage` and `usage_total`.
+- The Claude Code Stop hook reads the session's tokens from the transcript (input, output and cache creation; cache reads are left out) and records them for the bound task. Near the budget it adds a warning; at the budget it tells the agent to stop and report. `POLIER_USAGE=0` switches it off.
+- New `tools/usage.py record | show` for every other harness and for manual entries.
+- `tools/state.py set <ID> in_progress` refuses a task whose budget is used (continuing needs a granted `state_override`) and warns at `warn_at`; `state.py show` prints the tokens. The dispatch plan lists such a task as blocked, and running entries carry `tokens` and `max_tokens`.
+- The DSH guard mirror accepts and validates the new section.
+
+**Status page.** `tools/render_status.py <project> --html` also writes `STATUS.html`: summary tiles, stages, every task with attempts, gate records, review verdict, tokens against the budget and audit findings, the next wave, blocked tasks and pending approvals. One static file, no script, light and dark. It changes with every token report, so keep it out of git.
+
+**README.** Quick links, a recorded demo, a "Why" table, "What Polier is not", a FAQ and the status page.
+
+**Migration:** set `generator_version` to `1.3.0`. Optional: add `"budget": {"max_tokens_per_task": <number>, "warn_at": 0.8}` to `policy.json` and `STATUS.html` to `.gitignore`. Projects without a budget behave as before. Plugin users: `git pull`, `dsh plugin --profile <name> add ./polier` again, restart. Claude Code users: replace the package copy; the hook entries stay the same. Skill-only users: `./update.sh`.
+
 ## 1.2.0
 
 **Research, a dependency checkpoint and automatic releases.**

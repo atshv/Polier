@@ -26,5 +26,9 @@
     "handoff_before_done": true,
     "run_record": true,
     "disjoint_scopes": true
+  },
+  "budget": {
+    "max_tokens_per_task": null,
+    "warn_at": 0.8
   }
 }

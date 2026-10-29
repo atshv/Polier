@@ -221,7 +221,8 @@ class Running(unittest.TestCase):
         write_policy(root)
         entry = plan(root)["running"][0]
         self.assertEqual(entry, {"id": "M01", "title": "Task M01", "status": "in_progress",
-                                 "attempt": 2, "max_attempts": 3, "claim": None})
+                                 "attempt": 2, "max_attempts": 3, "tokens": 0, "max_tokens": None,
+                             "claim": None})
 
     def test_every_active_status_is_running(self):
         root = project([
@@ -242,7 +243,8 @@ class Running(unittest.TestCase):
         self.assertEqual(result["waves"], [])
         self.assertEqual(result["running"], [{
             "id": "M01", "title": "Task M01", "status": "pending", "attempt": 0,
-            "max_attempts": 3, "claim": {"harness": "dsh", "session": "session-1"},
+            "max_attempts": 3, "tokens": 0, "max_tokens": None,
+        "claim": {"harness": "dsh", "session": "session-1"},
         }])
 
     def test_a_claim_on_an_active_task_is_shown(self):

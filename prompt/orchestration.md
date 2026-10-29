@@ -51,7 +51,7 @@ evaluates without writing.
 
 | To | Preconditions (hard unless noted) |
 |---|---|
-| `in_progress` | every `depends_on` task done; attempts opened < `max_attempts_per_task`; other `in_progress` tasks < `max_in_progress`; stage not stopped, blocking stages complete |
+| `in_progress` | every `depends_on` task done; tokens used < `budget.max_tokens_per_task` (when set); attempts opened < `max_attempts_per_task`; other `in_progress` tasks < `max_in_progress`; stage not stopped, blocking stages complete |
 | `verifying` | an attempt is open in the run record |
 | `review` | a passing record for every gate (`pass`, exit 0, not `infra`/`busy`/`timeout`) |
 | `done` | review `verdict: pass` (`checks.review_before_done`); 1–3-line `handoff` when depended on (`checks.handoff_before_done`); run record (`checks.run_record`); granted `new_dependency` approval when a manifest is touched (`dependencies.approval`) |
@@ -75,6 +75,18 @@ passing with exit code 0 and a result other than `infra`, `busy` or `timeout`.
   `max_review_rounds` caps it and a further `rework` is refused.
 - A fix inside an attempt is not a new attempt; a rework that leads to a new
   attempt still counts one round. Never reset either counter by editing files.
+
+## Token budget
+
+`budget.max_tokens_per_task` in `policy.json` caps what one task may spend
+across all its attempts and sessions (`null` switches it off). The use is
+stored per session in `runs/<ID>.json`: the Claude Code Stop hook records its
+session from the transcript, every other harness or a human records it with
+`tools/usage.py record <ID> --tokens N`. At `budget.warn_at` (default 80 %)
+the tools warn; once the budget is used, `tools/state.py` refuses another
+`in_progress`, the dispatch plan lists the task as blocked, and the Claude Code
+hook tells the agent to stop and report. Continuing needs a granted
+`state_override`. `tools/usage.py show` lists the use per task.
 
 ## The stage loop
 
@@ -126,7 +138,7 @@ Do not retry around a refusal, do not force without an approval.
    brief. Work reopens as a new attempt.
 
 Escalate at: an exhausted attempt count, an exhausted review-round count, a
-scope conflict, a missing or denied approval, a stopped stage, a policy denial
+used token budget, a scope conflict, a missing or denied approval, a stopped stage, a policy denial
 the task genuinely needs.
 
 ## Patterns on the board

@@ -25,7 +25,7 @@ from .board import load_board, ready_tasks, stage_key, stage_report, task_stage_
 from .claims import live_claims
 from .errors import PolierError
 from .paths import inside, normalized
-from .policy import (checks as policy_checks, enabled as policy_enabled,
+from .policy import (budget as policy_budget, checks as policy_checks, enabled as policy_enabled,
                      limits as policy_limits, load_policy)
 
 # Board statuses of a task that is being worked on and therefore reported as
@@ -88,6 +88,7 @@ class _Plan:
         self.checks = policy_checks(self.policy)
         self.max_attempts = self.limits["max_attempts_per_task"]
         self.max_in_progress = self.limits["max_in_progress"]
+        self.max_tokens = policy_budget(self.policy)["max_tokens_per_task"]
         per_wave = self.max_in_progress
         if isinstance(limit, int) and not isinstance(limit, bool) and limit > 0:
             per_wave = min(per_wave, limit)
@@ -149,6 +150,8 @@ class _Plan:
                 "status": status,
                 "attempt": runs.attempt_count(self.root, tid),
                 "max_attempts": self.max_attempts,
+                "tokens": runs.usage_total(self.root, tid),
+                "max_tokens": self.max_tokens,
                 "claim": _claim_summary(claim) if claim else None,
             })
         return out
@@ -174,6 +177,13 @@ class _Plan:
                         "action": _state_command(tid, "blocked")
                                   + f' --note "attempts {used}/{self.max_attempts} used; '
                                     f'what is needed"',
+                    })
+                elif self._over_budget(tid):
+                    out.append({
+                        "id": tid,
+                        "reason": f"token budget used ({runs.usage_total(self.root, tid):,}"
+                                  f"/{self.max_tokens:,}) — escalate",
+                        "action": _state_command(tid, "blocked") + ' --note "token budget used"',
                     })
                 elif not (self.root / _brief_path(tid)).is_file():
                     out.append({
@@ -239,6 +249,7 @@ class _Plan:
             and (task.get("id") in self.claims
                  or (self.policy_on
                      and runs.attempt_count(self.root, task.get("id")) >= self.max_attempts)
+                 or self._over_budget(task.get("id"))
                  or not (self.root / _brief_path(task.get("id"))).is_file())
         }
         for task in self.tasks:
@@ -281,6 +292,9 @@ class _Plan:
                 if kept:
                     waves.append([self._wave_entry(task) for task in kept])
         return waves, conflicts
+
+    def _over_budget(self, tid) -> bool:
+        return bool(self.max_tokens) and runs.usage_total(self.root, tid) >= self.max_tokens
 
     def result(self) -> dict:
         waves, conflicts = self._waves()
