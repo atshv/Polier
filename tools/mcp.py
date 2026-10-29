@@ -39,15 +39,20 @@ from core import approvals as approvals_mod  # noqa: E402
 from core import board as board_mod  # noqa: E402
 from core import claims as claims_mod  # noqa: E402
 from core import dashboard as dashboard_mod  # noqa: E402
+from core import filters as filters_mod  # noqa: E402
 from core import gate as gate_mod  # noqa: E402
+from core import inbox as inbox_mod  # noqa: E402
 from core import runs as runs_mod  # noqa: E402
 from core import runtime as runtime_mod  # noqa: E402
+from core import settings as settings_mod  # noqa: E402
 from core import state as state_mod  # noqa: E402
+from core import views as views_mod  # noqa: E402
+from core import worklog as worklog_mod  # noqa: E402
 from core.errors import PolierError  # noqa: E402
 from core.gates import suggest_gate_commands  # noqa: E402
 
 PROTOCOL = "2024-11-05"
-SERVER = {"name": "polier", "version": "2.0.0"}
+SERVER = {"name": "polier", "version": "2.1.0"}
 
 
 def _text(value: Any) -> str:
@@ -87,6 +92,20 @@ class Server:
                  "task": {"type": "string"}, "name": {"type": "string"},
                  "command": {"type": "string"}, "timeout": {"type": "integer"}},
                  "required": ["task", "name"]}},
+            {"name": "polier_settings", "description": "Committed dashboard settings: features, labels, defaults and the current feature flags.",
+             "inputSchema": {"type": "object", "properties": {}}},
+            {"name": "polier_views", "description": "Built-in and saved task views (filters, grouping, sorting).",
+             "inputSchema": {"type": "object", "properties": {}}},
+            {"name": "polier_worklog", "description": "Actual effort from runs, gates and sessions, for one task or the whole project.",
+             "inputSchema": {"type": "object", "properties": {"task": {"type": "string"}}}},
+            {"name": "polier_me", "description": "Your Work: my tasks, reviews, approvals, claims and sessions.",
+             "inputSchema": {"type": "object", "properties": {}}},
+            {"name": "polier_inbox", "description": "Actionable inbox items (approvals, failed gates, blocked tasks, budget, reviews).",
+             "inputSchema": {"type": "object", "properties": {"unread": {"type": "boolean"}, "limit": {"type": "integer"}}}},
+            {"name": "polier_inbox_read", "description": "Mark inbox items read; use all=true to mark the current inbox read, reset=true to clear the read state.",
+             "inputSchema": {"type": "object", "properties": {
+                 "ids": {"type": "array", "items": {"type": "string"}}, "all": {"type": "boolean"},
+                 "reset": {"type": "boolean"}}}},
             {"name": "polier_claim", "description": "Take the claim for a task (harness/session optional).",
              "inputSchema": {"type": "object", "properties": {
                  "task": {"type": "string"}, "session": {"type": "string"}}, "required": ["task"]}},
@@ -176,6 +195,48 @@ class Server:
                 "log": str(result.get("log_path")),
                 "summary": gate_mod.summary(result, tail=10, max_errors=10),
             }
+        if name == "polier_settings":
+            value = settings_mod.load(self.root, strict=False)
+            return {
+                "settings": value,
+                "features": settings_mod.features(value),
+                "labels": settings_mod.label_list(value),
+                "me": settings_mod.me(value),
+                "errors": settings_mod.errors(value),
+            }
+        if name == "polier_views":
+            me = settings_mod.me(settings_mod.load(self.root, strict=False))
+            return {"builtin": filters_mod.builtin_views(me),
+                    "saved": views_mod.load_all(self.root),
+                    "all": views_mod.all_views(self.root, me)}
+        if name == "polier_worklog":
+            if task:
+                try:
+                    detail = dashboard_mod.task_detail(self.root, task)
+                except KeyError:
+                    raise PolierError(f"unknown task {task}")
+                return detail["worklog"]
+            snapshot = dashboard_mod.snapshot(self.root)
+            return worklog_mod.project_worklog(self.root, snapshot["tasks"])
+        if name == "polier_me":
+            snapshot = dashboard_mod.snapshot(self.root)
+            return inbox_mod.your_work(self.root, snapshot=snapshot)
+        if name == "polier_inbox":
+            snapshot = dashboard_mod.snapshot(self.root)
+            summary = inbox_mod.inbox_summary(self.root, snapshot=snapshot)
+            items = summary["items"]
+            if arguments.get("unread"):
+                items = [item for item in items if not item.get("read")]
+            limit = arguments.get("limit")
+            if isinstance(limit, int) and limit > 0:
+                items = items[:limit]
+            return {"items": items, "counts": summary["counts"]}
+        if name == "polier_inbox_read":
+            self._guard()
+            ids = arguments.get("ids") if isinstance(arguments.get("ids"), list) else []
+            return inbox_mod.mark_read(self.root, [str(item) for item in ids],
+                                       all_items=bool(arguments.get("all")),
+                                       reset=bool(arguments.get("reset")))
         if name == "polier_claim":
             self._guard()
             if not task:

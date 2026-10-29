@@ -42,11 +42,43 @@ class McpTest(unittest.TestCase):
         tools = {tool["name"] for tool in by_id[2]["result"]["tools"]}
         self.assertIn("polier_snapshot", tools)
         self.assertIn("polier_state_set", tools)
+        for name in ("polier_settings", "polier_views", "polier_worklog",
+                     "polier_me", "polier_inbox", "polier_inbox_read"):
+            self.assertIn(name, tools)
         snapshot = json.loads(by_id[3]["result"]["content"][0]["text"])
         self.assertEqual(snapshot["project"]["name"], "canvas-mini")
         self.assertEqual(len(snapshot["tasks"]), 8)
         detail = json.loads(by_id[4]["result"]["content"][0]["text"])
         self.assertEqual(detail["task"]["id"], "F-01")
+
+    def test_cockpit_tools(self) -> None:
+        root = sample_project()
+        process, responses = mcp_session(root, [
+            {"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+             "params": {"name": "polier_settings", "arguments": {}}},
+            {"jsonrpc": "2.0", "id": 2, "method": "tools/call",
+             "params": {"name": "polier_views", "arguments": {}}},
+            {"jsonrpc": "2.0", "id": 3, "method": "tools/call",
+             "params": {"name": "polier_worklog", "arguments": {"task": "F-01"}}},
+            {"jsonrpc": "2.0", "id": 4, "method": "tools/call",
+             "params": {"name": "polier_me", "arguments": {}}},
+            {"jsonrpc": "2.0", "id": 5, "method": "tools/call",
+             "params": {"name": "polier_inbox", "arguments": {}}},
+        ])
+        self.assertEqual(process.returncode, 0, process.stderr)
+        by_id = {response.get("id"): response for response in responses}
+        settings = json.loads(by_id[1]["result"]["content"][0]["text"])
+        self.assertIn("features", settings)
+        self.assertIn("labels", settings)
+        views = json.loads(by_id[2]["result"]["content"][0]["text"])
+        self.assertIn("all", [view["id"] for view in views["builtin"]])
+        worklog = json.loads(by_id[3]["result"]["content"][0]["text"])
+        self.assertEqual(worklog["task"], "F-01")
+        me = json.loads(by_id[4]["result"]["content"][0]["text"])
+        self.assertEqual(me["me"], "owner")
+        inbox = json.loads(by_id[5]["result"]["content"][0]["text"])
+        self.assertIn("items", inbox)
+        self.assertIn("counts", inbox)
 
     def test_read_only_refuses_writes(self) -> None:
         root = sample_project()
@@ -56,12 +88,16 @@ class McpTest(unittest.TestCase):
                         "arguments": {"task": "ENG-01", "status": "blocked", "note": "x"}}},
             {"jsonrpc": "2.0", "id": 2, "method": "tools/call",
              "params": {"name": "polier_unknown", "arguments": {}}},
+            {"jsonrpc": "2.0", "id": 3, "method": "tools/call",
+             "params": {"name": "polier_inbox_read", "arguments": {"all": True}}},
         ], extra=["--read-only"])
         self.assertEqual(process.returncode, 0)
         by_id = {response.get("id"): response for response in responses}
         self.assertTrue(by_id[1]["result"]["isError"])
         self.assertIn("read-only", by_id[1]["result"]["content"][0]["text"])
         self.assertTrue(by_id[2]["result"]["isError"])
+        self.assertTrue(by_id[3]["result"]["isError"])
+        self.assertIn("read-only", by_id[3]["result"]["content"][0]["text"])
 
 
 if __name__ == "__main__":

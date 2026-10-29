@@ -32,6 +32,14 @@ one self-contained page from `server/assets/`. Stop it with Ctrl+C.
 
 ![Task drawer](images/dashboard-detail.png)
 
+## The project cockpit (2.1)
+
+- **Settings** (`Settings` tab) edits the committed `dashboard.json` next to `board.json`: feature flags for optional views (future views default off), the label definitions (id, title, palette colour, group) and the owner handle used by "Your Work". Machine-local settings — session provider, gate commands, theme, read state — stay in the runtime folder. The CLI is `python3 tools/settings.py show|init|feature|me|label …`.
+- **Labels** are optional task fields of board schema 1.1 (`labels: [ids]`); they never change the write scope. Add or edit definitions in Settings, then assign them in the task drawer or the plan editor; the plan editor upgrades a 0.9/1.0 board to 1.1 on first use. `tools/plan.py` accepts `--labels`.
+- **Filters and views**: the filter bar builds bounded conditions (field, operator, value) for text, status, label, number, boolean and budget fields. The result can be saved as a committed `views/<id>.json` with grouping, sorting and columns; built-in views ("Ready now", "Blocked", "Review queue", "Over budget", "No estimate", "Mine") come from the code and never overwrite files. CLI: `python3 tools/views.py list|builtin|show|save|delete`.
+- **Your Work** (`Your Work` tab) is the owner cockpit: my tasks, review queue, approvals, claims, blocked tasks, budget warnings, ready tasks and running sessions. The **inbox** (header bell, same tab) is one actionable feed — approvals, failed gates, blocked tasks, budget, review requests, failed sessions — with a local read/unread state. Nothing is project state; only read marks are stored (runtime).
+- **Worklog**: the task drawer's Worklog tab shows attempts, gate records, sessions, token usage and durations; `estimate_hours` (schema 1.1) is compared with the actual hours (session time when sessions exist, otherwise the attempt window). Project and stage sums are available from `/api/worklog` and `polier_worklog`.
+
 Reading the page without live updates: add `?noevents=1` (static mode) and
 `?theme=light|dark` to freeze the theme; deep links are `#/board`, `#/table`,
 `#/graph`, `#/dispatch`, `#/approvals`, `#/activity`, `#/sessions`, `#/plan`
@@ -143,7 +151,12 @@ the `errors`/`actions` the CLI would print.
 | `POST /api/plan/generator`, `/api/plan/approve` | planning session, approval |
 | `POST /api/plan/tasks`, `PATCH/DELETE /api/plan/tasks/<id>` | plan editing |
 | `POST /api/plan/stages/<id>/decision`, `/move` | stage owner decision, order |
-| `GET /api/events` | Server-Sent Events (`state`, `job`, `session`, `approval`, `claim`, `plan`, `ready`, `lag`) |
+| `GET/PUT /api/settings`, `POST /api/settings/labels`, `PUT/DELETE /api/settings/labels/<id>` | project settings, feature flags, labels |
+| `GET /api/filters/fields` | filter field/operator metadata for the builder |
+| `GET /api/views`, `PUT/DELETE /api/views/<id>` | built-in and saved views |
+| `GET /api/worklog[?task=<id>]` | per-task or project worklog and estimate comparison |
+| `GET /api/me`, `GET /api/inbox`, `POST /api/inbox/read` | Your Work, inbox items and read state |
+| `GET /api/events` | Server-Sent Events (`state`, `job`, `session`, `approval`, `claim`, `plan`, `inbox`, `views`, `settings`, `ready`, `lag`) |
 
 The dashboard also reads gate commands from the project's own table in
 `docs/quality.md` (columns: gate, command) so the gate runner prefills the
@@ -157,12 +170,15 @@ page falls back to `.polier-dashboard/`):
 
 | Path | Contents |
 |---|---|
-| `config.json` | provider command/settings, gate-command overrides, UI preferences |
+| `dashboard.json` (project root, committed) | feature flags, label definitions, defaults (`me`) |
+| `views/<id>.json` (project root, committed) | saved filters, grouping, sorting and columns |
+| `config.json` (runtime) | provider command/settings, gate-command overrides, UI preferences |
 | `plan.json`, `plan/` | interview answers and the last generator prompt |
 | `jobs/<id>.log` | full output of gate/check/audit jobs |
 | `sessions/<id>/` | prompt, generated Claude settings, transcript, session log, meta |
+| `inbox.json` | read state of the inbox items |
 
-Deleting the folder loses transcripts and job logs only.
+Deleting the folder loses transcripts, job logs and read marks only; `dashboard.json` and `views/` are project files and survive.
 
 ## Limits and design notes
 
@@ -180,3 +196,6 @@ Deleting the folder loses transcripts and job logs only.
   formats change.
 - Headless runs inherit the local Claude Code login; token use is recorded but
   cost control remains `policy.json` → `budget`.
+- "Worklog actual hours" are derived, not tracked: an attempt window or the
+  session span. It is a comparison aid for estimates, not payroll time.
+- The inbox is a derived feed, not a store; only its read marks are local.

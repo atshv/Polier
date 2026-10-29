@@ -1,4 +1,4 @@
-"""Board schema 1.0: 0.9 boards stay valid, 1.0 fields are opt-in and validated."""
+"""Board schemas: 0.9 stays valid, 1.0 and 1.1 fields are opt-in and validated."""
 from __future__ import annotations
 
 import importlib.util
@@ -61,6 +61,14 @@ def board_10() -> dict:
                   claim={"harness": "dsh", "session": "s1", "heartbeat": "2026-10-25T00:00:00Z"}),
         ],
     }
+
+
+def board_11() -> dict:
+    board = board_10()
+    board["schema_version"] = "1.1"
+    board["tasks"][0]["labels"] = ["feature", "risk-high"]
+    board["tasks"][0]["estimate_hours"] = 6.5
+    return board
 
 
 def check_module():
@@ -245,6 +253,41 @@ class CheckCli(unittest.TestCase):
         errors: list[str] = []
         module.check_board(root, errors, [])
         self.assertTrue(any("services/ghost" in error for error in errors), errors)
+
+
+class Schema11(unittest.TestCase):
+    def test_board_1_1_accepts_labels_and_estimate(self):
+        errors = board_errors(board_11())
+        self.assertEqual(errors, [])
+        self.assertEqual(schema_version(board_11()), "1.1")
+
+    def test_1_1_fields_need_schema_1_1(self):
+        board = board_10()
+        board["tasks"][0]["labels"] = ["feature"]
+        errors = board_errors(board)
+        self.assertTrue(any("needs schema version 1.1" in error for error in errors), errors)
+        board = board_10()
+        board["tasks"][0]["estimate_hours"] = 2
+        self.assertTrue(any("needs schema version 1.1" in error
+                            for error in board_errors(board)))
+
+    def test_label_and_estimate_shape(self):
+        board = board_11()
+        board["tasks"][0]["labels"] = ["Feature", "risk-high"]
+        self.assertTrue(any("lowercase label ids" in error for error in board_errors(board)))
+        board = board_11()
+        board["tasks"][0]["labels"] = ["bug", "bug"]
+        self.assertTrue(any("must not repeat" in error for error in board_errors(board)))
+        board = board_11()
+        board["tasks"][0]["estimate_hours"] = -1
+        self.assertTrue(any("estimate_hours" in error for error in board_errors(board)))
+        board = board_11()
+        board["tasks"][0]["estimate_hours"] = "6"
+        self.assertTrue(any("estimate_hours" in error for error in board_errors(board)))
+
+    def test_id_pattern_is_widened_for_1_1(self):
+        board = board_11()
+        self.assertEqual(task_id_pattern(board).pattern, task_id_pattern(board_10()).pattern)
 
 
 class Render(unittest.TestCase):
