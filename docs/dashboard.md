@@ -56,6 +56,17 @@ one self-contained page from `server/assets/`. Stop it with Ctrl+C.
 
 The five views are controlled by `dashboard.json` → `features` (default on). `defaults.hours_per_day` (1–24) changes the timeline scale. Nothing in this section writes to the project: planning dates are the only new board fields, and they are edited through the validated plan editor.
 
+## Knowledge and intake (2.3)
+
+- **Pages** — a read-only browser for the project's Markdown: root documents (`README`, `AGENTS`, `ARCHITECTURE`, `STATUS`, `CHANGELOG`, …), `docs/**` (with subcollections such as `docs/adr`, `docs/gates`, `docs/research`), `tasks/*.md` briefs, `reviews/*.md`, and the package/service/app/tool README/ARCHITECTURE files. A page shows its rendered content, safe relative links, backlinks (pages and tasks that reference it), the git history and old revisions (`?ref=<commit>`), plus local favorites. Full-text search covers every indexed page. Nothing is written — documents are edited by the agents through the normal write guard. `GET /api/pages`, `/api/page?path=&ref=`, `/api/page/history`, `/api/pages/search`, `/api/pages/favorites`; MCP `polier_pages`, `polier_page`, `polier_pages_search`; CLI `tools/pages.py list|search|show|history|favorite|favorites`.
+- **Intake** — proposals as committed `intake/<id>.json` files in a small lifecycle: `proposed` → `accepted` (creates a pending board task through the validated plan editor and links back) or `rejected` (with a reason). Kind (`idea`/`issue`/`request`/`question`), priority, source (`owner`/`agent`/`cli`/`mcp`/`web`) and links are part of the record. Accept an entry from the intake view, the CLI (`tools/intake.py accept`) or the API; a task template can provide the structure. `GET/POST /api/intake`, `PATCH /api/intake/<id>`, `POST /api/intake/<id>/accept|reject`; MCP `polier_intake`, `polier_intake_add`.
+- **Task templates** — committed `templates/tasks/<id>.json` files with the reusable shape of a task (title/goal optional, scope, acceptance, gates, complexity, labels, estimate, owner, package, exclusive). Create them by hand, save one from an existing task ("save as template"), and use them as defaults in the plan editor, the intake accept form, `POST /api/plan/tasks` (`template: <id>`) and the CLI (`tools/templates.py`). They never bypass validation. `GET/POST /api/task-templates`, `DELETE /api/task-templates/<id>`; MCP `polier_templates`.
+
+![Pages](images/dashboard-pages.png)
+![Intake](images/dashboard-intake.png)
+
+The pages view and intake are controlled by `dashboard.json` → `features.pages` / `features.intake` (default on). Favorites are local; intake entries and templates are committed.
+
 Reading the page without live updates: add `?noevents=1` (static mode) and
 `?theme=light|dark` to freeze the theme; deep links are `#/board`, `#/table`,
 `#/graph`, `#/dispatch`, `#/approvals`, `#/activity`, `#/sessions`, `#/plan`
@@ -177,6 +188,9 @@ the `errors`/`actions` the CLI would print.
 | `GET /api/modules` | packages with tasks, health, docs and contracts |
 | `GET /api/coverage` | requirement definitions, task links, evidence and gaps |
 | `GET /api/analytics` | throughput, cycle time, gate pass rate, rework, effort and tokens |
+| `GET /api/pages`, `/api/page?path=&ref=`, `/api/page/history`, `/api/pages/search`, `PUT /api/pages/favorites` | Markdown knowledge layer: collections, content, revisions, search, favorites |
+| `GET/POST /api/intake`, `PATCH /api/intake/<id>`, `POST /api/intake/<id>/accept\|reject` | intake proposals and triage into validated tasks |
+| `GET/POST /api/task-templates`, `DELETE /api/task-templates/<id>` | reusable task templates |
 | `GET /api/events` | Server-Sent Events (`state`, `job`, `session`, `approval`, `claim`, `plan`, `inbox`, `views`, `settings`, `ready`, `lag`) |
 
 The dashboard also reads gate commands from the project's own table in
@@ -193,11 +207,14 @@ page falls back to `.polier-dashboard/`):
 |---|---|
 | `dashboard.json` (project root, committed) | feature flags, label definitions, defaults (`me`, `hours_per_day`) |
 | `views/<id>.json` (project root, committed) | saved filters, grouping, sorting and columns |
+| `intake/<id>.json` (project root, committed) | intake proposals and their decisions |
+| `templates/tasks/<id>.json` (project root, committed) | reusable task templates |
 | `config.json` (runtime) | provider command/settings, gate-command overrides, UI preferences |
 | `plan.json`, `plan/` | interview answers and the last generator prompt |
 | `jobs/<id>.log` | full output of gate/check/audit jobs |
 | `sessions/<id>/` | prompt, generated Claude settings, transcript, session log, meta |
 | `inbox.json` | read state of the inbox items |
+| `pages.json` | local page favorites |
 
 Deleting the folder loses transcripts, job logs and read marks only; `dashboard.json` and `views/` are project files and survive.
 
@@ -220,6 +237,8 @@ Deleting the folder loses transcripts, job logs and read marks only; `dashboard.
 - "Worklog actual hours" are derived, not tracked: an attempt window or the
   session span. It is a comparison aid for estimates, not payroll time.
 - The inbox is a derived feed, not a store; only its read marks are local.
+- Pages are read-only: the viewer never edits a document, and old revisions are
+  read from git. Intake and task templates are the only new committed files.
 - The timeline is a derived schedule unless `planned_start`/`target` are set; it
   is a planning aid, not a promise. Cycles are stages by evidence, not calendar
   periods, and Coverage only knows the D-codes the project documents.

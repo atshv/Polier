@@ -45,8 +45,8 @@ FEATURES: Dict[str, bool] = {
     "modules": True,
     "coverage": True,
     "analytics": True,
-    "pages": False,
-    "intake": False,
+    "pages": True,
+    "intake": True,
     "assistant": False,
 }
 

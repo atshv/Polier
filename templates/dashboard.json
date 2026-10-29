@@ -10,8 +10,8 @@
     "modules": true,
     "coverage": true,
     "analytics": true,
-    "pages": false,
-    "intake": false,
+    "pages": true,
+    "intake": true,
     "assistant": false
   },
   "labels": [

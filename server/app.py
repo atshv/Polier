@@ -43,13 +43,16 @@ from core import cycles as cycles_mod
 from core import dashboard as dashboard_mod
 from core import filters as filters_mod
 from core import inbox as inbox_mod
+from core import intake as intake_mod
 from core import modules as modules_mod
+from core import pages as pages_mod
 from core import plans as plans_mod
 from core import plan_edit
 from core import policy as policy_mod
 from core import runtime as runtime_mod
 from core import settings as settings_mod
 from core import state as state_mod
+from core import task_templates as templates_mod
 from core import timeline as timeline_mod
 from core import views as views_mod
 from core import worklog as worklog_mod
@@ -59,7 +62,7 @@ from core.jobs import JobManager
 
 from .sessions import SessionManager
 
-VERSION = "2.2.0"
+VERSION = "2.3.0"
 CONFIG = "config.json"
 MAX_BODY = 1_500_000
 ASSETS = Path(__file__).resolve().parent / "assets"
@@ -512,6 +515,15 @@ class DashboardApp:
             return 200, result
         if path == "/api/plan/tasks" and method == "POST":
             payload = self._json(body)
+            if payload.get("template"):
+                try:
+                    defaults = templates_mod.defaults(self.root, str(payload["template"]))
+                except KeyError:
+                    raise ApiError(404, "unknown template")
+                except PolierError as exc:
+                    raise ApiError(400, str(exc))
+                payload = {**defaults, **{key: value for key, value in payload.items()
+                                          if key != "template" and value is not None}}
             try:
                 task = plan_edit.create_task(self.root, payload)
             except PolierError as exc:
@@ -702,6 +714,130 @@ class DashboardApp:
             return 200, coverage_mod.build(self.root, snapshot=self.snapshot())
         if path == "/api/analytics" and method == "GET":
             return 200, analytics_mod.build(self.root, snapshot=self.snapshot())
+        # pages, intake and task templates (2.3) ---------------------------
+        if path == "/api/pages" and method == "GET":
+            return 200, pages_mod.index(self.root)
+        if path == "/api/pages/search" and method == "GET":
+            return 200, {"query": query.get("q") or "",
+                         "results": pages_mod.search(self.root, query.get("q") or "",
+                                                     int(query.get("limit") or 50))}
+        if path == "/api/pages/favorites" and method == "GET":
+            return 200, pages_mod.load_favorites(self.root)
+        if path == "/api/pages/favorites" and method in ("PUT", "POST"):
+            payload = self._json(body)
+            paths = payload.get("favorites") if isinstance(payload.get("favorites"), list) else []
+            return 200, pages_mod.set_favorites(self.root, paths)
+        if path == "/api/page/history" and method == "GET":
+            try:
+                return 200, {"path": query.get("path"),
+                             "history": pages_mod.history(self.root, query.get("path") or "",
+                                                          int(query.get("limit") or 20))}
+            except KeyError:
+                raise ApiError(404, "unknown page")
+        if path == "/api/page" and method == "GET":
+            try:
+                return 200, pages_mod.page(self.root, query.get("path") or "",
+                                           query.get("ref") or None)
+            except KeyError:
+                raise ApiError(404, "unknown page")
+            except PolierError as exc:
+                raise ApiError(400, str(exc))
+        if path == "/api/intake" and method == "GET":
+            status = query.get("status")
+            if status and status not in intake_mod.STATUSES:
+                raise ApiError(400, "unknown intake status")
+            return 200, {"entries": intake_mod.load_all(self.root, status or None),
+                         **intake_mod.summary(self.root)}
+        if path == "/api/intake" and method == "POST":
+            payload = self._json(body)
+            try:
+                entry = intake_mod.create(self.root, payload, by=self.role,
+                                          source=str(payload.get("source") or "web"))
+            except PolierError as exc:
+                raise ApiError(400, str(exc))
+            self.bus.publish("intake", {"entry": entry})
+            self.invalidate()
+            return 200, entry
+        match = re.fullmatch(r"/api/intake/(IN-[0-9]{3,})", path)
+        if match and method == "GET":
+            try:
+                return 200, intake_mod.get(self.root, match.group(1))
+            except KeyError:
+                raise ApiError(404, "unknown intake entry")
+        if match and method in ("PUT", "PATCH"):
+            payload = self._json(body)
+            try:
+                entry = intake_mod.update(self.root, match.group(1), payload)
+            except KeyError:
+                raise ApiError(404, "unknown intake entry")
+            except PolierError as exc:
+                raise ApiError(400, str(exc))
+            self.bus.publish("intake", {"entry": entry})
+            return 200, entry
+        match = re.fullmatch(r"/api/intake/(IN-[0-9]{3,})/accept", path)
+        if match and method == "POST":
+            payload = self._json(body)
+            task_payload = dict(payload.get("task") or {}) if isinstance(payload.get("task"), dict) else {}
+            for key in ("stage", "owner", "package", "complexity", "estimate_hours", "labels",
+                        "scope_write", "scope_read", "acceptance", "gates", "depends_on",
+                        "exclusive", "id"):
+                if key in payload and key not in task_payload:
+                    task_payload[key] = payload[key]
+            template = payload.get("template") or task_payload.pop("template", None)
+            try:
+                result = intake_mod.accept(
+                    self.root, match.group(1), by=str(payload.get("by") or self.role),
+                    note=str(payload.get("note") or ""),
+                    task_payload=task_payload,
+                    template=template)
+            except KeyError:
+                raise ApiError(404, "unknown intake entry")
+            except PolierError as exc:
+                raise ApiError(400, str(exc))
+            self.bus.publish("intake", {"entry": result["intake"]})
+            self.bus.publish("state", {"task": result["task"].get("id"), "status": "pending"})
+            self.invalidate()
+            return 200, result
+        match = re.fullmatch(r"/api/intake/(IN-[0-9]{3,})/reject", path)
+        if match and method == "POST":
+            payload = self._json(body)
+            try:
+                entry = intake_mod.reject(self.root, match.group(1),
+                                          by=str(payload.get("by") or self.role),
+                                          note=str(payload.get("note") or ""))
+            except KeyError:
+                raise ApiError(404, "unknown intake entry")
+            except PolierError as exc:
+                raise ApiError(400, str(exc))
+            self.bus.publish("intake", {"entry": entry})
+            return 200, entry
+        if path == "/api/task-templates" and method == "GET":
+            return 200, {"templates": templates_mod.load_all(self.root)}
+        if path == "/api/task-templates" and method == "POST":
+            payload = self._json(body)
+            try:
+                if payload.get("from_task"):
+                    template = templates_mod.from_task(
+                        self.root, str(payload["from_task"]), str(payload.get("id") or ""),
+                        name=payload.get("name") or None)
+                else:
+                    template = templates_mod.save(self.root, payload)
+            except KeyError:
+                raise ApiError(404, "unknown task")
+            except PolierError as exc:
+                raise ApiError(400, str(exc))
+            self.bus.publish("templates", {"template": template})
+            return 200, template
+        match = re.fullmatch(r"/api/task-templates/([a-z][a-z0-9-]{0,40})", path)
+        if match and method == "DELETE":
+            try:
+                result = templates_mod.delete(self.root, match.group(1))
+            except KeyError:
+                raise ApiError(404, "unknown template")
+            except PolierError as exc:
+                raise ApiError(400, str(exc))
+            self.bus.publish("templates", {"deleted": match.group(1)})
+            return 200, result
         # files / audit ----------------------------------------------------
         if path == "/api/files" and method == "GET":
             try:
