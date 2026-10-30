@@ -98,6 +98,10 @@ The pages view and intake are controlled by `dashboard.json` → `features.pages
 
 All three features are controlled by `dashboard.json` → `features.assistant` / `features.automations` / `features.github` (default on). Assistant conversations are local runtime files; automation rules are committed; the GitHub panel is read-only.
 
+## Language (2.7)
+
+The dashboard speaks English and German. It follows the browser language; switch it under **Settings → General → Language**, in the command palette or with `?lang=de` / `?lang=en` (remembered per browser). Translations live in `server/assets/i18n.js`; project content — task titles, Markdown, commands, paths — is never translated, and the handbook stays English.
+
 ## AI, MCP and GitHub (2.6)
 
 - **Agents** (`agents.json`, committed) — profiles with role, model, instructions, skills and connectors; *Assign to a task* starts a headless session with them. Built-in Builder, Reviewer and Lead until the file exists.

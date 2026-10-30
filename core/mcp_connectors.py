@@ -218,7 +218,7 @@ def _rpc(method: str, request_id: Optional[int], params: Optional[dict] = None) 
 
 
 INIT_PARAMS = {"protocolVersion": PROTOCOL, "capabilities": {},
-               "clientInfo": {"name": "polier-dashboard", "version": "2.6"}}
+               "clientInfo": {"name": "polier-dashboard", "version": "2.7"}}
 
 
 def _test_stdio(entry: Dict[str, Any], timeout: float) -> Dict[str, Any]:

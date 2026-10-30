@@ -2,6 +2,18 @@
 
 Each release lists what a running project must do to adopt it. Update between stages, never during a task (see `guide/cheatsheet.md`). The current version is in `VERSION`; projects record theirs in `board.json` → `generator_version`.
 
+## 2.7.0
+
+**German as a second language, a new look and a short README.**
+
+**Dashboard in German.** The whole dashboard can run in German: navigation, views, the task drawer, dialogs, toasts, tooltips and dates. It follows the browser language; *Settings → General → Language*, the command palette (*Sprache: Deutsch* / *Language: English*) or `?lang=de|en` switch it, and the choice is remembered per browser. Translations live in `server/assets/i18n.js` (exact strings, fragments of composed strings, nouns in counts and patterns); `app.js` passes every UI string through `tr()` in `h()`, toasts and the static header. Project content is never translated: Markdown is rendered with translation paused, and commands, paths and long server messages are left alone. The handbook stays English. New suite `tests/test_i18n.py`.
+
+**New look.** A new logo (the board's four tiles, the last one checked) in the header, the favicon and `docs/images/logo.svg`; new banners in English and German (`banner.png`, `banner.de.png`); new screenshots of every view; two animated GIFs per language — a dashboard tour (`tour.gif`) and "proof, not promises" (`flow.gif`): a gate run is recorded, and moving to review is refused until every gate has a passing record.
+
+**README.** Rewritten short, with a German version (`README.de.md`). The list of the guard's known gaps moved to [`docs/guard-limits.md`](docs/guard-limits.md); unused images were removed.
+
+**Compatibility.** No API, file or rule changes. The select-mode button now reads *Done selecting*. Restart the dashboard to load the new assets. Plugin users: `git pull`, `dsh plugin --profile <name> add ./polier` again, restart. Claude Code users: replace the package copy. Skill-only users: `./update.sh`.
+
 ## 2.6.0
 
 **Knowledge, AI and integrations.** 2.5 made the dashboard calmer; 2.6 fills it: the knowledge view becomes a documentation site with a handbook that ships with Polier, an AI area turns headless sessions into assignable agents with skills and MCP connectors, Polier's own MCP server gets a setup page, and GitHub can be connected from the dashboard. The README is rewritten around a quick start.

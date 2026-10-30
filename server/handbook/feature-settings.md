@@ -6,7 +6,7 @@
 
 | Section | Controls |
 |---|---|
-| **General** | project facts and your *"Me" handle* |
+| **General** | project facts, your *"Me" handle* and the dashboard language (English or German, per browser) |
 | **Features** | turn views on or off; hidden views leave the sidebar and the palette |
 | **Labels** | id, title, colour and group of every label |
 | **Templates** | task templates saved in `templates/tasks/` |

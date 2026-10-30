@@ -66,7 +66,7 @@ from core.errors import PolierError  # noqa: E402
 from core.gates import suggest_gate_commands  # noqa: E402
 
 PROTOCOL = "2024-11-05"
-SERVER = {"name": "polier", "version": "2.6.0"}
+SERVER = {"name": "polier", "version": "2.7.0"}
 
 
 def _text(value: Any) -> str:

@@ -9,6 +9,93 @@
    ========================================================================= */
 
 const THEME_KEY = 'polier.theme';
+
+/* ---------- language: English source strings, translations in i18n.js ---------- */
+
+const LANG_KEY = 'polier.lang';
+const UI_LANGUAGES = [{ id: 'en', label: 'English' }, { id: 'de', label: 'Deutsch' }];
+const UI_LANG = (function pickLanguage() {
+  const packs = window.POLIER_I18N || {};
+  let chosen = null;
+  try { chosen = new URLSearchParams(location.search).get('lang') || localStorage.getItem(LANG_KEY); } catch (err) { chosen = null; }
+  if (!chosen) chosen = String(navigator.language || 'en').slice(0, 2).toLowerCase();
+  return packs[chosen] ? chosen : 'en';
+})();
+const UI_PACK = UI_LANG === 'en' ? null : (window.POLIER_I18N || {})[UI_LANG];
+const UI_LOCALE = UI_PACK ? UI_PACK.locale : 'en-US';
+const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+/* Fragments match whole words only, so "est " never hits inside "latest ". */
+const UI_FRAGMENTS = UI_PACK ? Object.keys(UI_PACK.fragments).sort((a, b) => b.length - a.length).map((key) => ({
+  re: new RegExp((/^[A-Za-z]/.test(key) ? '(?<![A-Za-z])' : '') + escapeRegExp(key) + (/[A-Za-z]$/.test(key) ? '(?![A-Za-z])' : ''), 'g'),
+  value: UI_PACK.fragments[key]
+})) : [];
+const UI_WORDS = UI_PACK ? new RegExp('\\b(' + Object.keys(UI_PACK.words).join('|') + ')\\b', 'g') : null;
+let i18nPaused = 0;
+
+/* Translate one UI string. Project content is never passed through here
+   while i18nPaused is set (Markdown rendering). */
+function tr(value) {
+  if (!UI_PACK || i18nPaused || value === null || value === undefined) return value;
+  const text = String(value);
+  if (!/[A-Za-z]/.test(text)) return text;
+  const core = text.trim();
+  const result = trCore(core);
+  if (result === null) return text;
+  return text.slice(0, text.indexOf(core)) + result + text.slice(text.indexOf(core) + core.length);
+}
+
+/* Commands, paths and code are never translated. */
+const UNTRANSLATABLE = /^(python3?|node|npx|npm|pnpm|uvx|gh|git|curl|claude|dsh|bash|sh|cd|ctest|cmake)\s|\s--?[a-z]|^\$ |^[\w.-]+\/[\w./-]+$/;
+
+function trCore(core) {
+  if (Object.prototype.hasOwnProperty.call(UI_PACK.exact, core)) return UI_PACK.exact[core];
+  if (UNTRANSLATABLE.test(core)) return null;
+  if (core.indexOf('\n') !== -1) {
+    const joined = core.split('\n').map((line) => { const hit = line.trim() ? trCore(line.trim()) : null; return hit === null ? line : hit; }).join('\n');
+    return joined === core ? null : joined;
+  }
+  for (const [pattern, replacement] of UI_PACK.patterns) {
+    const match = core.match(pattern);
+    if (!match) continue;
+    if (typeof replacement === 'function') {
+      const result = replacement(match, (part) => { const hit = trCore(String(part).trim()); return hit === null ? part : hit; });
+      if (result === core) continue;
+      return result;
+    }
+    return core.replace(pattern, replacement);
+  }
+  if (core.indexOf(' · ') !== -1) {
+    const parts = core.split(' · ').map((part) => { const hit = trCore(part.trim()); return hit === null ? part : hit; });
+    return parts.join(' · ');
+  }
+  let out = core;
+  for (const fragment of UI_FRAGMENTS) out = out.replace(fragment.re, fragment.value);
+  /* nouns in short counts such as "8 tasks" — never in sentences from the server */
+  if (UI_WORDS && /\d/.test(out) && out.split(/\s+/).length <= 4) out = out.replace(UI_WORDS, (word) => UI_PACK.words[word]);
+  return out === core ? null : out;
+}
+
+function setLanguage(lang) {
+  try { localStorage.setItem(LANG_KEY, lang); } catch (err) { /* private mode */ }
+  const url = new URL(location.href);
+  url.searchParams.delete('lang');
+  location.replace(url.toString());
+}
+
+/* Static text in index.html (header, jobs tray). */
+function translateStatic(root) {
+  if (!UI_PACK) return;
+  document.documentElement.lang = UI_LANG;
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const nodes = [];
+  while (walker.nextNode()) nodes.push(walker.currentNode);
+  for (const node of nodes) if (node.nodeValue.trim()) node.nodeValue = tr(node.nodeValue);
+  for (const element of root.querySelectorAll('[title], [placeholder], [aria-label]')) {
+    for (const attr of ['title', 'placeholder', 'aria-label']) {
+      if (element.hasAttribute(attr)) element.setAttribute(attr, tr(element.getAttribute(attr)));
+    }
+  }
+}
 const MORE_MARK = '…';
 
 /* Navigation: views are grouped in the sidebar; `feature` hides a view when the
@@ -112,7 +199,8 @@ function h(tag, props, ...children) {
       const value = props[key];
       if (value === null || value === undefined || value === false) continue;
       if (key === 'class') node.className = value;
-      else if (key === 'text') node.textContent = String(value);
+      else if (key === 'text') node.textContent = String(tr(value));
+      else if (key === 'title' || key === 'placeholder' || key === 'aria-label') node.setAttribute(key, String(tr(value)));
       else if (key === 'dataset') Object.assign(node.dataset, value);
       else if (key === 'on') {
         for (const event of Object.keys(value)) node.addEventListener(event, value[event]);
@@ -132,7 +220,7 @@ function append(parent, children) {
     if (child === null || child === undefined || child === false || child === true) continue;
     if (Array.isArray(child)) append(parent, child);
     else if (child instanceof Node) parent.appendChild(child);
-    else parent.appendChild(document.createTextNode(String(child)));
+    else parent.appendChild(document.createTextNode(String(tr(child))));
   }
   return parent;
 }
@@ -192,7 +280,7 @@ function parseDate(value) {
 function fmtNum(value) {
   const num = Number(value);
   if (!isFinite(num)) return '0';
-  return num.toLocaleString('en-US');
+  return num.toLocaleString(UI_LOCALE);
 }
 
 function fmtTokens(value) {
@@ -221,7 +309,7 @@ function relTime(iso) {
   if (seconds < 3600) return Math.round(seconds / 60) + 'm ago';
   if (seconds < 86400) return Math.round(seconds / 3600) + 'h ago';
   if (seconds < 86400 * 7) return Math.round(seconds / 86400) + 'd ago';
-  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  return date.toLocaleDateString(UI_LOCALE, { month: 'short', day: 'numeric' });
 }
 
 function dayKey(iso) {
@@ -239,7 +327,7 @@ function dayLabel(iso) {
   const diff = Math.round((startOfToday - startOfDate) / 86400000);
   if (diff === 0) return 'Today';
   if (diff === 1) return 'Yesterday';
-  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  return date.toLocaleDateString(UI_LOCALE, { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 function truncate(value, max) {
@@ -399,7 +487,7 @@ function errorCallout(err, options) {
 function toast(message, kind, ttl) {
   const variant = kind || 'info';
   const node = h('div', { class: 'toast toast-' + variant, role: 'status' },
-    h('div', { class: 'toast-text', text: String(message) }),
+    h('div', { class: 'toast-text', text: String(message).split('\n').map((line) => tr(line)).join('\n') }),
     h('button', {
       class: 'toast-close', type: 'button', 'aria-label': 'Dismiss notification', text: '×',
       on: { click: () => node.remove() }
@@ -584,6 +672,15 @@ function methodBadge(method) {
 }
 
 function mdFragment(text, options) {
+  i18nPaused += 1;
+  try {
+    return mdFragmentRaw(text, options);
+  } finally {
+    i18nPaused -= 1;
+  }
+}
+
+function mdFragmentRaw(text, options) {
   const opts = options || {};
   const fragment = document.createDocumentFragment();
   if (text === null || text === undefined || String(text) === '') return fragment;
@@ -731,7 +828,7 @@ function paintThemeGlyph() {
   const theme = preferredTheme();
   glyph.textContent = theme === 'dark' ? '☀' : '☾';
   const button = document.getElementById('btn-theme');
-  if (button) button.title = theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme';
+  if (button) button.title = tr(theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme');
 }
 
 function applyTheme(theme) {
@@ -1373,20 +1470,20 @@ function shortDay(value) {
   const stamp = dateToUtc(value);
   if (stamp === null) return '—';
   const date = new Date(stamp);
-  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' });
+  return date.toLocaleDateString(UI_LOCALE, { month: 'short', day: 'numeric', timeZone: 'UTC' });
 }
 
 function fullDay(value) {
   const stamp = dateToUtc(value);
   if (stamp === null) return '—';
   const date = new Date(stamp);
-  return date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+  return date.toLocaleDateString(UI_LOCALE, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
 }
 
 function monthLabel(value) {
   const stamp = dateToUtc(value);
   if (stamp === null) return '';
-  return new Date(stamp).toLocaleDateString(undefined, { month: 'short', year: 'numeric', timeZone: 'UTC' });
+  return new Date(stamp).toLocaleDateString(UI_LOCALE, { month: 'short', year: 'numeric', timeZone: 'UTC' });
 }
 
 function weekdayInitial(weekday) {
@@ -2733,10 +2830,10 @@ function renderBell() {
   count.hidden = unread <= 0;
   count.textContent = unread > 99 ? '99+' : String(unread);
   count.className = 'bell-count' + (high ? ' is-high' : '');
-  bell.title = unread
+  bell.title = tr(unread
     ? unread + ' unread inbox item' + (unread === 1 ? '' : 's') + (high ? ' · ' + high + ' high' : '')
-    : 'Inbox is empty';
-  bell.setAttribute('aria-label', unread ? 'Open your inbox (' + unread + ' unread)' : 'Open your inbox');
+    : 'Inbox is empty');
+  bell.setAttribute('aria-label', tr(unread ? 'Open your inbox (' + unread + ' unread)' : 'Open your inbox'));
 }
 
 function renderHeader() {
@@ -2783,8 +2880,8 @@ function renderHeader() {
   const writable = canWrite();
   dom.checkButton.disabled = !writable;
   dom.auditButton.disabled = !writable;
-  dom.checkButton.title = writable ? 'Run the board check job (POST /api/jobs/check)' : 'The dashboard is read-only';
-  dom.auditButton.title = writable ? 'Run the project audit job (POST /api/jobs/audit)' : 'The dashboard is read-only';
+  dom.checkButton.title = tr(writable ? 'Run the board check job (POST /api/jobs/check)' : 'The dashboard is read-only');
+  dom.auditButton.title = tr(writable ? 'Run the project audit job (POST /api/jobs/audit)' : 'The dashboard is read-only');
   paintJobsButtonState();
   renderBell();
 }
@@ -2817,8 +2914,8 @@ function renderTabs() {
 
 function setLive(status, label) {
   dom.live.dataset.live = status;
-  if (dom.liveLabel) dom.liveLabel.textContent = label;
-  dom.live.title = status === 'live' ? 'Connected to /api/events' : (label || 'Server-Sent Events connection');
+  if (dom.liveLabel) dom.liveLabel.textContent = tr(label);
+  dom.live.title = tr(status === 'live' ? 'Connected to /api/events' : (label || 'Server-Sent Events connection'));
 }
 
 /* =========================================================================
@@ -4063,12 +4160,12 @@ function paintJobsButtonState() {
   const running = state.jobs.filter((job) => job.status === 'running').length;
   dom.jobsDot.className = 'jobs-dot' + (running ? ' is-running' : '');
   if (running) {
-    dom.jobsSummary.textContent = running + ' ' + plural(running, 'job') + ' running';
+    dom.jobsSummary.textContent = tr(running + ' ' + plural(running, 'job') + ' running');
     return;
   }
   const latest = state.jobs[0];
   if (!latest) {
-    dom.jobsSummary.textContent = 'no jobs yet';
+    dom.jobsSummary.textContent = tr('no jobs yet');
     dom.jobsDot.className = 'jobs-dot';
     return;
   }
@@ -4345,6 +4442,7 @@ function shortcutRow(key, label) {
    ========================================================================= */
 
 async function boot() {
+  translateStatic(document.body);
   initTheme();
   restorePreferences();
   bindStatic();
@@ -4486,7 +4584,7 @@ function renderColumn(column, tasks) {
   if (collapsed) {
     if (isDone) {
       node.classList.add('is-clickable');
-      node.title = 'Show the done tasks';
+      node.title = tr('Show the done tasks');
       node.tabIndex = 0;
       const open = () => { state.boardDoneOpen = true; renderView(); };
       node.addEventListener('click', open);
@@ -4494,7 +4592,7 @@ function renderColumn(column, tasks) {
         if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); open(); }
       });
     } else {
-      node.title = 'No ' + column.label.toLowerCase() + ' tasks';
+      node.title = tr('No ' + column.label.toLowerCase() + ' tasks');
     }
     return node;
   }
@@ -6508,7 +6606,21 @@ function renderSettingsGeneral(project, config, health) {
                 await saveSettings({ defaults: { me: value } }, 'general', 'Handle saved');
               }
             }
-          })))));
+          }))),
+      h('div', { class: 'settings-row' },
+        h('div', { class: 'settings-row-main' },
+          h('div', { class: 'settings-row-title', text: 'Language' }),
+          h('div', { class: 'settings-row-sub', text: 'Language of the dashboard on this browser. Project files and the handbook stay as they are.' })),
+        h('div', { class: 'settings-actions' },
+          h('select', {
+            class: 'select', 'aria-label': 'Language',
+            on: { change: (event) => setLanguage(event.target.value) }
+          }, UI_LANGUAGES.map((language) => {
+            const option = h('option', { value: language.id });
+            option.textContent = language.label;
+            if (language.id === UI_LANG) option.selected = true;
+            return option;
+          }))))));
   return card;
 }
 
@@ -7216,7 +7328,7 @@ function renderTimeline() {
         '\n' + shortDay(task.start) + ' → ' + shortDay(task.end) +
         ' · ' + fmtHours(task.hours) +
         (task.estimate_hours !== null && task.estimate_hours !== undefined ? ' (estimate ' + fmtHours(task.estimate_hours) + ')' : '') +
-        (task.labels && task.labels.length ? '\nlabels: ' + task.labels.map(labelTitle).join(', ') : '');
+        (task.labels && task.labels.length ? '\nLabels: ' + task.labels.map(labelTitle).join(', ') : '');
       lane.appendChild(h('button', {
         class: 'tl-bar status-' + color + (task.critical ? ' is-critical' : ''),
         type: 'button',
@@ -7247,10 +7359,10 @@ function svgEl(tag, attrs, text) {
   if (attrs) {
     for (const key of Object.keys(attrs)) {
       if (attrs[key] === null || attrs[key] === undefined) continue;
-      node.setAttribute(key, String(attrs[key]));
+      node.setAttribute(key, String(key === 'aria-label' || key === 'title' ? tr(attrs[key]) : attrs[key]));
     }
   }
-  if (text !== null && text !== undefined) node.textContent = String(text);
+  if (text !== null && text !== undefined) node.textContent = String(tr(text));
   return node;
 }
 
@@ -9392,7 +9504,7 @@ function automationActionLabel(action) {
   if (!action) return 'Action';
   if (action.type === 'state') return 'Set ' + (action.status || 'status');
   if (action.type === 'session') return 'Start ' + (action.role || 'worker') + ' session';
-  if (action.type === 'open') return 'Open';
+  if (action.type === 'open') return 'Open item';
   if (action.type === 'note') return 'Copy note';
   return action.type;
 }
@@ -9711,7 +9823,7 @@ function renderGithub() {
         h('td', { class: 'mono', text: run.headBranch || '—' }),
         h('td', { text: run.event || '—' }),
         h('td', { text: run.createdAt ? relTime(run.createdAt) : '—' }),
-        h('td', {}, run.url ? h('a', { href: run.url, target: '_blank', rel: 'noopener noreferrer', text: 'Open' }) : null)));
+        h('td', {}, run.url ? h('a', { href: run.url, target: '_blank', rel: 'noopener noreferrer', text: 'View ↗' }) : null)));
     }
     table.appendChild(body);
     runsCard.querySelector('.panel-body').appendChild(table);
@@ -10627,7 +10739,7 @@ function renderSelectToggle() {
   const on = selectionMode();
   return h('button', {
     class: 'btn btn-sm' + (on ? ' btn-primary' : ''), type: 'button',
-    text: on ? 'Done' : 'Select',
+    text: on ? 'Done selecting' : 'Select',
     'aria-pressed': on ? 'true' : 'false',
     title: on ? 'Leave selection mode' : 'Select tasks for a bulk action (status, claim, labels, estimate)',
     on: { click: () => setSelectionMode(!on) }
@@ -10870,6 +10982,10 @@ function paletteItems() {
   }
   items.push({ id: 'action-refresh', group: 'Actions', label: 'Refresh everything', sub: 'snapshot + view', run: () => refreshAll() });
   items.push({ id: 'action-settings', group: 'Actions', label: 'Open Settings', sub: 'settings', run: () => navigate('settings') });
+  for (const language of UI_LANGUAGES) {
+    if (language.id === UI_LANG) continue;
+    items.push({ id: 'action-lang-' + language.id, group: 'Actions', label: language.id === 'de' ? 'Sprache: Deutsch' : 'Language: English', sub: 'language', run: () => setLanguage(language.id) });
+  }
   const tasks = (state.snapshot && state.snapshot.tasks) || [];
   if (tasks.length) {
     items.push({ id: 'group-tasks', group: 'Tasks', label: '', sub: '', header: true });
@@ -11547,7 +11663,7 @@ function buildGraphSvg(layout) {
     svg.setAttribute('height', String(Math.round(height * zoom)));
   }
   svg.setAttribute('role', 'img');
-  svg.setAttribute('aria-label', 'Task dependency graph with ' + rows.length + ' tasks');
+  svg.setAttribute('aria-label', tr('Task dependency graph with ' + rows.length + ' tasks'));
 
   const edges = document.createElementNS('http://www.w3.org/2000/svg', 'g');
   const nodes = document.createElementNS('http://www.w3.org/2000/svg', 'g');
@@ -11588,7 +11704,7 @@ function buildGraphSvg(layout) {
     group.setAttribute('data-status', task.status || 'pending');
     group.setAttribute('tabindex', '0');
     group.setAttribute('role', 'button');
-    group.setAttribute('aria-label', task.id + ': ' + (task.title || 'untitled') + ' — ' + stMeta(task.status).label);
+    group.setAttribute('aria-label', task.id + ': ' + (task.title || 'untitled') + ' — ' + tr(stMeta(task.status).label));
     group.addEventListener('click', () => openTask(task.id));
     group.addEventListener('keydown', (event) => {
       if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openTask(task.id); }
