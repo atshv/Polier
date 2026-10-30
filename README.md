@@ -14,7 +14,7 @@
 
 Works with **Claude Code**, any **MCP** client and **DeepSeek Harness**. Python standard library only, everything stays as files in your repository.
 
-<p align="center"><img src="docs/images/dashboard.png" alt="The Polier dashboard: board, task drawer, command palette, timeline, knowledge, agents and MCP" width="100%"></p>
+<p align="center"><img src="docs/images/tour.gif" alt="A tour of the dashboard: board, task drawer, command palette, timeline, knowledge, agents and MCP" width="100%"></p>
 
 ## Why
 
@@ -43,7 +43,7 @@ The dashboard follows your browser language (English or German); switch it under
 
 ## Proof, not promises
 
-<p align="center"><img src="docs/images/demo.gif" alt="A gate runs and is recorded; moving the task to review is refused until every gate has a passing record" width="100%"></p>
+<p align="center"><img src="docs/images/flow.gif" alt="A gate runs and is recorded; moving the task to review is refused until every gate has a passing record" width="100%"></p>
 
 1. **Plan** — interview → `ARCHITECTURE.md`, `board.json`, task briefs, `policy.json`. You approve.
 2. **Build** — an agent claims one task and may write only inside its scope.
