@@ -4,7 +4,7 @@ Each release lists what a running project must do to adopt it. Update between st
 
 ## 2.7.0
 
-**German as a second language, a new look and a short README.**
+**German as a second language, a guided first-run setup, a new look and a short README.**
 
 **Dashboard in German.** The whole dashboard can run in German: navigation, views, the task drawer, dialogs, toasts, tooltips and dates. It follows the browser language; *Settings → General → Language*, the command palette (*Sprache: Deutsch* / *Language: English*) or `?lang=de|en` switch it, and the choice is remembered per browser. Translations live in `server/assets/i18n.js` (exact strings, fragments of composed strings, nouns in counts and patterns); `app.js` passes every UI string through `tr()` in `h()`, toasts and the static header. Project content is never translated: Markdown is rendered with translation paused, and commands, paths and long server messages are left alone. The handbook stays English. New suite `tests/test_i18n.py`.
 
@@ -12,7 +12,9 @@ Each release lists what a running project must do to adopt it. Update between st
 
 **README.** Rewritten short, with a German version (`README.de.md`). The list of the guard's known gaps moved to [`docs/guard-limits.md`](docs/guard-limits.md); unused images were removed.
 
-**Compatibility.** No API, file or rule changes. The select-mode button now reads *Done selecting*. Restart the dashboard to load the new assets. Plugin users: `git pull`, `dsh plugin --profile <name> add ./polier` again, restart. Claude Code users: replace the package copy. Skill-only users: `./update.sh`.
+**Guided first-run setup.** A machine that has never run the dashboard starts on a guided setup instead of the board: Welcome → GitHub → AI provider → Sign in → Model → Done. An existing runtime reads as `skipped`, so an upgrade never opens the wizard by itself; it stays reachable from **Setup** and **Settings**. The GitHub step reuses the device-flow login and is left out when `features.github` is off; the AI provider step picks Claude Code (default, command `claude`) or a custom command, flagging a command that is not on the PATH; the sign-in step probes `claude auth status` read-only and shows the copyable `claude auth login` with **Check again**; the model step sets an optional `--model` override for Claude Code (`opus`, `sonnet`, `haiku` or the provider default — a custom command runs as configured without it); Done summarises and opens the board, or the plan editor when there is no board yet. **Skip setup** is shown on every pending step and opens the dashboard the same way. Reopen it from the sidebar's system group (**Setup**), the command palette (**Open guided setup**) or **Settings → Guided setup → Run it again** (which resets the state). `GET/POST /api/setup` reads the state and records `complete`, `skip` or `reset`; `GET /api/config` returns the same `setup` state. The handbook gains a *First-run setup* guide and the API page documents the route.
+
+**Compatibility.** No board, policy, run, review or other project file changes shape. The setup state and the provider/model choices are machine-local in the dashboard runtime `config.json`; `dashboard.json` gains `features.setup` (default on; off hides the view and the auto-open), and a read-only dashboard disables the setup writes. The select-mode button now reads *Done selecting*. Restart the dashboard to load the new assets. Plugin users: `git pull`, `dsh plugin --profile <name> add ./polier` again, restart. Claude Code users: replace the package copy. Skill-only users: `./update.sh`.
 
 ## 2.6.0
 

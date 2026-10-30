@@ -42,6 +42,9 @@ SAMPLES = {
     "The latest estimate": "The latest estimate",
     "python3 tools/gate.py --task ENG-01 --name build": "python3 tools/gate.py --task ENG-01 --name build",
     "transition refused ENG-01: no passing gate record for build, cpp-unit": "transition refused ENG-01: no passing gate record for build, cpp-unit",
+    "Step 2 of 6": "Schritt 2 von 6",
+    "claude found at /usr/bin/claude": "claude gefunden unter /usr/bin/claude",
+    "claude auth login": "claude auth login",
 }
 
 

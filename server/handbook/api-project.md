@@ -5,7 +5,7 @@ Read the whole project in one call, or the parts you need.
 | Endpoint | Purpose |
 |---|---|
 | `GET /api/health` | version, role, board presence |
-| `GET /api/config` | dashboard config, gate commands, session settings |
+| `GET /api/config` | dashboard config, gate commands, session settings, first-run setup state |
 | `PUT /api/config` | save gate commands, session settings, UI preferences |
 | `GET /api/snapshot` | tasks with derived fields, stages, dispatch, counts, git |
 | `GET /api/dispatch` | the dispatch plan |
@@ -80,7 +80,7 @@ Run events, gate results, reviews and approvals, newest first.
 
 ### GET /api/config
 
-Machine-local settings: suggested and saved gate commands, session provider, UI preferences, read-only flag, versions.
+Machine-local settings: suggested and saved gate commands, session provider, UI preferences, read-only flag, versions, and `setup` — the first-run state described in [Settings and views](polier:api-settings).
 
 ### PUT /api/config
 

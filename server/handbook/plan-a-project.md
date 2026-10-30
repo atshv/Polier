@@ -10,7 +10,7 @@ Turn an idea into an approved plan: architecture, stages, tasks and policy. You 
 
 ## 1. Answer the interview
 
-Without `board.json` the dashboard opens the **Plan editor** with the interview. The questions cover mode (greenfield or brownfield), name, goal, non-goals, platform, stack, data, hosting, release path and hard constraints.
+Without `board.json` the dashboard opens the **Plan editor** with the interview (on a fresh machine the guided [first-run setup](polier:setup) opens first; **Skip setup** leads here). The questions cover mode (greenfield or brownfield), name, goal, non-goals, platform, stack, data, hosting, release path and hard constraints.
 
 - **Save answers** keeps a draft in the local runtime folder; nothing is committed yet.
 - Leave a question empty when you do not know the answer. It becomes an `open_questions` entry on the board instead of a guess.
