@@ -46,6 +46,7 @@ const VIEWS = [
   { key: 'github', label: 'GitHub', group: 'integrations', feature: 'github' },
   { key: 'pages', label: 'Pages', group: 'knowledge', feature: 'pages' },
   { key: 'intake', label: 'Intake', group: 'knowledge', feature: 'intake' },
+  { key: 'setup', label: 'Setup', group: 'system', feature: 'setup' },
   { key: 'settings', label: 'Settings', group: 'system' }
 ];
 
@@ -780,6 +781,7 @@ const FEATURE_NOTES = {
   assistant: 'Ask the project questions; conversations are local to this machine.',
   automations: 'Committed rules that suggest actions; dry run only, nothing executes.',
   github: 'Pull request and CI status through the gh CLI, and the GitHub account connection.',
+  setup: 'The guided first-run setup and its automatic first start on a new machine.',
   agents: 'Agent profiles (role, model, instructions, skills, connectors) assigned to tasks.',
   skills: 'Reusable agent instructions in .claude/skills/, inlined into session prompts.',
   mcp: 'Polier as an MCP server for your AI clients, and MCP connectors for sessions.'
@@ -799,6 +801,7 @@ const FEATURE_LABELS = {
   assistant: 'Assistant',
   automations: 'Automations',
   github: 'GitHub',
+  setup: 'Guided setup',
   agents: 'Agents',
   skills: 'Skills',
   mcp: 'MCP'
@@ -2475,7 +2478,16 @@ const state = {
   githubLoaded: false,
   githubLoading: false,
   githubError: null,
-  bulk: { mode: false, selected: [], status: 'in_progress', note: '', labels: [], estimate: '', labelsOpen: false, busy: false }
+  bulk: { mode: false, selected: [], status: 'in_progress', note: '', labels: [], estimate: '', labelsOpen: false, busy: false },
+
+  /* 2.7 guided first-run setup */
+  setup: null,
+  setupLoaded: false,
+  setupLoading: false,
+  setupError: null,
+  setupStep: 'welcome',
+  setupBusy: null,
+  setupProviderChoice: null
 };
 
 const dom = {
@@ -2905,6 +2917,13 @@ function connectEvents() {
   source.addEventListener('github', () => {
     if ((state.route.view === 'github' || state.route.view === 'settings') && dom.modalBackdrop.hidden) refreshGithubViews();
   });
+  source.addEventListener('setup', () => {
+    /* Another tab finished or reset the setup: refresh without a second probe. */
+    loadConfig();
+    if (state.route.view === 'setup') {
+      loadSetup().then(() => { if (state.route.view === 'setup') renderView(); });
+    }
+  });
   source.addEventListener('session', (event) => {
     const payload = ssePayload(event);
     if (payload && payload.id && state.sessionsLoaded) {
@@ -3170,6 +3189,10 @@ async function loadViewData(view) {
     await Promise.all([loadSettings(), loadConfig(), loadSnapshot(), loadViews(), loadHealth(), loadFilterFields(), loadTaskTemplates(), loadGithubAuth()]);
     return rerender();
   }
+  if (view === 'setup') {
+    await Promise.all([loadConfig(), loadSetup(), loadGithubAuth(), loadSettings()]);
+    return rerender();
+  }
   if (view === 'timeline') { await Promise.all([loadSnapshot(), loadTimeline()]); return rerender(); }
   if (view === 'cycles') { await Promise.all([loadSnapshot(), loadCycles()]); return rerender(); }
   if (view === 'modules') { await Promise.all([loadSnapshot(), loadModules()]); return rerender(); }
@@ -3241,6 +3264,11 @@ function renderView() {
   }
   if (view === 'plan') {
     renderPlanView();
+    restoreFocus(focus);
+    return;
+  }
+  if (view === 'setup') {
+    renderSetupView();
     restoreFocus(focus);
     return;
   }
@@ -4369,7 +4397,11 @@ async function boot() {
   if (!known) {
     const active = currentView();
     let startView = 'board';
-    if (!state.config || state.config.board_present === false || state.noBoard) startView = 'plan';
+    /* A fresh machine starts with the guided setup; after finish or skip it never
+       opens by itself again (the state lives in the machine-local config). A
+       read-only dashboard cannot save setup changes, so it starts on the board. */
+    if (setupEnabled() && setupStatus() === 'pending' && !(state.config && state.config.read_only)) startView = 'setup';
+    else if (!state.config || state.config.board_present === false || state.noBoard) startView = 'plan';
     else if (active && active.kind === 'table') startView = 'table';
     try { history.replaceState(null, '', '#/' + startView); } catch (err) { location.hash = '#/' + startView; }
   }
@@ -6392,7 +6424,7 @@ function renderInboxPanel() {
 
 const FEATURE_ORDER = ['inbox', 'worklog', 'views', 'labels', 'timeline', 'cycles',
   'modules', 'coverage', 'analytics', 'pages', 'intake', 'assistant', 'agents', 'skills', 'mcp',
-  'automations', 'github'];
+  'automations', 'github', 'setup'];
 
 function settingsUI() {
   if (!state.settingsUI) {
@@ -6457,6 +6489,7 @@ function renderSettings() {
   }
 
   view.appendChild(renderSettingsGeneral(project, config, health));
+  if (setupEnabled()) view.appendChild(renderSettingsSetup(config));
   view.appendChild(renderSettingsFeatures(ui));
   if (feature('labels')) view.appendChild(renderSettingsLabels(ui));
   view.appendChild(h('section', { class: 'card-panel settings-section' },
@@ -10595,6 +10628,7 @@ async function githubLogout() {
 async function refreshGithubViews() {
   await loadGithubAuth();
   if (state.route.view === 'github') await loadGithub(true);
+  if (state.route.view === 'setup') { await loadSetup(); renderView(); return; }
   if (state.route.view === 'github' || state.route.view === 'settings') renderView();
 }
 
@@ -10824,6 +10858,8 @@ function paletteItems() {
   const items = [];
   for (const view of VIEWS) {
     if (view.feature && !feature(view.feature)) continue;
+    /* Setup has its own action below ("Open guided setup"). */
+    if (view.key === 'setup') continue;
     items.push({
       id: 'view-' + view.key, group: 'Views', label: view.label, sub: '#' + view.key,
       run: () => navigate(view.key)
@@ -10870,6 +10906,9 @@ function paletteItems() {
   }
   items.push({ id: 'action-refresh', group: 'Actions', label: 'Refresh everything', sub: 'snapshot + view', run: () => refreshAll() });
   items.push({ id: 'action-settings', group: 'Actions', label: 'Open Settings', sub: 'settings', run: () => navigate('settings') });
+  if (setupEnabled()) {
+    items.push({ id: 'action-setup', group: 'Actions', label: 'Open guided setup', sub: 'setup', run: () => navigate('setup') });
+  }
   const tasks = (state.snapshot && state.snapshot.tasks) || [];
   if (tasks.length) {
     items.push({ id: 'group-tasks', group: 'Tasks', label: '', sub: '', header: true });
@@ -10978,6 +11017,610 @@ function bindPaletteShortcut() {
     }
   });
 }
+
+/* =========================================================================
+   2.7 — Guided first-run setup (#/setup)
+
+   Four setup steps in the order a new operator needs them: connect GitHub,
+   choose the AI Polier runs, sign in to it and pick a model. The state is
+   machine-local (GET/POST /api/setup); the page can be skipped at any time and
+   is reachable later from the sidebar, the palette and Settings.
+   ========================================================================= */
+
+const SETUP_STEPS = [
+  { id: 'welcome', label: 'Welcome' },
+  { id: 'github', label: 'GitHub' },
+  { id: 'ai', label: 'AI' },
+  { id: 'signin', label: 'Sign in' },
+  { id: 'model', label: 'Model' },
+  { id: 'done', label: 'Done' }
+];
+
+const SETUP_PROVIDER_FALLBACK = {
+  id: 'claude', label: 'Claude Code', command: ['claude'], login_command: 'claude auth login',
+  models: ['opus', 'sonnet', 'haiku'],
+  hint: 'Polier runs the Claude Code CLI headlessly and reads its JSON events.'
+};
+
+function setupEnabled() {
+  return feature('setup');
+}
+
+function setupRecord() {
+  const fromApi = state.setup && state.setup.state;
+  if (fromApi && typeof fromApi === 'object') return fromApi;
+  const fromConfig = state.config && state.config.setup;
+  if (fromConfig && typeof fromConfig === 'object') return fromConfig;
+  return { version: 1, status: 'pending', updated_at: null };
+}
+
+function setupStatus() {
+  const status = String(setupRecord().status || 'pending');
+  return status === 'done' || status === 'skipped' ? status : 'pending';
+}
+
+function setupProvider() {
+  const data = state.setup && state.setup.provider;
+  if (data && typeof data === 'object') return data;
+  const session = (state.config && state.config.session) || {};
+  return {
+    id: session.provider || 'claude',
+    command: Array.isArray(session.command) && session.command.length ? session.command : ['claude'],
+    model: session.model || null,
+    installed: null, path: null, signed_in: null, auth_method: null,
+    login_command: null, models: []
+  };
+}
+
+function setupProviders() {
+  const list = state.setup && state.setup.providers;
+  if (Array.isArray(list) && list.length) return list;
+  return [SETUP_PROVIDER_FALLBACK, {
+    id: 'custom', label: 'Custom command', command: null, login_command: null, models: [],
+    hint: 'A command that prints Claude Code-style JSON events; Polier appends the prompt as its last argument.'
+  }];
+}
+
+function setupProviderPreset(id) {
+  const providers = setupProviders();
+  return providers.find((entry) => entry.id === id) || providers[0];
+}
+
+function setupGitHubAuth() {
+  return (state.githubAuth && state.githubAuth.auth) || null;
+}
+
+function setupSteps() {
+  /* The GitHub step only exists while the project keeps the GitHub feature on. */
+  return SETUP_STEPS.filter((step) => step.id !== 'github' || feature('github'));
+}
+
+function setupStepItems() {
+  const provider = setupProvider();
+  const github = setupGitHubAuth() || {};
+  const customSaved = provider.id === 'custom' && Array.isArray(provider.command) && provider.command.length > 0;
+  return setupSteps().map((step) => {
+    let done = false;
+    if (step.id === 'welcome') done = true;
+    else if (step.id === 'github') done = Boolean(github.logged_in);
+    else if (step.id === 'ai') done = provider.id === 'custom' ? Boolean(customSaved && provider.installed !== false) : provider.installed !== false;
+    else if (step.id === 'signin') done = provider.signed_in === true;
+    else if (step.id === 'model') done = provider.id === 'claude' && Boolean(provider.model);
+    return { id: step.id, label: step.label, done: done };
+  });
+}
+
+function setupNextView() {
+  const present = state.config && typeof state.config.board_present === 'boolean'
+    ? state.config.board_present
+    : !state.noBoard;
+  return present ? 'board' : 'plan';
+}
+
+function setupNextLabel() {
+  return setupNextView() === 'board' ? 'board' : 'plan editor';
+}
+
+function goToSetupStep(id) {
+  const steps = setupSteps();
+  const next = steps.some((step) => step.id === id) ? id : 'welcome';
+  state.setupStep = next;
+  if (state.route.view !== 'setup') {
+    navigate('setup');
+    return;
+  }
+  renderView();
+  const title = document.getElementById('setup-step-title');
+  if (title) title.focus();
+}
+
+async function loadSetup() {
+  state.setupLoading = true;
+  try {
+    state.setup = await api('/api/setup');
+    state.setupError = null;
+    state.setupLoaded = true;
+  } catch (err) {
+    state.setupError = err;
+  } finally {
+    state.setupLoading = false;
+  }
+  return state.setup;
+}
+
+async function saveSetupProvider(id, command) {
+  const preset = setupProviderPreset(id);
+  const source = Array.isArray(command) && command.length ? command : (preset.command || ['claude']);
+  const cmd = source.map((part) => String(part)).filter(Boolean);
+  if (!cmd.length) {
+    toast('The provider command must not be empty', 'warn');
+    return;
+  }
+  state.setupBusy = 'provider';
+  renderView();
+  try {
+    await api('/api/config', { method: 'PUT', body: { session: { provider: id, command: cmd } } });
+    await Promise.all([loadConfig(), loadSetup()]);
+    state.setupProviderChoice = id;
+    toast('AI provider saved', 'ok');
+  } catch (err) {
+    toast('AI provider: ' + describeError(err), 'error');
+  } finally {
+    state.setupBusy = null;
+    renderView();
+  }
+}
+
+async function saveSetupModel(value) {
+  const model = String(value || '').trim();
+  state.setupBusy = 'model';
+  renderView();
+  try {
+    await api('/api/config', { method: 'PUT', body: { session: { model: model || null } } });
+    await Promise.all([loadConfig(), loadSetup()]);
+    toast(model ? 'Model saved' : 'Model reset to the provider default', 'ok');
+  } catch (err) {
+    toast('Model: ' + describeError(err), 'error');
+  } finally {
+    state.setupBusy = null;
+    renderView();
+  }
+}
+
+async function refreshSetupProbe() {
+  state.setupBusy = 'probe';
+  renderView();
+  try {
+    await Promise.all([loadConfig(), loadSetup(), loadGithubAuth()]);
+  } finally {
+    state.setupBusy = null;
+    renderView();
+  }
+}
+
+async function finishSetup(skip) {
+  const target = setupNextView();
+  state.setupBusy = 'finish';
+  renderView();
+  try {
+    const payload = await api('/api/setup', { method: 'POST', body: { action: skip ? 'skip' : 'complete' } });
+    await loadConfig();
+    if (payload && payload.state) {
+      state.setup = payload;
+      state.setupLoaded = true;
+      state.setupError = null;
+    }
+    state.setupBusy = null;
+    toast(skip ? 'Setup skipped — reopen it under Setup or in Settings' : 'Setup done — Polier is ready', 'ok');
+    navigate(target);
+  } catch (err) {
+    toast('Setup: ' + describeError(err), 'error');
+    state.setupBusy = null;
+    renderView();
+  }
+}
+
+async function resetSetup() {
+  try {
+    const payload = await api('/api/setup', { method: 'POST', body: { action: 'reset' } });
+    await loadConfig();
+    if (payload && payload.state) {
+      state.setup = payload;
+      state.setupLoaded = true;
+      state.setupError = null;
+    }
+    state.setupStep = 'welcome';
+    state.setupProviderChoice = null;
+    toast('Guided setup restarted', 'ok');
+    navigate('setup');
+  } catch (err) {
+    toast('Setup: ' + describeError(err), 'error');
+  }
+}
+
+function setupStepper(steps, activeId) {
+  const row = h('div', { class: 'steps setup-steps' });
+  steps.forEach((step, index) => {
+    if (index) row.appendChild(h('span', { class: 'step-sep' }));
+    const active = step.id === activeId;
+    const classes = ['step', 'setup-step'];
+    if (active) classes.push('is-active');
+    else if (step.done) classes.push('is-done');
+    row.appendChild(h('button', {
+      class: classes.join(' '), type: 'button',
+      title: 'Step ' + (index + 1) + ' of ' + steps.length,
+      'aria-current': active ? 'step' : null,
+      on: { click: () => goToSetupStep(step.id) }
+    },
+    h('span', { class: 'step-no', text: step.done && !active ? '✓' : String(index + 1) }),
+    h('span', { text: step.label })));
+  });
+  return row;
+}
+
+function setupStepHead(title, sub) {
+  return h('div', { class: 'setup-step-head' },
+    h('h2', { class: 'setup-step-title', id: 'setup-step-title', tabindex: '-1', text: title }),
+    sub ? h('p', { class: 'setup-step-sub', text: sub }) : null);
+}
+
+function setupCommandBox(command) {
+  return h('div', { class: 'setup-command' },
+    h('code', { class: 'mono', text: command }),
+    copyButton(command));
+}
+
+function setupNeighbour(stepId, delta) {
+  const steps = setupSteps();
+  const index = steps.findIndex((step) => step.id === stepId);
+  const target = index < 0 ? null : steps[index + delta];
+  return target ? target.id : null;
+}
+
+function setupFooter(stepId, primaryLabel) {
+  const actions = h('div', { class: 'row-wrap' });
+  const previous = setupNeighbour(stepId, -1);
+  const next = setupNeighbour(stepId, 1);
+  if (previous) {
+    actions.appendChild(h('button', {
+      class: 'btn', type: 'button', text: '← Back', disabled: Boolean(state.setupBusy),
+      on: { click: () => goToSetupStep(previous) }
+    }));
+  }
+  if (stepId !== 'done' && next) {
+    actions.appendChild(h('button', {
+      class: 'btn btn-primary', type: 'button', text: (primaryLabel || 'Continue') + ' →',
+      disabled: Boolean(state.setupBusy),
+      on: { click: () => goToSetupStep(next) }
+    }));
+  }
+  if (stepId !== 'done' && setupStatus() === 'pending') {
+    const readOnly = state.config && state.config.read_only;
+    actions.appendChild(h('button', {
+      class: 'btn btn-ghost', type: 'button', text: 'Skip setup', disabled: Boolean(state.setupBusy) || Boolean(readOnly),
+      title: readOnly ? 'The dashboard is read-only: setup changes cannot be saved' : 'Leave the setup now and open the ' + setupNextLabel(),
+      on: { click: () => finishSetup(true) }
+    }));
+  }
+  return h('div', { class: 'setup-footer' }, actions,
+    h('span', { class: 'hint', text: 'Machine-local: stored in the dashboard runtime, never committed.' }));
+}
+
+function renderSetupWelcomeStep(status) {
+  const items = [
+    ['GitHub', 'Connect the gh CLI so tasks show their pull request and CI status. Optional.'],
+    ['AI', 'Choose the command Polier runs for headless sessions — Claude Code by default.'],
+    ['Sign in', 'Sign that CLI in once. Polier never stores the credential.'],
+    ['Model', 'Pin a model override, or keep the provider default.']
+  ];
+  const body = h('div', {},
+    setupStepHead('Welcome to Polier', 'This short setup covers the four things the dashboard uses beyond the board itself. Everything is stored on this machine only.'),
+    h('ul', { class: 'setup-list' }, items.map((item) => h('li', {},
+      h('span', { class: 'setup-list-title', text: item[0] }),
+      h('span', { class: 'setup-list-text', text: item[1] })))),
+    h('p', { class: 'hint', text: 'Skip any step now and reopen the setup later from the sidebar (Setup), the command palette or Settings.' }));
+  if (status === 'done') {
+    body.appendChild(h('div', { class: 'callout callout-ok', text: '✓ Setup was completed on this machine. Running it again lets you change the provider, model or GitHub connection.' }));
+  } else if (status === 'skipped') {
+    body.appendChild(h('div', { class: 'callout callout-info', text: 'Setup was skipped on this machine. Running it now picks up the current GitHub and provider settings.' }));
+  }
+  return { body: body, footer: setupFooter('welcome', status === 'pending' ? 'Start' : 'Continue') };
+}
+
+function renderSetupGithubStep() {
+  const body = h('div', {}, setupStepHead('Connect GitHub',
+    'Polier reads pull requests and CI through the gh CLI so every task shows its branch. Optional — the board and sessions work without it.'));
+  if (!feature('github')) {
+    body.appendChild(h('div', { class: 'callout callout-info', text: 'GitHub is turned off for this project (dashboard.json → features.github).' }));
+    return { body: body, footer: setupFooter('github') };
+  }
+  const auth = setupGitHubAuth();
+  const busy = Boolean(state.setupBusy);
+  if (!auth) {
+    body.appendChild(loadingRow('Checking the GitHub connection…'));
+  } else if (auth.logged_in) {
+    body.appendChild(h('div', { class: 'callout callout-ok', text: '✓ Connected' + (auth.user ? ' as ' + auth.user : '') + (auth.source ? ' via ' + auth.source : '') + '.' }));
+    body.appendChild(h('div', { class: 'row-wrap setup-actions' },
+      h('button', { class: 'btn', type: 'button', text: 'Reconnect', disabled: !canWrite() || busy, on: { click: () => openGithubLogin() } }),
+      h('button', { class: 'btn btn-ghost', type: 'button', text: 'Disconnect', disabled: !canWrite() || busy, on: { click: () => githubLogout() } }),
+      h('button', { class: 'btn btn-ghost', type: 'button', text: 'Check again', disabled: busy, on: { click: () => refreshSetupProbe() } })));
+  } else if (!auth.gh) {
+    body.appendChild(h('div', { class: 'callout callout-warn', text: 'The GitHub CLI (gh) is not installed on this machine.' }));
+    body.appendChild(h('div', { class: 'row-wrap setup-actions' },
+      h('a', { class: 'btn', href: 'https://cli.github.com', target: '_blank', rel: 'noopener noreferrer', text: 'Install the GitHub CLI ↗' }),
+      h('button', { class: 'btn btn-ghost', type: 'button', text: 'Check again', disabled: busy, on: { click: () => refreshSetupProbe() } })));
+  } else {
+    body.appendChild(h('div', { class: 'callout callout-warn', text: auth.reason || 'GitHub is not connected yet.' }));
+    body.appendChild(h('div', { class: 'row-wrap setup-actions' },
+      h('button', { class: 'btn btn-primary', type: 'button', text: 'Connect GitHub', disabled: !canWrite() || busy, on: { click: () => openGithubLogin() } }),
+      h('button', { class: 'btn btn-ghost', type: 'button', text: 'Check again', disabled: busy, on: { click: () => refreshSetupProbe() } })));
+    body.appendChild(h('p', { class: 'hint', text: 'The sign-in uses the GitHub device flow: the dashboard shows a one-time code and finishes on its own once you confirm in the browser.' }));
+  }
+  return { body: body, footer: setupFooter('github') };
+}
+
+function renderSetupAiStep() {
+  const provider = setupProvider();
+  const providers = setupProviders();
+  const choice = state.setupProviderChoice || provider.id;
+  const busy = Boolean(state.setupBusy);
+  const body = h('div', {}, setupStepHead('Choose the AI',
+    'Headless sessions, the assistant and the agents run one command per task. Claude Code is the default; a custom command works if it emits the same JSON events.'));
+  const cards = h('div', { class: 'setup-choices' });
+  for (const entry of providers) {
+    const on = choice === entry.id;
+    const sameClaude = entry.id === 'claude' && provider.id === 'claude'
+      && JSON.stringify(provider.command || []) === JSON.stringify(entry.command || []);
+    cards.appendChild(h('button', {
+      class: 'setup-choice' + (on ? ' is-on' : ''), type: 'button',
+      'aria-pressed': on ? 'true' : 'false',
+      disabled: busy || (!canWrite() && entry.id === 'claude'),
+      on: {
+        click: () => {
+          state.setupProviderChoice = entry.id;
+          if (entry.id === 'claude' && !sameClaude) saveSetupProvider('claude');
+          else renderView();
+        }
+      }
+    },
+    h('span', { class: 'setup-choice-title', text: entry.label }),
+    h('span', { class: 'setup-choice-sub', text: entry.command ? entry.command.join(' ') : 'your own command' }),
+    h('span', { class: 'setup-choice-hint', text: entry.hint || '' })));
+  }
+  body.appendChild(cards);
+  if (choice === 'custom') {
+    const commandArea = h('textarea', {
+      class: 'textarea', rows: '3', 'aria-label': 'Custom provider command',
+      placeholder: 'one argument per line, e.g.\nmy-provider\n--flag'
+    });
+    commandArea.value = provider.id === 'custom' && Array.isArray(provider.command) ? provider.command.join('\n') : '';
+    body.appendChild(h('label', { class: 'field setup-block' },
+      h('span', { class: 'field-label', text: 'Command for the custom provider' }), commandArea,
+      h('span', { class: 'field-help', text: 'One argument per line; Polier appends the task prompt as the last argument. The command must emit Claude Code-style JSON events.' })));
+    body.appendChild(h('div', { class: 'row-wrap setup-actions' },
+      h('button', {
+        class: 'btn btn-primary', type: 'button', text: 'Save provider',
+        disabled: !canWrite() || busy,
+        on: {
+          click: () => {
+            const text = commandArea.value.trim();
+            if (!text) {
+              toast('Enter the provider command first', 'warn');
+              commandArea.focus();
+              return;
+            }
+            saveSetupProvider('custom', parseCommand(text));
+          }
+        }
+      })));
+  }
+  const customSaved = provider.id === 'custom' && Array.isArray(provider.command) && provider.command.length > 0;
+  let statusText;
+  let statusTone;
+  if (choice === 'custom') {
+    const onPath = provider.installed !== false;
+    statusText = customSaved
+      ? 'Saved command: ' + provider.command.join(' ') + (onPath ? '' : ' (not found on PATH)')
+      : 'No custom command saved yet.';
+    statusTone = customSaved && onPath ? ' is-ok' : ' is-warn';
+  } else if (provider.id === 'claude') {
+    statusText = provider.installed === false
+      ? 'claude was not found on the PATH.'
+      : 'claude found' + (provider.path ? ' at ' + provider.path : '');
+    statusTone = provider.installed === false ? ' is-warn' : ' is-ok';
+  } else {
+    statusText = 'Save Claude Code to switch the provider.';
+    statusTone = ' is-ok';
+  }
+  body.appendChild(h('div', { class: 'setup-status' },
+    h('span', { class: 'setup-status-dot' + statusTone }), h('span', { text: statusText })));
+  return { body: body, footer: setupFooter('ai') };
+}
+
+function renderSetupSigninStep() {
+  const provider = setupProvider();
+  const preset = setupProviderPreset(provider.id);
+  const login = provider.login_command || (preset && preset.login_command) || null;
+  const busy = Boolean(state.setupBusy);
+  const body = h('div', {}, setupStepHead('Sign in to the AI',
+    'The provider CLI keeps its own credential. Sign in once on this machine; the dashboard never sees or stores it.'));
+  if (provider.id === 'claude') {
+    if (provider.installed === false) {
+      body.appendChild(h('div', { class: 'callout callout-warn', text: 'The claude CLI is not on the PATH. Install it first, then come back to this step.' }));
+      body.appendChild(h('div', { class: 'row-wrap setup-actions' },
+        h('button', { class: 'btn', type: 'button', text: 'Open the Claude Code guide', on: { click: () => openPage('polier:connect-claude-code') } }),
+        h('button', { class: 'btn btn-ghost', type: 'button', text: 'Check again', disabled: busy, on: { click: () => refreshSetupProbe() } })));
+    } else if (provider.signed_in === true) {
+      body.appendChild(h('div', { class: 'callout callout-ok', text: '✓ Signed in' + (provider.auth_method ? ' (' + provider.auth_method + ')' : '') + '.' }));
+      body.appendChild(h('div', { class: 'row-wrap setup-actions' },
+        h('button', { class: 'btn btn-ghost', type: 'button', text: 'Check again', disabled: busy, on: { click: () => refreshSetupProbe() } })));
+    } else if (provider.signed_in === false) {
+      body.appendChild(h('div', { class: 'callout callout-warn', text: 'The claude CLI is installed but not signed in.' }));
+      body.appendChild(setupCommandBox(login || 'claude auth login'));
+      body.appendChild(h('div', { class: 'row-wrap setup-actions' },
+        h('button', { class: 'btn btn-primary', type: 'button', text: 'Check again', disabled: busy, on: { click: () => refreshSetupProbe() } })));
+    } else {
+      body.appendChild(h('div', { class: 'callout callout-info', text: 'The sign-in state could not be checked. Run the command once in a terminal, then check again.' }));
+      body.appendChild(setupCommandBox(login || 'claude auth login'));
+      body.appendChild(h('div', { class: 'row-wrap setup-actions' },
+        h('button', { class: 'btn', type: 'button', text: 'Check again', disabled: busy, on: { click: () => refreshSetupProbe() } })));
+    }
+    body.appendChild(h('p', { class: 'hint', text: 'Run the command in a terminal on this machine. The device or browser sign-in happens there, not in the dashboard.' }));
+  } else {
+    body.appendChild(h('div', { class: 'callout callout-info', text: 'Custom providers have no automatic sign-in check. Make sure the command is authenticated before sessions use it.' }));
+    if (Array.isArray(provider.command) && provider.command.length) body.appendChild(setupCommandBox(provider.command.join(' ')));
+  }
+  return { body: body, footer: setupFooter('signin') };
+}
+
+function renderSetupModelStep() {
+  const provider = setupProvider();
+  const preset = setupProviderPreset(provider.id);
+  const models = Array.isArray(provider.models) && provider.models.length ? provider.models : (preset.models || []);
+  const listId = 'setup-model-options';
+  const busy = Boolean(state.setupBusy);
+  const applies = provider.id === 'claude';
+  const input = h('input', {
+    class: 'input', type: 'text', value: provider.model || '', disabled: !applies,
+    list: models.length ? listId : null, placeholder: 'provider default', 'aria-label': 'Model override'
+  });
+  const body = h('div', {}, setupStepHead('Pick a model',
+    'Optional: pin the model the provider runs. Leave it empty to use the provider default.'),
+    applies ? null : h('div', { class: 'callout callout-info', text: 'The model override applies to Claude Code only. A custom provider command runs as configured, without an extra --model argument.' }),
+    h('label', { class: 'field setup-block' },
+      h('span', { class: 'field-label', text: 'Model override' }), input,
+      h('span', { class: 'field-help', text: applies ? 'Passed to the provider as --model. The accepted values depend on your provider and plan.' : 'Saved values are ignored while the provider is a custom command.' })),
+    models.length && applies ? h('div', { class: 'setup-models' }, models.map((model) => h('button', {
+      class: 'chip chip-link', type: 'button', text: model,
+      on: { click: () => { input.value = model; input.focus(); } }
+    }))) : null,
+    models.length && applies ? h('datalist', { id: listId }, models.map((model) => h('option', { value: model }))) : null);
+  body.appendChild(h('div', { class: 'row-wrap setup-actions' },
+    h('button', { class: 'btn btn-primary', type: 'button', text: 'Save model', disabled: !applies || !canWrite() || busy, on: { click: () => saveSetupModel(input.value) } }),
+    h('button', { class: 'btn', type: 'button', text: 'Use the provider default', disabled: !applies || !canWrite() || busy, on: { click: () => saveSetupModel('') } })));
+  return { body: body, footer: setupFooter('model') };
+}
+
+function renderSetupDoneStep(status) {
+  const provider = setupProvider();
+  const github = setupGitHubAuth() || {};
+  const customSaved = provider.id === 'custom' && Array.isArray(provider.command) && provider.command.length > 0;
+  const customOk = customSaved && provider.installed !== false;
+  const rows = [
+    ['GitHub', !feature('github') ? 'Turned off in dashboard.json' : (github.logged_in ? 'Connected' + (github.user ? ' as ' + github.user : '') : 'Not connected (optional)'), !feature('github') || Boolean(github.logged_in)],
+    ['AI provider', provider.id === 'custom'
+      ? (customSaved ? 'Custom: ' + provider.command.join(' ') + (provider.installed === false ? ' (not found on PATH)' : '') : 'No custom command saved')
+      : (provider.installed === false ? 'Claude Code not found on the PATH' : 'Claude Code' + (provider.path ? ' (' + provider.path + ')' : '')),
+     provider.id === 'custom' ? customOk : provider.installed !== false],
+    ['Sign in', provider.signed_in === true ? 'Signed in' + (provider.auth_method ? ' (' + provider.auth_method + ')' : '') : (provider.signed_in === false ? 'Not signed in yet' : 'No automatic check'), provider.signed_in === true],
+    ['Model', provider.id === 'claude' ? (provider.model || 'Provider default') : 'Not used by a custom command', true]
+  ];
+  const body = h('div', {}, setupStepHead('Ready',
+    'The dashboard uses what you picked here. Change it any time under Settings → Sessions or by running the setup again.'),
+    h('ul', { class: 'setup-summary' }, rows.map((row) => h('li', { class: 'setup-summary-row' },
+      h('span', { class: 'setup-summary-mark ' + (row[2] ? 'is-ok' : 'is-warn'), text: row[2] ? '✓' : '·' }),
+      h('span', { class: 'setup-summary-label', text: row[0] }),
+      h('span', { class: 'setup-summary-value', text: row[1] })))),
+    h('p', { class: 'hint', text: 'Stored only on this machine in the dashboard runtime config.json — nothing is committed and the project files are unchanged.' }));
+  body.appendChild(h('div', { class: 'row-wrap setup-actions' },
+    h('button', {
+      class: 'btn btn-primary', type: 'button',
+      text: 'Open the ' + setupNextLabel() + ' →',
+      title: state.config && state.config.read_only ? 'Read-only dashboard: open the dashboard without saving' : '',
+      disabled: Boolean(state.setupBusy),
+      on: {
+        click: () => {
+          /* A read-only dashboard refuses the POST, so just leave the wizard. */
+          if (state.config && state.config.read_only) { navigate(setupNextView()); return; }
+          finishSetup(false);
+        }
+      }
+    }),
+    status !== 'pending' ? h('button', { class: 'btn btn-ghost', type: 'button', text: 'Run it again', disabled: !canWrite(), on: { click: () => resetSetup() } }) : null,
+    status === 'pending' ? h('button', { class: 'btn btn-ghost', type: 'button', text: 'Skip setup', disabled: Boolean(state.setupBusy) || Boolean(state.config && state.config.read_only), on: { click: () => finishSetup(true) } }) : null));
+  return { body: body, footer: setupFooter('done') };
+}
+
+function renderSetupView() {
+  const wizard = h('div', { class: 'wizard setup-wizard' });
+  dom.view.appendChild(wizard);
+  const status = setupStatus();
+  const available = setupSteps();
+  const stepId = available.some((step) => step.id === state.setupStep) ? state.setupStep : 'welcome';
+
+  wizard.appendChild(h('div', { class: 'wizard-hero' },
+    h('div', { class: 'wizard-kicker', text: status === 'pending' ? 'First-run setup' : 'Guided setup' }),
+    h('h1', { class: 'wizard-title', text: 'Get Polier ready' }),
+    h('p', { class: 'wizard-lede', text: 'Connect GitHub, choose the AI for headless sessions, sign in and pick a model. The dashboard is ready when you finish — or skip and come back any time from Setup or Settings.' })));
+  wizard.appendChild(setupStepper(setupStepItems(), stepId));
+
+  if (state.setupError) {
+    wizard.appendChild(errorCallout(state.setupError));
+    wizard.appendChild(h('div', { class: 'row-wrap setup-actions' },
+      h('button', {
+        class: 'btn btn-primary', type: 'button', text: 'Try again',
+        on: { click: async () => { await loadSetup(); renderView(); } }
+      }),
+      h('button', {
+        class: 'btn', type: 'button', text: 'Open the ' + setupNextLabel(),
+        title: 'Leave the setup without changing its state',
+        on: { click: () => navigate(setupNextView()) }
+      })));
+    return;
+  }
+  if (state.setupLoading && !state.setup && !state.setupLoaded) {
+    wizard.appendChild(loadingRow('Checking the setup state…'));
+    return;
+  }
+  if (state.config && state.config.read_only) {
+    wizard.appendChild(h('div', { class: 'callout callout-warn', text: 'This dashboard runs read-only: the setup is visible, but saving the provider, the model or the setup state is refused. Start the dashboard writable to finish the setup.' }));
+  }
+
+  let panel;
+  if (stepId === 'welcome') panel = renderSetupWelcomeStep(status);
+  else if (stepId === 'github') panel = renderSetupGithubStep();
+  else if (stepId === 'ai') panel = renderSetupAiStep();
+  else if (stepId === 'signin') panel = renderSetupSigninStep();
+  else if (stepId === 'model') panel = renderSetupModelStep();
+  else panel = renderSetupDoneStep(status);
+
+  const card = h('div', { class: 'card-panel panel-pad wizard-section setup-panel' });
+  card.appendChild(panel.body);
+  wizard.appendChild(card);
+  if (state.setupBusy) wizard.appendChild(loadingRow(state.setupBusy === 'probe' ? 'Checking again…' : 'Saving…'));
+  wizard.appendChild(panel.footer);
+}
+
+function renderSettingsSetup(config) {
+  /* /api/config is reloaded with the settings view, so it is fresher than a
+     setup payload from an earlier visit. */
+  const record = (config && config.setup) || setupRecord();
+  const statusText = record.status === 'done' ? 'Completed' : (record.status === 'skipped' ? 'Skipped' : 'Not finished');
+  return h('section', { class: 'card-panel settings-section' },
+    h('div', { class: 'panel-head' },
+      h('span', { class: 'panel-title', text: 'Guided setup' }),
+      h('span', { class: 'hint', text: 'This machine' })),
+    h('div', { class: 'panel-body' },
+      h('div', { class: 'settings-row' },
+        h('div', { class: 'settings-row-main' },
+          h('div', { class: 'settings-row-title', text: statusText }),
+          h('div', { class: 'settings-row-sub', text: 'GitHub, AI provider, sign-in and model in four guided steps. Machine-local, not committed; the board and the CLI work without it.' })),
+        h('div', { class: 'settings-actions' },
+          h('button', {
+            class: 'btn btn-sm', type: 'button', text: 'Open setup',
+            disabled: !setupEnabled(),
+            title: setupEnabled() ? 'Open the guided setup' : 'The setup view is turned off (dashboard.json → features.setup)',
+            on: { click: () => { if (state.route.view !== 'setup') navigate('setup'); } }
+          }),
+          h('button', {
+            class: 'btn btn-sm btn-primary', type: 'button', text: 'Run it again',
+            disabled: !canWrite() || !setupEnabled(),
+            title: canWrite() ? 'Reset the setup state and start at the first step' : 'The dashboard is read-only',
+            on: { click: () => resetSetup() }
+          })))));
+}
+
+
 
 /* =========================================================================
    24. Approvals inbox

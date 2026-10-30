@@ -97,7 +97,7 @@ async function call(method, path, body) {
 | [Sessions](polier:api-sessions) | headless agent sessions |
 | [Approvals](polier:api-approvals) | request, grant, deny |
 | [Plan](polier:api-plan) | interview, generator, tasks, stages |
-| [Settings and views](polier:api-settings) | features, labels, filters, saved views |
+| [Settings and views](polier:api-settings) | features, labels, filters, saved views, first-run setup |
 | [Your work](polier:api-work) | Your Work, inbox, worklog, bulk actions |
 | [Planning views](polier:api-planning) | timeline, cycles, modules, coverage, analytics |
 | [Knowledge](polier:api-knowledge) | pages, search, intake, task templates |

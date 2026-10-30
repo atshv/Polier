@@ -26,6 +26,7 @@ events.addEventListener('job', (event) => console.log('job', JSON.parse(event.da
 | `inbox` | inbox counts changed |
 | `settings`, `views` | `dashboard.json` or a saved view changed |
 | `intake`, `templates`, `assistant`, `automations` | the matching feature changed |
+| `setup` | the first-run setup state changed |
 | `lag` | the client fell behind; reload the snapshot |
 
 The payload is JSON. Treat events as hints: on any event, re-read what you display (for example `GET /api/snapshot`).

@@ -53,6 +53,7 @@ FEATURES: Dict[str, bool] = {
     "mcp": True,
     "automations": True,
     "github": True,
+    "setup": True,
 }
 
 DEFAULT_LABELS: List[Dict[str, str]] = [

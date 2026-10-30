@@ -32,6 +32,43 @@ at the bottom. Views turned off in `dashboard.json` → `features` are hidden.
   click cards), then move them to a status, claim/release them, replace their
   labels or set an estimate. **Done** leaves the mode.
 
+## Guided first-run setup
+
+A guided setup at `#/setup` opens instead of the board on a machine that has not
+run the dashboard before. An existing dashboard runtime without a setup record
+reads as `skipped`, so an upgrade never opens the wizard by itself; it stays
+reachable from **Setup** and **Settings**.
+
+| Step | What it does |
+|---|---|
+| Welcome | introduces the sequence and the skip button |
+| GitHub | connects `gh` through the existing device flow (`GET /api/github/auth`, `POST /api/github/login`, `…/login/cancel`, `…/logout`); left out when `dashboard.json` → `features.github` is off (the stepper then has five steps) |
+| AI provider | Claude Code (default, command `claude`) or a custom command, saved machine-locally through `PUT /api/config` → `session`; a custom command that is not on the PATH is flagged **not found on PATH** and the step stays unfinished |
+| Sign in | read-only `claude auth status` probe: installed/signed-in state, the copyable `claude auth login` command and **Check again**; a custom provider shows no probe, a signed-out CLI reads as not signed in and `signed_in` is `null` only when the check cannot run |
+| Model | optional `--model` override (`opus`, `sonnet`, `haiku` or the provider default); Claude Code only — a custom command runs as configured without an extra `--model`, and the field is disabled |
+| Done | the summary and **Open the board** (or the plan editor when there is no board yet); on a read-only dashboard it opens the dashboard without saving |
+
+- **Skip**: **Skip setup** is shown on every step of a writable dashboard while
+  the state is `pending` (disabled when read-only); when `GET /api/setup` fails
+  the page offers **Try again** and **Open the board** / **Open the plan
+  editor**. After finishing or skipping the dashboard never opens it on its own
+  again.
+- **Reopen**: **Setup** in the sidebar's system group, **Open guided setup** in
+  the command palette, or **Settings → Guided setup → Run it again** (which sets
+  the state back to `pending`).
+- **Storage**: the state (`pending`, `done` or `skipped`, and when it last
+  changed) and the provider/model choices are machine-local in the runtime
+  `config.json`; no project file is created or changed.
+- **Read-only**: the setup is viewable and the probe runs, but the wizard does
+  not auto-open, the provider, model and setup writes are disabled and the API
+  answers `403`; **Open the board** on the Done step and the error fallback still
+  lead out.
+- **Switch**: `dashboard.json` → `features.setup` (default on) hides the view and
+  the auto-open.
+
+`GET /api/setup` reads the state, the chosen provider and the available
+providers; `POST /api/setup` records `complete`, `skip` or `reset`.
+
 ## What the page can do
 
 | View | What it shows / does |
@@ -112,8 +149,8 @@ The handbook in Pages (*Guides → AI and MCP*, *API reference → AI and integr
 
 Reading the page without live updates: add `?noevents=1` (static mode) and
 `?theme=light|dark` to freeze the theme; deep links are `#/board`, `#/table`,
-`#/graph`, `#/dispatch`, `#/approvals`, `#/activity`, `#/sessions`, `#/plan`
-and `#/board/<ID>` to open a task.
+`#/graph`, `#/dispatch`, `#/approvals`, `#/activity`, `#/sessions`, `#/plan`,
+`#/setup` and `#/board/<ID>` to open a task.
 
 The page is read-only when you pass `--read-only` (or `--role viewer`); the
 badge in the header shows it.
@@ -206,7 +243,7 @@ the `errors`/`actions` the CLI would print.
 | Method and path | Purpose |
 |---|---|
 | `GET /api/health` | version, role, board presence |
-| `GET /api/config` | dashboard config, suggested gate commands, session settings |
+| `GET /api/config` | dashboard config, suggested gate commands, session settings, setup state |
 | `GET /api/snapshot` | whole project: tasks with derived fields, dispatch, stages, counts, git |
 | `GET /api/tasks/<id>` | task detail: brief, review, gate records, events, approvals |
 | `GET /api/tasks/<id>/logs/<log>` | one gate log from `reviews/evidence/` |
@@ -222,6 +259,7 @@ the `errors`/`actions` the CLI would print.
 | `POST /api/plan/tasks`, `PATCH/DELETE /api/plan/tasks/<id>` | plan editing |
 | `POST /api/plan/stages/<id>/decision`, `/move` | stage owner decision, order |
 | `GET/PUT /api/settings`, `POST /api/settings/labels`, `PUT/DELETE /api/settings/labels/<id>` | project settings, feature flags, labels |
+| `GET/POST /api/setup` | first-run setup state; `complete`, `skip` or `reset` |
 | `GET /api/filters/fields` | filter field/operator metadata for the builder |
 | `GET /api/views`, `PUT/DELETE /api/views/<id>` | built-in and saved views |
 | `GET /api/worklog[?task=<id>]` | per-task or project worklog and estimate comparison |
@@ -263,7 +301,7 @@ page falls back to `.polier-dashboard/`):
 | `automations.json` (project root, committed) | deterministic automation rules (evaluated as a dry run) |
 | `agents.json` (project root, committed) | agent profiles |
 | `.claude/skills/<id>/SKILL.md` (committed) | skills |
-| `config.json` (runtime) | provider command/settings, gate-command overrides, MCP connectors (`mcp_servers`, `polier_mcp`), UI preferences |
+| `config.json` (runtime) | provider command/settings, gate-command overrides, MCP connectors (`mcp_servers`, `polier_mcp`), UI preferences, first-run setup state (`setup`) |
 | `plan.json`, `plan/` | interview answers and the last generator prompt |
 | `jobs/<id>.log` | full output of gate/check/audit jobs |
 | `sessions/<id>/` | prompt, generated Claude settings, transcript, session log, meta |

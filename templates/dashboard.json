@@ -14,7 +14,8 @@
     "intake": true,
     "assistant": true,
     "automations": true,
-    "github": true
+    "github": true,
+    "setup": true
   },
   "labels": [
     {

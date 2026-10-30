@@ -15,7 +15,10 @@ git clone https://github.com/atshv/Polier && cd Polier
 python3 tools/serve.py examples/monorepo-mini --port 8765 --open
 ```
 
-The server binds to `127.0.0.1` and serves one page. Stop it with Ctrl+C. Without `board.json` the page opens the **Plan editor** with the interview instead.
+The server binds to `127.0.0.1` and serves one page. Stop it with Ctrl+C. Without `board.json` the page opens the **Plan editor** with the interview instead; on a fresh machine the guided setup opens first.
+
+> [!TIP]
+> On a machine where the dashboard has not run before, the guided [first-run setup](polier:setup) opens first: connect GitHub, pick the AI provider, sign in and choose a model. **Skip setup** goes on to the board (or the plan editor without `board.json`).
 
 ## 2. Find your way
 

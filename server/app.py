@@ -59,6 +59,7 @@ from core import plan_edit
 from core import policy as policy_mod
 from core import runtime as runtime_mod
 from core import settings as settings_mod
+from core import setup as setup_mod
 from core import state as state_mod
 from core import task_templates as templates_mod
 from core import timeline as timeline_mod
@@ -137,11 +138,18 @@ class DashboardApp:
         return runtime_mod.runtime_dir(self.root) / CONFIG
 
     def _config(self) -> Dict[str, Any]:
-        config = runtime_mod.read_json(self._config_path())
+        path = self._config_path()
+        existed = path.is_file()
+        config = runtime_mod.read_json(path)
         config.setdefault("version", 1)
         config.setdefault("gate_commands", {})
         config.setdefault("session", {})
         config.setdefault("ui", {})
+        if not isinstance(config.get("setup"), dict):
+            # A runtime without a setup record: pending on a machine that never
+            # ran the dashboard, skipped on an existing one (no surprise wizard
+            # after an upgrade; it stays reachable from Setup and Settings).
+            config["setup"] = setup_mod.initial(existed)
         return config
 
     def _save_config(self, config: Dict[str, Any]) -> None:
@@ -159,6 +167,7 @@ class DashboardApp:
             "gate_commands": {**suggest_gate_commands(self.root), **config.get("gate_commands", {})},
             "session": self.sessions.settings(),
             "ui": config.get("ui", {}),
+            "setup": setup_mod.read(config),
             "polier": {"root": str(self.package_root), "version": self.package_version(),
                        "python": sys.executable},
         }
@@ -901,6 +910,24 @@ class DashboardApp:
                 return 200, connectors_mod.test(self._config(), match.group(1), self.package_root, self.root)
             except KeyError:
                 raise ApiError(404, "unknown connector")
+        # guided setup (2.7) -----------------------------------------------
+        if path == "/api/setup" and method == "GET":
+            return 200, setup_mod.payload(board_present=(self.root / "board.json").is_file(),
+                                          config=self._config())
+        if path == "/api/setup" and method == "POST":
+            payload = self._json(body)
+            action = str(payload.get("action") or "").strip()
+            if not action:
+                raise ApiError(400, "action is required")
+            config = self._config()
+            try:
+                state = setup_mod.mark(config, action)
+            except PolierError as exc:
+                raise ApiError(400, str(exc))
+            self._save_config(config)
+            self.bus.publish("setup", {"setup": state})
+            return 200, setup_mod.payload(board_present=(self.root / "board.json").is_file(),
+                                          config=self._config())
         # GitHub account connection (2.6) ----------------------------------
         if path == "/api/github/auth" and method == "GET":
             return 200, {"auth": github_mod.auth_status(), "login": self.github_login.view()}
