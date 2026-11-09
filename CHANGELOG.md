@@ -2,6 +2,12 @@
 
 Each release lists what a running project must do to adopt it. Update between stages, never during a task (see `guide/cheatsheet.md`). The current version is in `VERSION`; projects record theirs in `board.json` → `generator_version`. A release is published automatically when `VERSION` changes on `main` (`.github/workflows/release.yml`).
 
+## 4.3.0
+
+**Features**
+
+- **design:** Magic UI as the component source for web front ends (554ad84)
+
 ## 4.2.0
 
 **Features**
