@@ -2,6 +2,12 @@
 
 Each release lists what a running project must do to adopt it. Update between stages, never during a task (see `guide/cheatsheet.md`). The current version is in `VERSION`; projects record theirs in `board.json` → `generator_version`. A release is published automatically when `VERSION` changes on `main` (`.github/workflows/release.yml`).
 
+## 4.2.0
+
+**Features**
+
+- **roles:** specialist roles for builders, reviewers and planners (0f06599)
+
 ## 4.1.0
 
 **What REA does well, applied to Polier.** Studied how [morluto/rea](https://github.com/morluto/rea) runs its repository — not its code — and took over what fits a DeepSeek Harness plugin.
