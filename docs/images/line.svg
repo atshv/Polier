@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 200" width="100%" role="img" aria-label="Polier factory line">
+<defs><linearGradient id="g" x1="0" x2="1"><stop offset="0" stop-color="#6366f1"/><stop offset="1" stop-color="#4338ca"/></linearGradient></defs>
+<rect width="1200" height="200" rx="20" fill="#0f172a"/>
+<text x="40" y="52" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="26" font-weight="700" fill="#fff">Polier</text>
+<text x="140" y="52" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="18" fill="#a5b4fc">AI software factory · web · iOS · Android · desktop · CLI · services</text>
+<rect x="40" y="92" width="110" height="64" rx="12" fill="url(#g)"/>
+<text x="95" y="118" text-anchor="middle" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" fill="#e0e7ff">1</text>
+<text x="95" y="139" text-anchor="middle" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="16" font-weight="600" fill="#fff">Idea</text>
+<path d="M152 124 h11 m-5 -5 l5 5 l-5 5" stroke="#64748b" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="165" y="92" width="110" height="64" rx="12" fill="url(#g)"/>
+<text x="220" y="118" text-anchor="middle" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" fill="#e0e7ff">2</text>
+<text x="220" y="139" text-anchor="middle" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="16" font-weight="600" fill="#fff">Concept</text>
+<path d="M277 124 h11 m-5 -5 l5 5 l-5 5" stroke="#64748b" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="290" y="92" width="110" height="64" rx="12" fill="url(#g)"/>
+<text x="345" y="118" text-anchor="middle" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" fill="#e0e7ff">3</text>
+<text x="345" y="139" text-anchor="middle" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="16" font-weight="600" fill="#fff">Design</text>
+<path d="M402 124 h11 m-5 -5 l5 5 l-5 5" stroke="#64748b" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="415" y="92" width="110" height="64" rx="12" fill="url(#g)"/>
+<text x="470" y="118" text-anchor="middle" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" fill="#e0e7ff">4</text>
+<text x="470" y="139" text-anchor="middle" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="16" font-weight="600" fill="#fff">Architecture</text>
+<path d="M527 124 h11 m-5 -5 l5 5 l-5 5" stroke="#64748b" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="540" y="92" width="110" height="64" rx="12" fill="url(#g)"/>
+<text x="595" y="118" text-anchor="middle" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" fill="#e0e7ff">5</text>
+<text x="595" y="139" text-anchor="middle" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="16" font-weight="600" fill="#fff">Plan</text>
+<path d="M652 124 h11 m-5 -5 l5 5 l-5 5" stroke="#64748b" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="665" y="92" width="110" height="64" rx="12" fill="#059669"/>
+<text x="720" y="118" text-anchor="middle" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" fill="#e0e7ff">6</text>
+<text x="720" y="139" text-anchor="middle" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="16" font-weight="600" fill="#fff">Build</text>
+<path d="M777 124 h11 m-5 -5 l5 5 l-5 5" stroke="#64748b" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="790" y="92" width="110" height="64" rx="12" fill="#059669"/>
+<text x="845" y="118" text-anchor="middle" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" fill="#e0e7ff">7</text>
+<text x="845" y="139" text-anchor="middle" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="16" font-weight="600" fill="#fff">Verify</text>
+<path d="M902 124 h11 m-5 -5 l5 5 l-5 5" stroke="#64748b" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="915" y="92" width="110" height="64" rx="12" fill="#0e7490"/>
+<text x="970" y="118" text-anchor="middle" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" fill="#e0e7ff">8</text>
+<text x="970" y="139" text-anchor="middle" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="16" font-weight="600" fill="#fff">Release</text>
+<path d="M1027 124 h11 m-5 -5 l5 5 l-5 5" stroke="#64748b" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="1040" y="92" width="110" height="64" rx="12" fill="#0e7490"/>
+<text x="1095" y="118" text-anchor="middle" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" fill="#e0e7ff">9</text>
+<text x="1095" y="139" text-anchor="middle" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="16" font-weight="600" fill="#fff">Operate</text>
+<text x="600" y="184" text-anchor="middle" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" fill="#94a3b8">plan the product  ·  build with proof  ·  ship and run it</text>
+</svg>

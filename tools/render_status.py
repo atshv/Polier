@@ -246,6 +246,18 @@ def strip_claims(text: str) -> str:
     return re.sub(r"\n{3,}", "\n\n", without)
 
 
+def _render_factory(root) -> list:
+    """3.0: one line with the factory stations, when the project has factory.json."""
+    if root is None:
+        return []
+    try:
+        from core import factory
+        line = factory.status_line(root)
+    except Exception:  # noqa: BLE001 - a broken factory.json is check.py's finding, not a render failure
+        return []
+    return [line, ""] if line else []
+
+
 def render(board: dict, root=None, with_claims: bool = True) -> str:
     tasks = board.get("tasks", [])
     stages = [s for s in board.get("stages", []) if isinstance(s, dict)] \
@@ -271,6 +283,7 @@ def render(board: dict, root=None, with_claims: bool = True) -> str:
         "",
     ]
 
+    lines += _render_factory(root)
     lines += _render_stages(board, tasks, root)
     lines += _render_packages(board)
     lines += _render_runtime(board)

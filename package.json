@@ -1,7 +1,7 @@
 {
   "name": "dsh-polier",
-  "version": "2.7.0",
-  "description": "Plans an AI coding project before the first line of code, then keeps the agents to the plan: write guard per task, recorded test evidence, checkpoints, approvals and an optional local dashboard with headless agent sessions. DeepSeek Harness plugin with Claude Code hooks and an MCP server.",
+  "version": "3.0.0",
+  "description": "AI software factory: runs a project through nine stations from idea to operation (web, iOS, Android, desktop, CLI, services), maps every applicable checklist item to tasks and keeps the agents to the plan with a write guard, recorded test evidence, reviews and approvals. DeepSeek Harness plugin with Claude Code hooks and an MCP server.",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -15,7 +15,8 @@
     "agents",
     "planning",
     "polier",
-    "dashboard",
+    "software-factory",
+    "checklist",
     "mcp"
   ],
   "type": "module",
@@ -36,16 +37,13 @@
     "SKILL.md",
     "VERSION",
     "CHANGELOG.md",
+    "factory/",
     "prompt/",
     "templates/",
     "tools/*.py",
     "tools/manifest.json",
     "guide/",
-    "examples/",
-    "server/*.py",
-    "server/assets/*",
-    "server/handbook/",
-    "templates/dashboard.json"
+    "examples/"
   ],
   "engines": {
     "node": ">=20"

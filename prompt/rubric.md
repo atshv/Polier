@@ -23,8 +23,9 @@ Score each criterion **0 or 1**. **B** marks a blocker: it prevents approval reg
 | 13 | UI tasks have numbers | A task that touches UI paths has the UI specification section with target values in px/ms/tokens, all applicable states and screenshot evidence. | **B** if the task touches UI |
 | 14 | Execution state is recorded | Every status change went through `tools/state.py`; `runs/<ID>.json` exists for each started task and agrees with the board; attempts and rounds are within the `policy.json` limits. | – |
 | 15 | Policy and approvals | `policy.json` is valid and matches the profile; a high-risk action has a granted approval record before it happened; the dispatch plan has no scope conflicts and `tools/audit.py` is green for `done` tasks. | – |
+| 16 | Factory line | `factory.json` exists, `tools/factory.py check` exits 0, every closed station has an owner, every open build/verify item is linked to a task, `docs/factory.md` is current. | – |
 
-**Pass:** ≥ 14/15 and no blocker. Otherwise fix and re-check; after two rounds the human decides.
+**Pass:** ≥ 15/16 and no blocker (criterion 16 counts as met for a project without `factory.json`). Otherwise fix and re-check; after two rounds the human decides.
 
 ## 2. Lint
 
@@ -79,7 +80,7 @@ Read only: ARCHITECTURE.md, AGENTS.md, STATUS.md, board.json, tasks/*.md,
 docs/quality.md, docs/module-map.md (if present), docs/versions.md, docs/environments.md,
 package ARCHITECTURE.md/AGENTS.md files (profile L only).
 
-Score the 15 criteria of prompt/rubric.md. Look especially for:
+Score the 16 criteria of prompt/rubric.md. Look especially for:
 1. architecture over its profile budget or details that belong elsewhere
 2. acceptance criteria without gate or test
 3. tasks without scope, with cycles or overlapping write paths
@@ -97,6 +98,7 @@ Score the 15 criteria of prompt/rubric.md. Look especially for:
 14. status changes without a run record, attempts above the limit, or a `done` task without a review round
 15. a missing `policy.json` or `docs/orchestration.md` when the project uses the 1.1 loop, approvals missing for a dependency or protected path
 16. scope conflicts in the dispatch plan, or a policy that denies a command a gate needs
+17. factory items marked done without real evidence, `must` items deferred, build or verify items without a task, platform items (store, signing, privacy manifest, permissions) missing for a shipped platform
 
 Output: table | # | criterion | 0/1 | blocker | finding | file | fix |,
 then total, blockers, top three improvements.

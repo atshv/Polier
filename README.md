@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/images/banner.png" alt="Polier — plan the project, keep the agents to it" width="100%">
+  <img src="docs/images/line.svg" alt="Polier – the factory line: idea, concept, design, architecture, plan, build, verify, release, operate" width="100%">
 </p>
 
 <p align="center">
@@ -12,72 +12,62 @@
 
 <p align="center"><b>English</b> · <a href="README.de.md">Deutsch</a></p>
 
-**Polier is the site foreman for AI coding agents.** You describe what you want; Polier interviews you and writes a one-page architecture and a task plan with allowed files, acceptance criteria and checks. Once you approve, agents build task by task — and Polier blocks every write outside the current task, accepts only recorded test runs as proof, and keeps a reviewable record of every attempt, approval and review.
+**Polier is an AI software factory.** You describe the product; Polier runs it through nine stations — idea, concept, design, architecture, plan, build, verify, release, operate — for a website, an iOS or Android app, a desktop app, a CLI or a backend service. At every station it knows what your kind of product needs (sign-up, payments, offline mode, privacy policy, App Store privacy label, Play closed test, signing, monitoring …), asks for proof and lets the station close only when you approve it.
 
-Works with **Claude Code**, any **MCP** client and **DeepSeek Harness**. Python standard library only, everything stays as files in your repository.
-
-<p align="center"><img src="docs/images/tour.gif" alt="A tour of the dashboard: board, task drawer, command palette, timeline, knowledge, agents and MCP" width="100%"></p>
-
-## Why
-
-| Without Polier | With Polier |
-|---|---|
-| An agent "quickly fixes" files of another task | Writes outside the task's scope are blocked |
-| "Tests pass" is a sentence in the chat | Only a recorded gate run with exit code and log hash counts |
-| Tasks start before what they build on is done | `in_progress` is refused while a dependency is open |
-| A stuck agent retries forever | Attempts and token budgets are capped, then it escalates |
-| Nobody knows later why something was decided | Runs, approvals and reviews are committed with the task |
+Builder agents then work task by task inside the plan: writes outside the task are blocked, only recorded test runs count as evidence, and every attempt, review and approval is logged. Works with **Claude Code**, any **MCP** client and **DeepSeek Harness**. Python standard library only; everything stays as files in your repository.
 
 ## Quick start
 
 ```bash
 git clone https://github.com/atshv/Polier.git && cd Polier
-./install.sh claude          # Claude Code; for DeepSeek Harness: dsh plugin --profile <name> add .
+./install.sh claude          # Claude Code; DeepSeek Harness: dsh plugin --profile <name> add .
 ```
 
-Then open a session in an empty folder and write *"Plan a new project: …"* — Polier asks its questions, shows the plan for approval and writes the project files. The dashboard is optional:
+Open a session in an empty folder and write *"Build a new app with Polier: …"*. Polier interviews you, starts the line and walks you through the stations.
 
 ```bash
-python3 tools/serve.py /path/to/project --open      # try it: examples/monorepo-mini
+python3 tools/factory.py --root <project> status    # where the project is
+python3 tools/factory.py --root <project> next      # what the current station still needs
 ```
 
-The dashboard follows your browser language (English or German); switch it under **Settings → Language**, in the command palette (Ctrl/Cmd+K) or with `?lang=en`. Hooks for Claude Code: [`adapters/claude-code/README.md`](adapters/claude-code/README.md).
+## The line
+
+| # | Station | Output | Examples of what it checks |
+|---|---|---|---|
+| 1 | Idea | `project-input.md`, `factory.json` | problem, users, success signal, non-goals, platforms |
+| 2 | Concept | `docs/concept.md` | MVP features, user stories, done scenarios, costs, legal frame |
+| 3 | Design | `docs/ux-flows.md`, `docs/design-rules.md` | flows, screens, tokens, states, accessibility, platform guidelines |
+| 4 | Architecture | `ARCHITECTURE.md`, ADRs | stack with sources, layers, data model, API, secrets, environments |
+| 5 | Plan | `board.json`, `policy.json`, briefs | every build and verify item linked to a task, gates, cold start |
+| 6 | Build | code, `runs/`, `reviews/` | auth, data, security, payments, push, permissions, privacy manifest |
+| 7 | Verify | gate evidence | E2E, device/browser matrix, accessibility, OWASP/MASVS, beta |
+| 8 | Release | `docs/legal.md`, `docs/store/*` | CI from tags, legal texts, store listings, signing, notarisation |
+| 9 | Operate | `docs/runbook.md` | errors, uptime, backups, support, updates, store upkeep |
+
+The full checklist — 175 items, each with the platforms and traits it applies to — is [`factory/CATALOG.md`](factory/CATALOG.md). A web app with accounts gets about 100 of them, a CLI about 50.
 
 ## Proof, not promises
 
-<p align="center"><img src="docs/images/flow.gif" alt="A gate runs and is recorded; moving the task to review is refused until every gate has a passing record" width="100%"></p>
-
-1. **Plan** — interview → `ARCHITECTURE.md`, `board.json`, task briefs, `policy.json`. You approve.
-2. **Build** — an agent claims one task and may write only inside its scope.
-3. **Prove** — every gate runs through Polier and leaves a checksummed record.
-4. **Review** — `done` needs a passing verdict, the gate records and a handoff.
+- An item is done only with evidence: a file in the project (`docs/concept.md#user-stories`) or linked tasks that are done.
+- `must` items are done or *not applicable* with a reason; only `should` items can be deferred.
+- A task is done only with a passing review, recorded gate runs and a handoff.
+- A station closes only with every item resolved, every earlier station closed and the owner's name: `factory.py advance --by <you>`.
 
 ## What's inside
 
 | | |
 |---|---|
-| **Guardrails** | write guard, checkpoints, claims, approvals, token budgets — in `core/`, shared by every entry point |
-| **Dashboard** | board, table, timeline, cycles, coverage, analytics, approvals, your inbox, command palette — in **English and German** |
-| **AI** | assistant with confirmed proposals, agent profiles, skills, MCP server and connectors, GitHub login |
-| **Knowledge** | project docs as a docs site, plus a built-in handbook and API reference |
-| **CLI** | 31 tools with the same rules, from `state.py` to `mcp.py` — see [the cheatsheet](guide/cheatsheet.md) |
-
-<table>
-  <tr>
-    <td width="50%"><img src="docs/images/dashboard-detail.png" alt="Task drawer with status transitions, gates and the brief"></td>
-    <td width="50%"><img src="docs/images/dashboard-agents.png" alt="Agents: Builder, Reviewer and Lead with skills and connectors"></td>
-  </tr>
-  <tr>
-    <td><img src="docs/images/dashboard-knowledge.png" alt="Knowledge overview with project docs, guides and API reference"></td>
-    <td><img src="docs/images/dashboard-your-work.png" alt="Your Work: inbox first, open queues"></td>
-  </tr>
-</table>
+| **Factory** | `factory/catalog.json`, `tools/factory.py`, templates for concept, flows, legal texts, store listings and runbook |
+| **Guard rails** | write guard, checkpoints, claims, approvals, token budgets — in `core/`, the same for every harness |
+| **Gates** | catalogues for Node/TS, Python, Swift/iOS, Kotlin/Android, Expo, Flutter, C++, WASM, Postgres, Playwright, load, visual diff |
+| **Integrations** | Claude Code hooks, DeepSeek Harness plugin (`pl_factory`, `/pl factory`), MCP server (`tools/mcp.py`) |
+| **Examples** | [`factory-app`](examples/factory-app) (a line in progress), [`minimal-cli`](examples/minimal-cli), [`monorepo-mini`](examples/monorepo-mini) |
 
 ## Learn more
 
-- **Dashboard & API** — [`docs/dashboard.md`](docs/dashboard.md), or *Pages → Guides / API reference* inside the dashboard
-- **Connect your AI client** — `claude mcp add polier -- python3 tools/mcp.py --root <project> --read-only`
-- **Limits** — Polier is not a sandbox: [what the guard does not cover](docs/guard-limits.md)
+- **Process** — [`prompt/generator.md`](prompt/generator.md) · **Your part** — [`guide/cheatsheet.md`](guide/cheatsheet.md)
+- **Connect an AI client** — `claude mcp add polier -- python3 tools/mcp.py --root <project>`
+- **Limits** — Polier is not a sandbox: [what the write guard does not cover](docs/guard-limits.md)
 - **Changes** — [`CHANGELOG.md`](CHANGELOG.md) · [Releases](https://github.com/atshv/Polier/releases)
 
-Tests: `npm install && npm test`. License: [MIT](LICENSE).
+Tests: `npm install && npm test`. Licence: [MIT](LICENSE).

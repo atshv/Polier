@@ -1,6 +1,26 @@
 # Changelog
 
-Each release lists what a running project must do to adopt it. Update between stages, never during a task (see `guide/cheatsheet.md`). The current version is in `VERSION`; projects record theirs in `board.json` → `generator_version`.
+Each release lists what a running project must do to adopt it. Update between stages, never during a task (see `guide/cheatsheet.md`). The current version is in `VERSION`; projects record theirs in `board.json` → `generator_version`. A release is published automatically when `VERSION` changes on `main` (`.github/workflows/release.yml`).
+
+## 3.0.0
+
+**Polier becomes an AI software factory — and loses the dashboard.** 2.x grew a local web app with twenty views; 3.0 goes back to files and the command line and adds what was missing: the whole way from idea to operation, for every kind of software.
+
+**The factory line.** Nine stations — idea, concept, design, architecture, plan, build, verify, release, operate — each with a role, a goal, outputs and checklist items. `factory/catalog.json` holds 175 items for web, iOS, Android, desktop, CLI and backend services (readable as `factory/CATALOG.md`): from personas and user stories over design tokens, auth, payments, offline mode, privacy manifest and Android target SDK to store listings, signing, notarisation, legal texts, monitoring and store upkeep. An item applies when one of its platforms and one of its traits match the project; platforms imply traits (every app has `ui`, web and services `deploys`, accounts imply `personal_data`).
+
+**`factory.json` and `tools/factory.py`.** `init --platforms … --traits …` writes the project's line with the items that apply; `status`, `next`, `list`, `show` read it; `done --evidence <path>[#heading]`, `na`/`defer --reason`, `link --task`, `scope` and `advance --by <owner>` change it, and nothing else may. Evidence is checked: the path must exist (with the heading, when an anchor is given), build and verify items are done only through linked board tasks that are done, `must` items are never deferred. A station closes only with every item resolved, every earlier station closed and an owner name; the plan station refuses while an open build or verify item has no task. Stations without an applicable item close on their own. Every change is appended to the file's `history`. `render` writes `docs/factory.md`; `catalog` prints the catalog for a scope.
+
+**Process.** `prompt/generator.md` is rewritten around the line: the input block gains `PLATFORMS` and `TRAITS`, the interview asks for them, phase A ends by starting the line (A4), new sections cover the concept, design, build, verify, release and operate stations, and phase D maps every build and verify item to a task. Three new rules (21–23): the line is the progress, evidence instead of ticks, no skipped stations. The rubric gains criterion 16 (factory line; pass now ≥ 15/16).
+
+**Templates.** New: `project-input.md`, `concept.md`, `ux-flows.md`, `legal.md`, `runbook.md`, `store/ios.md`, `store/android.md`, `store/desktop.md`; gate catalogues `swift-ios.md`, `kotlin-android.md`, `expo-react-native.md`, `flutter.md`. `design-rules.md` gains light/dark, platform conventions, brand and copy sections (its accessibility heading is now `## Accessibility`). `AGENTS.template.md` names the factory rule.
+
+**Integrations.** `check.py` validates `factory.json` and warns about a stale `docs/factory.md`; `render_status.py` adds one *Factory* line to `STATUS.md`. The MCP server is rewritten slim with `polier_factory`, `polier_factory_next`, `polier_factory_item`, `polier_factory_set`, `polier_factory_link` next to the task tools. The DeepSeek Harness plugin gets `pl_factory` (status, next; lead-only done, na, defer, link, render) and `/pl factory`, `/pl advance <owner>`.
+
+**Removed.** The dashboard (`server/`, `tools/serve.py`, the handbook, screenshots and GIFs) and everything only it used: headless sessions and the assistant (`tools/session.py`, `tools/assistant.py`), agent profiles, skills and MCP connector management, automations, GitHub panel, intake, task templates, pages, saved views, settings and the plan editor (`tools/plan.py`, `tools/settings.py`, `tools/views.py`, `tools/intake.py`, `tools/templates.py`, `tools/pages.py`, `tools/automations.py`, `tools/github.py`) with their `core/` modules and tests. The removed MCP tools are gone with them.
+
+**New example.** `examples/factory-app/` — an offline fault-code app for iOS and Android, stopped in the design station.
+
+**Compatibility.** Board, policy, runs, reviews, approvals, gates, claims, slots and worktrees are unchanged; a 2.x project keeps working and has no factory line until `tools/factory.py init`. Project files that only the dashboard read (`dashboard.json`, `views/`, `intake/`, `templates/tasks/`, `automations.json`, `agents.json`) are ignored and can be deleted. Plugin users: `git pull`, `dsh plugin --profile <name> add ./polier` again, restart. Claude Code users: replace the package copy and re-add the MCP server if you used it. Skill-only users: `./update.sh`.
 
 ## 2.7.0
 

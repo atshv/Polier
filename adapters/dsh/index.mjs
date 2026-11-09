@@ -683,7 +683,56 @@ export function tools(ctx, config) {
     },
   })
 
-  return [status, gate, scope, check, next, state]
+  const factoryTool = jsonTool({
+    name: 'pl_factory',
+    description: 'The software factory line of the project (factory.json): stations from idea to operate, progress, the open checklist items of the current station with the evidence they need, and findings. Lead sessions can also mark an item (done with evidence, na or defer with a reason), link board tasks to it, or close the current station for the owner.',
+    parameters: {
+      type: 'object',
+      properties: {
+        action: { type: 'string', enum: ['status', 'next', 'done', 'na', 'defer', 'link', 'render'], description: 'status (default), next, or a lead-only write: done, na, defer, link, render.' },
+        item: { type: 'string', description: 'Checklist item ID for done/na/defer/link, e.g. BLD-30.' },
+        evidence: { type: 'array', items: { type: 'string' }, description: 'Project paths (optionally #heading) for done.' },
+        reason: { type: 'string', description: 'Reason for na or defer.' },
+        tasks: { type: 'array', items: { type: 'string' }, description: 'Board task IDs for link.' },
+        project: { type: 'string', description: 'Project folder with factory.json. Default: the session directory.' },
+      },
+    },
+    async execute(args, exec) {
+      const base = agentCwd(ctx, exec.agent)
+      const root = args.project ? path.resolve(base, args.project) : (findRoot(base) || base)
+      const script = path.join(TOOLS, 'factory.py')
+      if (!existsSync(script)) throw toolMissing('pl_factory', 'factory.py')
+      const action = typeof args.action === 'string' && args.action ? args.action : 'status'
+      const argv = [config.python, script, '--root', root]
+      if (action === 'status' || action === 'next') {
+        argv.push(action, '--json')
+        const result = await run(ctx, exec.agent, argv, { cwd: root, timeoutMs: 60_000, signal: exec.signal })
+        const value = lastJson(result.stdout)
+        if (value === undefined) {
+          return { ok: false, exit_code: result.code, error: (result.stderr || result.stdout).trim().slice(-4000) || `exit ${result.code}` }
+        }
+        return { root, ...value }
+      }
+      if (stateOf(exec.agent).role !== 'lead') {
+        throw new Error('Polier: only a lead session changes factory.json. Use /pl lead first.')
+      }
+      if (action === 'render') {
+        argv.push('render')
+      } else {
+        const item = typeof args.item === 'string' ? args.item.trim().toUpperCase() : ''
+        if (!item) throw new Error(`pl_factory ${action} needs the item ID`)
+        argv.push(action, item)
+        if (action === 'done') for (const value of args.evidence ?? []) argv.push('--evidence', String(value))
+        if (action === 'na' || action === 'defer') argv.push('--reason', String(args.reason ?? ''))
+        if (action === 'link') argv.push('--task', (args.tasks ?? []).map(String).join(','))
+        argv.push('--by', 'lead')
+      }
+      const result = await run(ctx, exec.agent, argv, { cwd: root, timeoutMs: 60_000, signal: exec.signal })
+      return { ok: result.code === 0, action, exit_code: result.code, output: (result.stdout + result.stderr).trim().slice(-4000) }
+    },
+  })
+
+  return [status, gate, scope, check, next, state, factoryTool]
 }
 
 // ---------------------------------------------------------------------------
@@ -728,6 +777,8 @@ const HELP = [
   '/pl task          remove the binding',
   '/pl next          the dispatch plan: running tasks, next wave, blocked tasks (tools/dispatch.py)',
   '/pl policy        the active policy.json rules and the pending approvals',
+  '/pl factory       the factory line: stations, progress, open items (tools/factory.py)',
+  '/pl advance <who> close the current factory station for the owner (lead only)',
   '/pl render        regenerate STATUS.md from board.json (lead only)',
 ].join('\n')
 
@@ -735,7 +786,7 @@ export function command(ctx, config) {
   return {
     name: 'pl',
     description: 'Polier: switch this session between lead, worker and reviewer, bind it to a task, show status.',
-    input: { hint: 'status | lead | worker | reviewer | task <ID> | next | policy | render' },
+    input: { hint: 'status | lead | worker | reviewer | task <ID> | next | policy | factory | advance <owner> | render' },
     async handler({ agent, rawInput, signal }) {
       const [verb = 'status', arg] = String(rawInput ?? '').trim().split(/\s+/).filter(Boolean)
       const state = stateOf(agent)
@@ -797,6 +848,24 @@ export function command(ctx, config) {
           if (!existsSync(script)) return { kind: 'error', text: 'pl next needs tools/dispatch.py, which this Polier package does not ship.' }
           const result = await run(ctx, agent, [config.python, script, '--root', info.root],
             { cwd: info.root, timeoutMs: 60_000, signal })
+          return result.code === 0
+            ? { kind: 'success', text: result.stdout.trim() }
+            : { kind: 'error', text: (result.stderr || result.stdout).trim() || `exit ${result.code}` }
+        }
+        case 'factory': {
+          const root = info?.root || findRoot(agentCwd(ctx, agent)) || agentCwd(ctx, agent)
+          const result = await run(ctx, agent, [config.python, path.join(TOOLS, 'factory.py'), '--root', root, 'status'],
+            { cwd: root, timeoutMs: 60_000, signal })
+          return result.code === 0
+            ? { kind: 'success', text: result.stdout.trim() }
+            : { kind: 'error', text: (result.stderr || result.stdout).trim() || `exit ${result.code}` }
+        }
+        case 'advance': {
+          if (state.role !== 'lead') return { kind: 'error', text: 'Only a lead session closes a factory station. Use /pl lead first.' }
+          if (!arg) return { kind: 'error', text: 'Name the owner who approves the station: /pl advance <owner>' }
+          const root = info?.root || findRoot(agentCwd(ctx, agent)) || agentCwd(ctx, agent)
+          const result = await run(ctx, agent, [config.python, path.join(TOOLS, 'factory.py'), '--root', root, 'advance', '--by', arg],
+            { cwd: root, timeoutMs: 60_000, signal })
           return result.code === 0
             ? { kind: 'success', text: result.stdout.trim() }
             : { kind: 'error', text: (result.stderr || result.stdout).trim() || `exit ${result.code}` }

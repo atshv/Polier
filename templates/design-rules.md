@@ -37,11 +37,39 @@ Every interactive element defines all applicable states: rest, hover, pressed, f
 - Floating controls have fixed positions; no new overlay without approval.
 - Reuse existing components, icons and spacing; a new component needs a reason in the task brief.
 
-## Accessibility minimums
+## Accessibility
 
 - Every control is keyboard reachable, has a visible focus and an accessible name (`aria-label` or visible text).
 - Semantic HTML first; images have alt text; form errors are text, not colour only.
 - No text below 11 px, no truncated text without ellipsis, no emoji as an icon.
+
+## Light and dark
+
+- Every colour token has a light and a dark value; components never branch on the scheme.
+- Test both schemes for contrast; images and illustrations have a dark variant or a neutral background.
+
+## Platform
+
+> Keep the subsection of each platform the project ships; delete the others.
+
+- **Web:** native controls where they exist (`<button>`, `<select>`, `<dialog>`); the back button and deep links work on every view.
+- **iOS:** Apple Human Interface Guidelines — tab bar or navigation stack, swipe back, Dynamic Type, safe areas, SF Symbols.
+- **Android:** Material Design 3 — top app bar, predictive back, edge-to-edge, adaptive icon, Material You colours where used.
+- **Desktop:** menu bar with standard menus, platform shortcuts (Cmd on macOS, Ctrl on Windows/Linux), remembered window size.
+
+## Brand
+
+| Asset | Sizes / format | File |
+| --- | --- | --- |
+| Logo | `<SVG + PNG 512>` | `<assets/logo.svg>` |
+| App icon | `<1024 px master; platform sizes generated>` | `<assets/icon.png>` |
+| Launch / splash | `<background token + logo>` | `<…>` |
+| Favicon | `<SVG + 32/180/512 PNG>` | `<public/…>` |
+
+## Copy
+
+- Tone: `<friendly, short, no jargon>`. Buttons are verbs ("Save", not "OK"); errors say what happened and what to do next.
+- Languages: `<de-CH, en>`; every string in the string catalogue, never inline.
 
 ## How a brief cites these rules
 

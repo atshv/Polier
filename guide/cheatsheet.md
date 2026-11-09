@@ -1,6 +1,6 @@
 # Cheatsheet
 
-The human's operating manual. The generator drafts and writes; you approve, start tasks and check results. Prompts live only in `prompt/generator.md` › phase I.
+The human's operating manual. Polier runs the factory line, drafts and writes; you approve stations, start tasks and check results. Prompts live only in `prompt/generator.md` › phase I.
 
 ## Your role per phase
 
@@ -23,46 +23,25 @@ The human's operating manual. The generator drafts and writes; you approve, star
 - **Generator copy:** if the package sits inside the project (`.generator/`), it is gitignored and ships `tools/manifest.json`, so `check.py` reports drift.
 - **Policy:** `policy.json` exists, `version: 1`, limits match the profile (S 3/1/3, M 3/2/3, L 3/3/3 for attempts/in progress/rounds), the manifest list matches the project; `docs/orchestration.md` exists and `AGENTS.md` names `policy.json`, `runs/` and the state commands.
 
-## The project cockpit (2.1)
+## The factory line (3.0)
 
-- **Settings:** the committed `dashboard.json` holds feature flags, labels and defaults (`me`). Edit it in the dashboard Settings view or `python3 <package>/tools/settings.py show|init|feature|me|label …`; never hand-edit it while the dashboard is writing.
-- **Labels & estimates:** optional task fields of board schema 1.1. `tools/plan.py create|update … --labels bug --estimate-hours 4`; labels must exist in `dashboard.json`. The plan editor upgrades a 0.9/1.0 board to 1.1 on first use. Labels never change the write scope.
-- **Views:** structured filters (field, operator, value), grouping and sorting can be saved as committed `views/<id>.json` with `tools/views.py save`; built-in views come from the code.
-- **Your Work / Inbox:** the dashboard derives the owner's queue (my tasks, reviews, approvals, claims, blocked, budget, ready, sessions) and one actionable feed (approvals, failed gates, blocked tasks, budget, review requests, failed sessions). Read marks are local only.
-- **Worklog:** attempts, gate records, sessions and tokens are the timesheet; `estimate_hours` is compared with the derived actual hours. No manual time tracking.
-- **CLI parity:** `tools/plan.py` (tasks, labels, estimates, stage decisions), `tools/settings.py`, `tools/views.py`; MCP read tools `polier_settings`, `polier_views`, `polier_worklog`, `polier_me`, `polier_inbox` (+ `polier_inbox_read`).
+| # | Station | You decide | Command |
+|---|---|---|---|
+| 1 | idea | problem, users, success signal, non-goals, platforms, traits | `factory.py init --platforms … --traits …` |
+| 2 | concept | MVP features, user stories, done scenarios D1..Dn, costs, legal frame | `factory.py advance --by <you>` |
+| 3 | design | flows, screens, tokens, states, accessibility (skipped without UI) | same |
+| 4 | architecture | stack, layers, data, API, secrets, environments | same |
+| 5 | plan | DAG, policy, briefs; every build/verify item linked to a task | same, after lint and cold start |
+| 6 | build | done tasks deliver the build items | same |
+| 7 | verify | matrices, audits, security review, beta | same |
+| 8 | release | legal texts, store listings, signing, first tag | same |
+| 9 | operate | monitoring, backups, support, updates | same |
 
-## The planning views (2.2)
-
-- **Timeline:** derived from dependencies and estimates (`defaults.hours_per_day` in `dashboard.json`); optional board schema 1.2 dates `planned_start`/`target` (`YYYY-MM-DD`) override one task. Set them with `tools/plan.py update <ID> --planned-start … --target …` or in the task drawer; they are cleared with null.
-- **Cycles:** stages are the cycles; the view shows progress, exit gates, owner decision, effort and a burndown from run events. Stage decisions go through `tools/plan.py stage <id> decision --decision continue|stop|pending` (or the view).
-- **Modules:** `packages[]` with tasks, health, docs (README/ARCHITECTURE), contracts and effort; tasks without a package stay visible.
-- **Coverage:** requirement definitions from `docs/quality.md` (`**Dn** …`) joined with task `satisfies` and passing evidence; undefined codes are reported.
-- **Analytics:** throughput, cycle time, gate pass rate, rework, blocked age, estimate vs actual, tokens and sessions — all derived; nothing to maintain.
-- **Board schema 1.2** only adds the two optional planning dates; old boards stay valid and the plan editor upgrades on first use.
-
-## Knowledge and intake (2.3)
-
-- **Pages:** read-only Markdown browser over root docs, `docs/`, `tasks/`, `reviews/` and package docs; search, favorites, backlinks and git history/old revisions. CLI `tools/pages.py list|search|show|history|favorite|favorites`.
-- **Intake:** proposals are committed `intake/<id>.json` files (`proposed` → `accepted`/`rejected`). Add via dashboard, `tools/intake.py add`, MCP; accept with a stage and optional template → creates a validated pending task and links it back. Rejections need a reason.
-- **Task templates:** committed `templates/tasks/<id>.json` (scope, acceptance, gates, complexity, labels, estimate). Save one from an existing task (`tools/templates.py save --from-task <ID> --id <id>`), use it in the plan editor, intake accept or `POST /api/plan/tasks` with `template`.
-- **Pages and intake** are feature-flagged in `dashboard.json` (default on). Nothing in the page viewer writes; templates and intake are validated project files.
-
-## Intelligence (2.4)
-
-- **Assistant:** `tools/assistant.py ask "…" --root <project>`; conversations are local. The dashboard chat shows the answer plus proposals (state/plan/gate/session/note); applying is explicit and validated. The assistant cannot write.
-- **Automations:** committed `automations.json` rules; `tools/automations.py init|validate|run` (dry run) prints matches and suggestions. Kinds: gate_failed, task_blocked, budget_over, review_ready, session_failed, intake_proposed, stage_decision_pending, task_ready. Nothing runs in the background.
-- **Bulk:** select tasks in Board/Table → state, claim, release, labels or estimate; per-task results tell you which transitions were refused.
-- **Command palette:** Cmd/Ctrl+K for views, tasks and quick actions.
-- **GitHub/CI:** `tools/github.py status` (or the GitHub view) reads PRs and workflow runs via `gh`; unavailable without a GitHub remote/login, never blocking.
-
-## The dashboard (2.0)
-
-- Start it with `python3 tools/serve.py <project> [--port 8765] [--open] [--token …] [--read-only]`; stop it with Ctrl+C. It needs no dependencies and writes only runtime files under `<git-common-dir>/polier/dashboard/`.
-- It shows the same state as `STATUS.md`/`dispatch.py` and drives the same actions: status transitions (`state.py`), claims, approvals (`approve.py`), gates (`gate.py` records), plan edits (validated `board.json` writes) and headless sessions.
-- Sessions: `tools/session.py run <ID> --role worker|reviewer|lead [--worktree] [--note "…"]`, then `list`/`show`/`stop`. The provider command, permission mode, allowed tools and model are in the dashboard config; the default is the Claude Code CLI in `-p` stream-json mode with the shipped hooks installed (scope, policy and stop checks apply).
-- MCP for an interactive Claude Code session: `claude mcp add polier -- python3 <package>/tools/mcp.py --root .` exposes `polier_snapshot`, `polier_task`, `polier_dispatch`, `polier_show`, `polier_activity`, `polier_approvals`, `polier_claims` and the write tools `polier_state_set`, `polier_gate`, `polier_claim`, `polier_release`.
-- Loop unchanged: the dashboard is a control plane, not a second source of truth. `runs/`, `reviews/` and `reviews/approvals/` stay the records; `state.py` stays the only status writer.
+- `python3 <package>/tools/factory.py status` — where the project is; `next` — what the current station still needs; `render` — regenerates `docs/factory.md`.
+- `done <ITEM> --evidence <path>[#heading]`, `na`/`defer <ITEM> --reason "…"`, `link <ITEM> --task M07`. A `must` item is never deferred; build and verify items are done only through done tasks.
+- New platform or feature area later: `factory.py scope --platforms … --traits …` adds the new items as open.
+- The full catalog: `factory/CATALOG.md`; for one scope: `factory.py catalog --platforms ios,android --traits accounts`.
+- Slow parts first: Apple Developer Program, Google Play Console (identity check, closed test), signing certificates, legal texts — start them during the build station.
 
 ## The task loop
 

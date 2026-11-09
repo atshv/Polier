@@ -506,3 +506,25 @@ test('ready tasks respect stage exit gates and the owner decision', () => {
   continued.tasks[1].evidence = ['reviews/evidence/ENG-01-wasm-build-1.json']
   assert.deepEqual(readyTasks(continued).map((t) => t.id), ['WEB-01'])
 })
+
+// ---------------------------------------------------------------------------
+// 3.0 factory line
+// ---------------------------------------------------------------------------
+
+const FACTORY_TOOL = path.resolve(import.meta.dirname, '../../../tools/factory.py')
+
+test('pl_factory shows the line and only a lead session writes it', async () => {
+  const root = project([task('M01', 'pending')])
+  execFileSync(PY, [FACTORY_TOOL, '--root', root, 'init', '--platforms', 'ios'], { stdio: 'pipe' })
+  const { tools } = await boot()
+  const a = agent(root)
+  const status = await call(tools, a, 'pl_factory', {})
+  assert.equal(status.error, false, status.text)
+  assert.equal(status.value.current, 'idea')
+  const next = await call(tools, a, 'pl_factory', { action: 'next' })
+  assert.equal(next.value.station, 'idea')
+  assert.ok(next.value.items.some((item) => item.id === 'IDEA-01'))
+  const refused = await call(tools, a, 'pl_factory', { action: 'na', item: 'IDEA-06', reason: 'hobby' })
+  assert.equal(refused.error, true)
+  assert.match(refused.text, /lead/)
+})

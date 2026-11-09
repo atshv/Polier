@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Polier as an MCP server: connect your own Claude Code (or any MCP host).
+"""Polier as an MCP server: connect Claude Code, Claude Desktop, Cursor or any MCP host.
 
 Usage:
     python3 tools/mcp.py [--root .] [--read-only]
@@ -9,68 +9,74 @@ Add it to Claude Code with:
     claude mcp add polier -- python3 /path/to/polier/tools/mcp.py --root .
 
 Tools (JSON-RPC ``tools/call``):
-    polier_snapshot   whole project snapshot (tasks, dispatch, stages, counts)
-    polier_tasks      every task with status, gates, tokens
-    polier_task       one task with brief, review, gates and events
-    polier_dispatch   next wave, running, blocked, conflicts
-    polier_show       board status against the run record
-    polier_activity   newest-first event feed
-    polier_approvals  approval records (pending by default)
-    polier_claims     live claims
-    polier_state_set  lead-only status transition (needs a lead session)
-    polier_gate       run one gate and return its record summary
-    polier_claim      take the claim for a task
-    polier_release    release the claim of a task
-    polier_agents     agent profiles (2.6)
-    polier_skills     project skills, or one skill with ?id (2.6)
+    polier_factory       the factory line: stations, progress, findings
+    polier_factory_next  open items of the current station
+    polier_factory_item  one checklist item with its state
+    polier_factory_set   mark an item done / na / deferred / open (write)
+    polier_factory_link  link board tasks to an item (write)
+    polier_tasks         every task with status, stage and gates
+    polier_task          one task: board entry, brief, review, run state
+    polier_dispatch      next wave, running, blocked, conflicts
+    polier_show          board status against the run record
+    polier_approvals     approval records (pending by default)
+    polier_claims        live claims
+    polier_state_set     lead-only status transition (write)
+    polier_gate          run one gate and return its record summary (write)
+    polier_claim         take the claim for a task (write)
+    polier_release       release the claim of a task (write)
 
 The server speaks newline-delimited JSON-RPC 2.0 on stdio (MCP stdio
 transport), runs on the Python standard library only, and writes nothing but
-what the called tools do.
+what the called tools do. ``--read-only`` refuses every write tool.
 """
 from __future__ import annotations
 
 import json
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from core import agents as agents_mod  # noqa: E402
 from core import approvals as approvals_mod  # noqa: E402
 from core import board as board_mod  # noqa: E402
 from core import claims as claims_mod  # noqa: E402
-from core import dashboard as dashboard_mod  # noqa: E402
-from core import analytics as analytics_mod  # noqa: E402
-from core import automations as automations_mod  # noqa: E402
-from core import coverage as coverage_mod  # noqa: E402
-from core import cycles as cycles_mod  # noqa: E402
-from core import filters as filters_mod  # noqa: E402
+from core import dispatch as dispatch_mod  # noqa: E402
+from core import factory as factory_mod  # noqa: E402
 from core import gate as gate_mod  # noqa: E402
-from core import github as github_mod  # noqa: E402
-from core import inbox as inbox_mod  # noqa: E402
 from core import runs as runs_mod  # noqa: E402
-from core import runtime as runtime_mod  # noqa: E402
-from core import intake as intake_mod  # noqa: E402
-from core import modules as modules_mod  # noqa: E402
-from core import pages as pages_mod  # noqa: E402
-from core import settings as settings_mod  # noqa: E402
-from core import skills as skills_mod  # noqa: E402
 from core import state as state_mod  # noqa: E402
-from core import task_templates as templates_mod  # noqa: E402
-from core import timeline as timeline_mod  # noqa: E402
-from core import views as views_mod  # noqa: E402
-from core import worklog as worklog_mod  # noqa: E402
 from core.errors import PolierError  # noqa: E402
 from core.gates import suggest_gate_commands  # noqa: E402
 
 PROTOCOL = "2024-11-05"
-SERVER = {"name": "polier", "version": "2.7.0"}
+
+
+def _version() -> str:
+    try:
+        return (Path(__file__).resolve().parent.parent / "VERSION").read_text(encoding="utf-8").strip()
+    except OSError:
+        return "unknown"
+
+
+SERVER = {"name": "polier", "version": _version()}
+WRITE_TOOLS = {"polier_factory_set", "polier_factory_link", "polier_state_set", "polier_gate",
+               "polier_claim", "polier_release"}
 
 
 def _text(value: Any) -> str:
     return value.strip() if isinstance(value, str) else ""
+
+
+def _schema(properties: Dict[str, Any] = None, required: List[str] = None) -> Dict[str, Any]:
+    value: Dict[str, Any] = {"type": "object", "properties": properties or {}}
+    if required:
+        value["required"] = required
+    return value
+
+
+TASK = {"task": {"type": "string", "description": "Task ID, e.g. M03"}}
+ITEM = {"item": {"type": "string", "description": "Factory item ID, e.g. BLD-30"}}
 
 
 class Server:
@@ -81,150 +87,122 @@ class Server:
     # -- tools -------------------------------------------------------------
     def tools(self) -> List[Dict[str, Any]]:
         return [
-            {"name": "polier_snapshot", "description": "Whole project snapshot: tasks with derived fields, dispatch, stages, counts, git.",
-             "inputSchema": {"type": "object", "properties": {}}},
-            {"name": "polier_tasks", "description": "Every task with status, stage, gates, tokens and review verdict.",
-             "inputSchema": {"type": "object", "properties": {}}},
-            {"name": "polier_task", "description": "One task with brief, review, gate records and run events.",
-             "inputSchema": {"type": "object", "properties": {"task": {"type": "string"}}, "required": ["task"]}},
+            {"name": "polier_factory", "description": "The factory line: platforms, traits, the nine stations with progress, the current station, errors and warnings.",
+             "inputSchema": _schema()},
+            {"name": "polier_factory_next", "description": "Open checklist items of the current station with detail and the expected evidence.",
+             "inputSchema": _schema({"limit": {"type": "integer"}})},
+            {"name": "polier_factory_item", "description": "One checklist item: catalog text, whether it applies, its state and problems.",
+             "inputSchema": _schema(ITEM, ["item"])},
+            {"name": "polier_factory_set", "description": "Mark an item done (with evidence paths), na or deferred (with a reason) or open. Refused when the state would not hold.",
+             "inputSchema": _schema({**ITEM,
+                                     "status": {"type": "string", "enum": list(factory_mod.ITEM_STATUSES)},
+                                     "evidence": {"type": "array", "items": {"type": "string"}},
+                                     "reason": {"type": "string"}}, ["item", "status"])},
+            {"name": "polier_factory_link", "description": "Link board tasks that deliver a build or verify item.",
+             "inputSchema": _schema({**ITEM, "tasks": {"type": "array", "items": {"type": "string"}}}, ["item", "tasks"])},
+            {"name": "polier_tasks", "description": "Every task with status, stage, owner, gates and dependencies.",
+             "inputSchema": _schema()},
+            {"name": "polier_task", "description": "One task: board entry, brief text, review text and run state.",
+             "inputSchema": _schema(TASK, ["task"])},
             {"name": "polier_dispatch", "description": "Next wave, running tasks, blocked tasks and scope conflicts.",
-             "inputSchema": {"type": "object", "properties": {}}},
+             "inputSchema": _schema()},
             {"name": "polier_show", "description": "Board status against the run record, gates, review and approvals.",
-             "inputSchema": {"type": "object", "properties": {"task": {"type": "string"}}, "required": ["task"]}},
-            {"name": "polier_activity", "description": "Newest-first feed of run events and approvals.",
-             "inputSchema": {"type": "object", "properties": {"limit": {"type": "integer"}}}},
+             "inputSchema": _schema(TASK, ["task"])},
             {"name": "polier_approvals", "description": "Approval records; pending by default.",
-             "inputSchema": {"type": "object", "properties": {"status": {"type": "string"}}}},
+             "inputSchema": _schema({"status": {"type": "string"}})},
             {"name": "polier_claims", "description": "Live claims of this repository.",
-             "inputSchema": {"type": "object", "properties": {}}},
+             "inputSchema": _schema()},
             {"name": "polier_state_set", "description": "Lead-only status transition through the state machine.",
-             "inputSchema": {"type": "object", "properties": {
-                 "task": {"type": "string"}, "status": {"type": "string"},
-                 "note": {"type": "string"}}, "required": ["task", "status"]}},
+             "inputSchema": _schema({**TASK, "status": {"type": "string"}, "note": {"type": "string"}}, ["task", "status"])},
             {"name": "polier_gate", "description": "Run one gate, write its evidence record and return the summary.",
-             "inputSchema": {"type": "object", "properties": {
-                 "task": {"type": "string"}, "name": {"type": "string"},
-                 "command": {"type": "string"}, "timeout": {"type": "integer"}},
-                 "required": ["task", "name"]}},
-            {"name": "polier_automations", "description": "Deterministic automation rules and a dry-run of their matches.",
-             "inputSchema": {"type": "object", "properties": {"run": {"type": "boolean"}}}},
-            {"name": "polier_github", "description": "Read-only GitHub/CI status: open PRs, recent workflow runs and task-to-branch mapping.",
-             "inputSchema": {"type": "object", "properties": {}}},
-            {"name": "polier_pages", "description": "The Markdown knowledge layer: collections, pages, word counts and favorites.",
-             "inputSchema": {"type": "object", "properties": {}}},
-            {"name": "polier_page", "description": "One page with content, links, backlinks and git history; ref reads an old revision.",
-             "inputSchema": {"type": "object", "properties": {
-                 "path": {"type": "string"}, "ref": {"type": "string"}}, "required": ["path"]}},
-            {"name": "polier_pages_search", "description": "Search the project's Markdown pages.",
-             "inputSchema": {"type": "object", "properties": {
-                 "q": {"type": "string"}, "limit": {"type": "integer"}}, "required": ["q"]}},
-            {"name": "polier_intake", "description": "Intake proposals (proposed/accepted/rejected) and their counts.",
-             "inputSchema": {"type": "object", "properties": {"status": {"type": "string"}}}},
-            {"name": "polier_intake_add", "description": "Add an intake proposal (idea, issue or request).",
-             "inputSchema": {"type": "object", "properties": {
-                 "title": {"type": "string"}, "description": {"type": "string"},
-                 "kind": {"type": "string"}, "priority": {"type": "string"}}, "required": ["title"]}},
-            {"name": "polier_templates", "description": "Task templates (reusable scope, gates, labels and estimates).",
-             "inputSchema": {"type": "object", "properties": {}}},
-            {"name": "polier_agents", "description": "Agent profiles: role, model, instructions, skills and connectors.",
-             "inputSchema": {"type": "object", "properties": {}}},
-            {"name": "polier_skills", "description": "Project skills (.claude/skills): name, when to use, instructions.",
-             "inputSchema": {"type": "object", "properties": {"id": {"type": "string", "description": "one skill with its body"}}}},
-            {"name": "polier_timeline", "description": "Auto-scheduled timeline: stage lanes, task bars, critical path and planning dates.",
-             "inputSchema": {"type": "object", "properties": {}}},
-            {"name": "polier_cycles", "description": "Stages as cycles: progress, exit gates, owner decision, burndown and effort.",
-             "inputSchema": {"type": "object", "properties": {}}},
-            {"name": "polier_modules", "description": "Packages as modules: tasks, health, docs and contracts.",
-             "inputSchema": {"type": "object", "properties": {}}},
-            {"name": "polier_coverage", "description": "Requirement coverage: D-codes, linked tasks, evidence and gaps.",
-             "inputSchema": {"type": "object", "properties": {}}},
-            {"name": "polier_analytics", "description": "Project analytics: throughput, cycle time, gate pass rate, rework, effort and tokens.",
-             "inputSchema": {"type": "object", "properties": {}}},
-            {"name": "polier_settings", "description": "Committed dashboard settings: features, labels, defaults and the current feature flags.",
-             "inputSchema": {"type": "object", "properties": {}}},
-            {"name": "polier_views", "description": "Built-in and saved task views (filters, grouping, sorting).",
-             "inputSchema": {"type": "object", "properties": {}}},
-            {"name": "polier_worklog", "description": "Actual effort from runs, gates and sessions, for one task or the whole project.",
-             "inputSchema": {"type": "object", "properties": {"task": {"type": "string"}}}},
-            {"name": "polier_me", "description": "Your Work: my tasks, reviews, approvals, claims and sessions.",
-             "inputSchema": {"type": "object", "properties": {}}},
-            {"name": "polier_inbox", "description": "Actionable inbox items (approvals, failed gates, blocked tasks, budget, reviews).",
-             "inputSchema": {"type": "object", "properties": {"unread": {"type": "boolean"}, "limit": {"type": "integer"}}}},
-            {"name": "polier_inbox_read", "description": "Mark inbox items read; use all=true to mark the current inbox read, reset=true to clear the read state.",
-             "inputSchema": {"type": "object", "properties": {
-                 "ids": {"type": "array", "items": {"type": "string"}}, "all": {"type": "boolean"},
-                 "reset": {"type": "boolean"}}}},
-            {"name": "polier_claim", "description": "Take the claim for a task (harness/session optional).",
-             "inputSchema": {"type": "object", "properties": {
-                 "task": {"type": "string"}, "session": {"type": "string"}}, "required": ["task"]}},
+             "inputSchema": _schema({**TASK, "name": {"type": "string"}, "command": {"type": "string"},
+                                     "timeout": {"type": "integer"}}, ["task", "name"])},
+            {"name": "polier_claim", "description": "Take the claim for a task.",
+             "inputSchema": _schema({**TASK, "session": {"type": "string"}}, ["task"])},
             {"name": "polier_release", "description": "Release the claim of a task.",
-             "inputSchema": {"type": "object", "properties": {"task": {"type": "string"}}, "required": ["task"]}},
+             "inputSchema": _schema(TASK, ["task"])},
         ]
 
     def call(self, name: str, arguments: Dict[str, Any]) -> Any:
         arguments = arguments if isinstance(arguments, dict) else {}
-        task = _text(arguments.get("task"))
-        if name == "polier_snapshot":
-            snapshot = dashboard_mod.snapshot(self.root)
-            return {
-                "project": snapshot["project"],
-                "counts": snapshot["counts"],
-                "stages": [{key: stage.get(key) for key in ("id", "title", "owner_decision", "complete", "tasks_open")}
-                           for stage in snapshot["stages"]],
-                "dispatch": snapshot["dispatch"],
-                "approvals_pending": snapshot["approvals"]["pending"],
-                "git": snapshot["git"],
-                "tasks": [{key: view.get(key) for key in ("id", "title", "status", "stage", "owner", "tokens")}
-                          for view in snapshot["tasks"]],
-            }
+        if name in WRITE_TOOLS and self.read_only:
+            raise PolierError("this MCP server runs read-only")
+        task = _text(arguments.get("task")).upper()
+        item = _text(arguments.get("item")).upper()
+
+        if name == "polier_factory":
+            value = factory_mod.summary(self.root)
+            if value is None:
+                raise PolierError("no factory.json; start the line with tools/factory.py init --platforms <list>")
+            return value
+        if name == "polier_factory_next":
+            limit = arguments.get("limit")
+            return factory_mod.next_items(self.root, limit=int(limit) if isinstance(limit, int) else 0)
+        if name == "polier_factory_item":
+            entry_item = factory_mod.catalog_item(item)
+            data = factory_mod.load(self.root) or {}
+            entry = (data.get("items") or {}).get(entry_item["id"])
+            return {**entry_item, "applies": entry is not None, "state": entry,
+                    "problems": factory_mod.item_problems(self.root, entry_item["id"], entry) if entry else []}
+        if name == "polier_factory_set":
+            status = _text(arguments.get("status"))
+            evidence = [str(v) for v in arguments.get("evidence") or [] if isinstance(v, str)]
+            return factory_mod.set_item(self.root, item, status, evidence=evidence,
+                                        reason=_text(arguments.get("reason")) or None, by="mcp")
+        if name == "polier_factory_link":
+            tasks = [str(v) for v in arguments.get("tasks") or [] if isinstance(v, str)]
+            return factory_mod.link(self.root, item, tasks, by="mcp")
+
         if name == "polier_tasks":
-            snapshot = dashboard_mod.snapshot(self.root)
-            return [{key: view.get(key) for key in (
-                "id", "title", "status", "stage", "stage_title", "owner", "complexity",
-                "gates", "gates_passed", "gates_missing", "tokens", "attempt", "review",
-                "claim", "blocked_reason", "next_status")} for view in snapshot["tasks"]]
+            board = board_mod.load_board(self.root, strict=False) or {}
+            keys = ("id", "title", "status", "stage", "owner", "complexity", "gates", "depends_on", "package")
+            return [{key: entry.get(key) for key in keys if key in entry}
+                    for entry in board.get("tasks") or [] if isinstance(entry, dict)]
         if name == "polier_task":
             if not task:
                 raise PolierError("task is required")
-            return dashboard_mod.task_detail(self.root, task)
+            board = board_mod.load_board(self.root, strict=False) or {}
+            entry = next((t for t in board.get("tasks") or [] if isinstance(t, dict) and t.get("id") == task), None)
+            if entry is None:
+                raise PolierError(f"unknown task {task}")
+            value: Dict[str, Any] = {"task": entry}
+            for key, rel in (("brief", f"tasks/{task}.md"), ("review", f"reviews/{task}.md")):
+                path = self.root / rel
+                if path.is_file():
+                    value[key] = path.read_text(encoding="utf-8")
+            try:
+                value["state"] = state_mod.status_of(self.root, task)
+            except Exception:  # noqa: BLE001 - a project without runs/ still shows the task
+                pass
+            return value
         if name == "polier_dispatch":
-            return dashboard_mod.snapshot(self.root)["dispatch"]
+            return dispatch_mod.plan(self.root)
         if name == "polier_show":
             if not task:
                 raise PolierError("task is required")
             return state_mod.status_of(self.root, task)
-        if name == "polier_activity":
-            limit = arguments.get("limit")
-            return dashboard_mod.activity(self.root, int(limit) if limit else 120)
         if name == "polier_approvals":
-            records = approvals_mod.load_all(self.root)
             status = _text(arguments.get("status")) or "pending"
-            return [record for record in records if record.get("status") == status]
+            return [record for record in approvals_mod.load_all(self.root) if record.get("status") == status]
         if name == "polier_claims":
             return claims_mod.live_claims(self.root)
         if name == "polier_state_set":
-            self._guard()
             status = _text(arguments.get("status"))
             if not task or not status:
                 raise PolierError("task and status are required")
-            return state_mod.set_status(self.root, task, status, actor="lead",
-                                        note=arguments.get("note"))
+            return state_mod.set_status(self.root, task, status, actor="lead", note=arguments.get("note"))
         if name == "polier_gate":
-            self._guard()
             gate_name = _text(arguments.get("name"))
             if not task or not gate_name:
                 raise PolierError("task and name are required")
-            command = _text(arguments.get("command"))
+            command = _text(arguments.get("command")) or suggest_gate_commands(self.root).get(gate_name, "")
             if not command:
-                command = self._gate_commands().get(gate_name, "")
-            if not command:
-                raise PolierError(f"no command configured for gate '{gate_name}'")
+                raise PolierError(f"no command for gate '{gate_name}': pass command or list it in docs/quality.md")
             board = board_mod.load_board(self.root, strict=False) or {}
             exclusive: List[str] = []
-            infra: List[str] = []
             for entry in board.get("tasks") or []:
                 if isinstance(entry, dict) and entry.get("id") == task:
-                    exclusive = [value for value in (entry.get("exclusive") or []) if isinstance(value, str)]
+                    exclusive = [v for v in (entry.get("exclusive") or []) if isinstance(v, str)]
                     break
             infra = list(board_mod.resources(board)["infra_patterns"])
             result = gate_mod.run_gate(command, task, gate_name, self.root, shell=True,
@@ -243,129 +221,59 @@ class Server:
                 "log": str(result.get("log_path")),
                 "summary": gate_mod.summary(result, tail=10, max_errors=10),
             }
-        if name == "polier_automations":
-            value = automations_mod.load(self.root, strict=False)
-            result = {"automations": value, "errors": automations_mod.errors(value),
-                      "kinds": list(automations_mod.KINDS)}
-            if arguments.get("run"):
-                result["evaluation"] = automations_mod.evaluate(self.root)
-            return result
-        if name == "polier_github":
-            return github_mod.status(self.root)
-        if name == "polier_pages":
-            return pages_mod.index(self.root)
-        if name == "polier_page":
-            path = _text(arguments.get("path"))
-            if not path:
-                raise PolierError("path is required")
-            return pages_mod.page(self.root, path, arguments.get("ref") or None)
-        if name == "polier_pages_search":
-            query = _text(arguments.get("q"))
-            if not query:
-                raise PolierError("q is required")
-            limit = arguments.get("limit")
-            return {"query": query, "results": pages_mod.search(
-                self.root, query, int(limit) if isinstance(limit, int) and limit > 0 else 50)}
-        if name == "polier_intake":
-            status = _text(arguments.get("status"))
-            if status and status not in intake_mod.STATUSES:
-                raise PolierError("unknown intake status")
-            return {"entries": intake_mod.load_all(self.root, status or None),
-                    **intake_mod.summary(self.root)}
-        if name == "polier_intake_add":
-            self._guard()
-            return intake_mod.create(self.root, arguments, by="mcp", source="mcp")
-        if name == "polier_templates":
-            return {"templates": templates_mod.load_all(self.root)}
-        if name == "polier_agents":
-            return agents_mod.load(self.root)
-        if name == "polier_skills":
-            if _text(arguments.get("id")):
-                try:
-                    return skills_mod.get(self.root, _text(arguments.get("id")))
-                except KeyError:
-                    raise PolierError(f"unknown skill {arguments.get('id')}")
-            return {"skills": [{key: skill[key] for key in ("id", "name", "description", "path")}
-                               for skill in skills_mod.load_all(self.root)]}
-        if name == "polier_timeline":
-            return timeline_mod.build(self.root)
-        if name == "polier_cycles":
-            return cycles_mod.build(self.root)
-        if name == "polier_modules":
-            snapshot = dashboard_mod.snapshot(self.root)
-            return modules_mod.build(self.root, snapshot=snapshot)
-        if name == "polier_coverage":
-            return coverage_mod.build(self.root)
-        if name == "polier_analytics":
-            return analytics_mod.build(self.root)
-        if name == "polier_settings":
-            value = settings_mod.load(self.root, strict=False)
-            return {
-                "settings": value,
-                "features": settings_mod.features(value),
-                "labels": settings_mod.label_list(value),
-                "me": settings_mod.me(value),
-                "errors": settings_mod.errors(value),
-            }
-        if name == "polier_views":
-            me = settings_mod.me(settings_mod.load(self.root, strict=False))
-            return {"builtin": filters_mod.builtin_views(me),
-                    "saved": views_mod.load_all(self.root),
-                    "all": views_mod.all_views(self.root, me)}
-        if name == "polier_worklog":
-            if task:
-                try:
-                    detail = dashboard_mod.task_detail(self.root, task)
-                except KeyError:
-                    raise PolierError(f"unknown task {task}")
-                return detail["worklog"]
-            snapshot = dashboard_mod.snapshot(self.root)
-            return worklog_mod.project_worklog(self.root, snapshot["tasks"])
-        if name == "polier_me":
-            snapshot = dashboard_mod.snapshot(self.root)
-            return inbox_mod.your_work(self.root, snapshot=snapshot)
-        if name == "polier_inbox":
-            snapshot = dashboard_mod.snapshot(self.root)
-            summary = inbox_mod.inbox_summary(self.root, snapshot=snapshot)
-            items = summary["items"]
-            if arguments.get("unread"):
-                items = [item for item in items if not item.get("read")]
-            limit = arguments.get("limit")
-            if isinstance(limit, int) and limit > 0:
-                items = items[:limit]
-            return {"items": items, "counts": summary["counts"]}
-        if name == "polier_inbox_read":
-            self._guard()
-            ids = arguments.get("ids") if isinstance(arguments.get("ids"), list) else []
-            return inbox_mod.mark_read(self.root, [str(item) for item in ids],
-                                       all_items=bool(arguments.get("all")),
-                                       reset=bool(arguments.get("reset")))
         if name == "polier_claim":
-            self._guard()
             if not task:
                 raise PolierError("task is required")
             return claims_mod.take(self.root, task, harness="claude-code",
                                    session=_text(arguments.get("session")) or "mcp")
         if name == "polier_release":
-            self._guard()
             if not task:
                 raise PolierError("task is required")
             return {"task": task, "released": claims_mod.release(self.root, task,
                                                                  _text(arguments.get("session")) or None)}
         raise PolierError(f"unknown tool {name}")
 
-    def _guard(self) -> None:
-        if self.read_only:
-            raise PolierError("this MCP server runs read-only")
-
-    def _gate_commands(self) -> Dict[str, str]:
-        config = runtime_mod.read_json(runtime_mod.runtime_dir(self.root) / "config.json")
-        commands = {**suggest_gate_commands(self.root), **(config.get("gate_commands") or {})}
-        return {key: value for key, value in commands.items() if isinstance(key, str) and isinstance(value, str)}
-
 
 def _error(message: str, code: int = -32602) -> Dict[str, Any]:
     return {"code": code, "message": message}
+
+
+def handle(server: Server, message: Dict[str, Any]):
+    """One JSON-RPC message → the response dict, or None for notifications."""
+    method = message.get("method")
+    request_id = message.get("id")
+    params = message.get("params") or {}
+    response: Dict[str, Any] = {"jsonrpc": "2.0"}
+    if request_id is not None:
+        response["id"] = request_id
+    if method == "initialize":
+        result: Any = {"protocolVersion": params.get("protocolVersion") or PROTOCOL,
+                       "capabilities": {"tools": {}}, "serverInfo": SERVER}
+    elif method in ("notifications/initialized", "initialized"):
+        return None
+    elif method == "ping":
+        result = {}
+    elif method == "tools/list":
+        result = {"tools": server.tools()}
+    elif method == "tools/call":
+        name = _text(params.get("name"))
+        try:
+            value = server.call(name, params.get("arguments") or {})
+            result = {"content": [{"type": "text", "text": json.dumps(value, indent=2, ensure_ascii=False, default=str)}],
+                      "isError": False}
+        except (PolierError, KeyError, ValueError) as exc:
+            result = {"content": [{"type": "text", "text": f"error: {exc}"}], "isError": True}
+        except Exception as exc:  # noqa: BLE001 - report, keep the server alive
+            result = {"content": [{"type": "text", "text": f"internal error: {exc}"}], "isError": True}
+    else:
+        if request_id is None:
+            return None
+        response["error"] = _error(f"unknown method {method}", -32601)
+        return response
+    if request_id is None:
+        return None
+    response["result"] = result
+    return response
 
 
 def main(argv=None) -> int:
@@ -386,43 +294,9 @@ def main(argv=None) -> int:
             continue
         if not isinstance(message, dict):
             continue
-        method = message.get("method")
-        request_id = message.get("id")
-        params = message.get("params") or {}
-        response: Dict[str, Any] = {"jsonrpc": "2.0"}
-        if request_id is not None:
-            response["id"] = request_id
-        if method == "initialize":
-            result = {"protocolVersion": params.get("protocolVersion") or PROTOCOL,
-                      "capabilities": {"tools": {}},
-                      "serverInfo": SERVER}
-        elif method in ("notifications/initialized", "initialized"):
-            continue
-        elif method == "ping":
-            result = {}
-        elif method == "tools/list":
-            result = {"tools": server.tools()}
-        elif method == "tools/call":
-            name = _text((params or {}).get("name"))
-            arguments = (params or {}).get("arguments") or {}
-            try:
-                value = server.call(name, arguments)
-                result = {"content": [{"type": "text", "text": json.dumps(value, indent=2, ensure_ascii=False)}],
-                          "isError": False}
-            except (PolierError, KeyError, ValueError) as exc:
-                result = {"content": [{"type": "text", "text": f"error: {exc}"}], "isError": True}
-            except Exception as exc:  # noqa: BLE001 - report, keep the server alive
-                result = {"content": [{"type": "text", "text": f"internal error: {exc}"}], "isError": True}
-        else:
-            if request_id is None:
-                continue
-            response["error"] = _error(f"unknown method {method}", -32601)
-            print(json.dumps(response), flush=True)
-            continue
-        if request_id is None:
-            continue
-        response["result"] = result
-        print(json.dumps(response, ensure_ascii=False), flush=True)
+        response = handle(server, message)
+        if response is not None:
+            print(json.dumps(response, ensure_ascii=False), flush=True)
     return 0
 
 

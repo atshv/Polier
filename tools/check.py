@@ -25,7 +25,7 @@ try:  # PL-15: optional, so a package without tools/drift.py still checks
 except Exception:  # noqa: BLE001
     _drift = None
 
-from core import approvals, audit, dispatch, runs  # noqa: E402
+from core import approvals, audit, dispatch, factory, runs  # noqa: E402
 from core.board import board_errors, stage_report, task_stage_id  # noqa: E402
 from core.errors import PolierError  # noqa: E402
 from core.evidence import verify_evidence  # noqa: E402
@@ -693,6 +693,24 @@ def check_orchestration(root: Path, board: dict, errors: list[str], warnings: li
     _check_orchestration_docs(root, warnings)
 
 
+def check_factory(root: Path, errors: list[str], warnings: list[str]) -> None:
+    """3.0: the factory line (factory.json) against the catalog, the board and the files."""
+    found_errors, found_warnings = factory.check(root)
+    errors.extend(found_errors)
+    warnings.extend(found_warnings)
+    if found_errors or not (root / factory.FILE).is_file():
+        return
+    rendered = root / "docs" / "factory.md"
+    try:
+        current = factory.render_markdown(root)
+    except PolierError:
+        return
+    if not rendered.is_file():
+        warnings.append("factory: docs/factory.md is missing; run tools/factory.py render")
+    elif rendered.read_text(encoding="utf-8") != current:
+        warnings.append("factory: docs/factory.md is stale; run tools/factory.py render")
+
+
 def main() -> int:
     root = Path(sys.argv[1] if len(sys.argv) > 1 else ".").resolve()
     errors: list[str] = []
@@ -774,6 +792,7 @@ def main() -> int:
     check_drift(root, warnings)
     check_links(root, errors)
     check_git(root, warnings)
+    check_factory(root, errors, warnings)
 
     for warning in warnings:
         print(f"WARN: {warning}")

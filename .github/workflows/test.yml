@@ -26,6 +26,12 @@ jobs:
         run: python3 tools/check.py examples/monorepo-mini
       - name: Reference L evidence chain passes audit.py
         run: python3 tools/audit.py --root examples/monorepo-mini
+      - name: Factory example passes factory.py check
+        run: python3 tools/factory.py --root examples/factory-app check
+      - name: Factory catalog Markdown is current
+        run: |
+          python3 tools/factory.py catalog > /tmp/CATALOG.md
+          diff -u factory/CATALOG.md /tmp/CATALOG.md
       - name: Shipped manifest is current
         # Strict for pull requests. On main the release workflow rewrites the
         # manifest when VERSION changes, so a stale one is only a warning there.

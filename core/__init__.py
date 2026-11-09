@@ -23,10 +23,12 @@ The modules group the rules:
 - ``approvals``: reviews/approvals/AP-NNN.json, the human decisions - 1.1.
 - ``state``: the task state machine, its checkpoints and the atomic write of
   board.json - 1.1.
+- ``factory``: the software factory line - nine stations from idea to
+  operate, the checklist catalog and the evidence per item (factory.json) - 3.0.
 """
 from __future__ import annotations
 
-from . import approvals, boundaries, claims, locks, policy, runs, slots, state
+from . import approvals, boundaries, claims, factory, locks, policy, runs, slots, state
 from .approvals import has_grant, request as request_approval
 from .board import (active_tasks, board_errors, find_root, load_board, pick_task,
                     ready_tasks, schema_version, stage_report, task_stage_id)
@@ -56,5 +58,5 @@ __all__ = [
     "load_run", "attempt_count", "run_state", "last_event", "record_gate", "summary",
     "has_grant", "request_approval",
     "check_transition", "set_status", "status_of", "STATE_TRANSITIONS",
-    "approvals", "boundaries", "claims", "locks", "policy", "runs", "slots", "state",
+    "approvals", "boundaries", "claims", "factory", "locks", "policy", "runs", "slots", "state",
 ]
