@@ -28,6 +28,7 @@ Open a session in an empty folder and say what you want: *"Build an app with Pol
 
 | You say | What happens |
 |---|---|
+| "Is everything ready?" | The agent calls `pl_preflight`: Python, git, DSH services, the write guard and the project, each problem with its fix |
 | "What is still missing?" | The agent already sees the live `<polier>` block: station, open items, running task, next move |
 | "Close the station." | You get a DSH approval prompt; only your answer closes it |
 | "Take task M03." | The session binds the task, claims it and may write only inside its scope |

@@ -4,6 +4,14 @@
 
 The DeepSeek Harness plugin registers these tools for the model. The human never calls them: the agent maps plain language to them, and the ones that need a human decision open a DSH approval prompt.
 
+## `pl_preflight`
+
+Check that everything is in place before work starts or continues: Python, git, the Polier package, the harness services Polier uses (approval prompts, shell), the write guard and, inside a project, git state, factory.json, board.json, policy.json, STATUS.md and claims. Changes nothing; every problem comes with its fix.
+
+| Parameter | Type | Required | Meaning |
+| --- | --- | --- | --- |
+| `project` | string |  | Project folder. Default: the session directory or the nearest parent with board.json or factory.json. |
+
 ## `pl_status`
 
 The full Polier state as JSON: the factory line, the running task with scope and brief, ready tasks with handoffs, live claims, policy limits, pending approvals and open questions. The <polier> context already shows the summary; call this only when you need the details.
@@ -144,5 +152,6 @@ This session is inside a Polier project: an AI software factory with nine statio
 - Specialists: a task names its role (frontend-builder, backend-builder, reviewer …). Delegate it to a fresh subagent whose first steps are pl_role with that role and pl_task with the task; pick the model strength the role suggests when the subagent tool lets you. A role only narrows what a session may do.
 - Independent review: a fresh subagent in the reviewer role that gets the pl_review packet (brief, diff, gate records, earlier rounds) and writes reviews/<ID>.md; later rounds are appended and the last verdict counts.
 - A task is done with pl_state done and, when other tasks depend on it, 1–3 handoff lines in the same call.
+- When something seems broken (a tool fails, a write is blocked without reason, a session resumes after a break), call pl_preflight first and fix what it lists.
 - A Ralph or subagent report is a claim, not evidence: gates go through pl_gate and status through pl_state.
 ```

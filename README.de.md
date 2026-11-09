@@ -28,6 +28,7 @@ In einem leeren Ordner eine Session öffnen und sagen, was du willst, z. B. *„
 
 | Du sagst | Was passiert |
 |---|---|
+| „Ist alles bereit?“ | Der Agent ruft `pl_preflight` auf und prüft Python, Git, DSH, Write Guard und Projekt. Jedes Problem kommt mit der Lösung |
 | „Was fehlt noch?“ | Der Agent sieht den Live-Block `<polier>` schon – Station, offene Punkte, laufende Aufgabe, nächster Schritt |
 | „Schliess die Station.“ | Du bekommst eine DSH-Freigabeabfrage, nur deine Antwort schliesst sie |
 | „Übernimm Aufgabe M03.“ | Die Session bindet die Aufgabe, reserviert sie und darf nur noch in ihrem Bereich schreiben |

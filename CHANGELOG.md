@@ -2,6 +2,10 @@
 
 What changed per version. Polier is not released yet: every 0.x version is a pre-release, 1.0 will be the first release. The current version is in `VERSION`; projects record theirs in `board.json` → `generator_version`.
 
+## 0.4.6
+
+**pl_preflight.** One call checks whether everything is in place before work starts or after a break: Python (3.9+), git, the Polier package, the DSH services Polier uses (approval prompts, shell), a probe of the write guard and, inside a project, git state, `factory.json`, `board.json`, `policy.json`, `STATUS.md` and claims. Nothing is changed; every problem comes with its fix and `next` names the first one. Headless: `tools/preflight.py [folder] [--json]`. The idea comes from comparing Polier with other agent harnesses.
+
 ## 0.4.5
 
 **First end-to-end run.** A small CLI (habit tracker, profile S) went through all nine stations with the real plugin and DSH packages: three tasks, independent reviewer agents, two rework rounds, a tagged release. 28 findings; these are fixed:

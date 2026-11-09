@@ -4,6 +4,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 
 import { Context } from '@deepseek-ai/cordis'
@@ -175,7 +176,7 @@ test('registers the tools, the live context and the skill with the real services
   await ctx.plugin(plugin)
   await new Promise((r) => setTimeout(r, 100))
   const names = ctx.get('tools').schemas().map((s) => s.name)
-  for (const n of ['pl_status', 'pl_gate', 'pl_scope_check', 'pl_review', 'pl_check', 'pl_next', 'pl_state', 'pl_factory', 'pl_mode', 'pl_role', 'pl_task', 'pl_approval']) {
+  for (const n of ['pl_preflight', 'pl_status', 'pl_gate', 'pl_scope_check', 'pl_review', 'pl_check', 'pl_next', 'pl_state', 'pl_factory', 'pl_mode', 'pl_role', 'pl_task', 'pl_approval']) {
     assert.ok(names.includes(n), n)
   }
   const skills = await ctx.get('skills').list({})
@@ -481,6 +482,20 @@ test('tool results name pl_* tools, and pl_review packs a task for the reviewer'
   assert.equal(packet.value.gates_green, true, packet.text)
   assert.deepEqual(packet.value.files, ['src/app.py'])
   assert.match(packet.value.diff, /\+x = 2/)
+})
+
+test('pl_preflight checks machine, harness, guard and project without changing anything', async () => {
+  const root = project([task('M01', 'in_progress')])
+  const { tools } = await boot({}, { approval: approvals() })
+  const result = await call(tools, agent(root), 'pl_preflight', {})
+  const byName = Object.fromEntries(result.value.checks.map((c) => [c.check, c.level]))
+  assert.equal(byName.python, 'ok', result.text)
+  assert.equal(byName['write guard'], 'ok', result.text)
+  assert.equal(byName['approval prompts'], 'ok')
+  assert.equal(byName.board, 'ok')
+  assert.ok(result.value.next)
+  const outside = await call(tools, agent(os.tmpdir()), 'pl_preflight', {})
+  assert.equal(outside.value.project, null)
 })
 
 test('pl_factory writes need the lead while tasks run', async () => {

@@ -43,6 +43,7 @@ DSH composes its tools from packages. In station 1, check the tool list and use 
 
 | Station / step | Use | Fallback |
 |---|---|---|
+| start, after a break | `pl_preflight` | `tools/preflight.py` |
 | all | `todo_write`, one item per station | none needed |
 | any station the owner wants finished | `create_goal` ("Close station concept: resolve every open item with evidence"); the `<polier>` block shows what is left each round | turn by turn |
 | 1 interview | `ask_user_question`, max. 10 per call, options with the recommended one first | chat |

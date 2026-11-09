@@ -11,6 +11,7 @@ description: AI software factory for DeepSeek Harness. Runs a software project t
 
 | Intent of the human | Tool |
 |---|---|
+| before starting or after a break | `pl_preflight` — Python, git, harness services, guard and project state, each problem with its fix |
 | start the line | `pl_factory` init with platforms and traits — the owner sees the plan and approves it |
 | what is open, what next | read `<polier>`; details with `pl_factory` (next) or `pl_next` |
 | record an item | `pl_factory` done (evidence), na or defer (reason), link (tasks); several at once with `batch` |

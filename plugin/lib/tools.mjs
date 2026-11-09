@@ -12,7 +12,7 @@ import {
 } from './policy.mjs'
 import { activeTasks, findProject, loadBoard, readyTasks } from './project.mjs'
 import { agentCwd, run } from './run.mjs'
-import { liveClaims, polierSlot, releaseClaim, ROLES, stateOf, takeClaim } from './session.mjs'
+import { context, liveClaims, polierSlot, releaseClaim, ROLES, stateOf, takeClaim } from './session.mjs'
 
 const ANY = {}
 const PROJECT = { type: 'string', description: 'Project folder. Default: the session directory or the nearest parent with board.json or factory.json.' }
@@ -103,6 +103,49 @@ async function render(ctx, config, agent, root, signal) {
 }
 
 export function tools(ctx, config) {
+  const preflight = jsonTool({
+    name: 'pl_preflight',
+    description: 'Check that everything is in place before work starts or continues: Python, git, the Polier package, the harness services Polier uses (approval prompts, shell), the write guard and, inside a project, git state, factory.json, board.json, policy.json, STATUS.md and claims. Changes nothing; every problem comes with its fix.',
+    parameters: { type: 'object', properties: { project: PROJECT } },
+    isConcurrencySafe: () => true,
+    async execute(args, exec) {
+      const where = path.resolve(agentCwd(ctx, exec.agent), String(args.project ?? '.'))
+      const checks = []
+      let result
+      try {
+        const ran = await run(ctx, exec.agent, py(config, 'preflight.py', where, '--json'), { cwd: where, timeoutMs: 60_000, signal: exec.signal, preferShell: false })
+        result = lastJson(ran.stdout)
+        if (!result) checks.push({ check: 'python', level: 'fail', detail: `${config.python} did not answer: ${(ran.stderr || ran.stdout || `exit ${ran.code}`).trim().slice(-300)}`, fix: 'set the plugin option python to a Python 3.9+ interpreter' })
+      } catch (error) {
+        checks.push({ check: 'python', level: 'fail', detail: `${config.python} cannot be started: ${String(error?.message ?? error)}`, fix: 'install Python 3.9+ or set the plugin option python' })
+      }
+      if (result) checks.push(...result.checks)
+      const approval = ctx.get?.('approval')
+      checks.push(approval && typeof approval.request === 'function'
+        ? { check: 'approval prompts', level: 'ok', detail: 'owner decisions open a DSH approval prompt' }
+        : { check: 'approval prompts', level: 'warn', detail: 'no approval service: station closes, lead mode and approvals fail closed', fix: 'enable dsh-user-approval in the profile, or let the owner run tools/*.py by hand' })
+      checks.push(ctx.get?.('shell')
+        ? { check: 'shell', level: 'ok', detail: 'gates run in the harness shell' }
+        : { check: 'shell', level: 'warn', detail: 'no harness shell: gates run as plain processes without the sandbox', fix: 'enable a tool executor with a shell in the profile' })
+      if (config.enforce === 'off') {
+        checks.push({ check: 'write guard', level: 'warn', detail: 'enforce is off: writes outside the task scope are not blocked', fix: 'set the plugin option enforce to deny' })
+      } else if (result?.project) {
+        const info = context(ctx, exec.agent)
+        const probe = info ? await run(ctx, exec.agent, [config.python, path.join(config.tools, 'guard.py'), JSON.stringify({ root: info.root, cwd: info.root, role: 'reviewer', tasks: [], path: 'src/__polier_probe__' })], { cwd: info.root, timeoutMs: 20_000, signal: exec.signal, preferShell: false }).catch(() => undefined) : undefined
+        const answer = probe ? lastJson(probe.stdout) : undefined
+        checks.push(answer && answer.deny
+          ? { check: 'write guard', level: 'ok', detail: `enforce ${config.enforce}; a probe write outside reviews/ was refused` }
+          : { check: 'write guard', level: 'fail', detail: 'tools/guard.py did not refuse a probe write', fix: 'check the python option; writes are blocked while the guard cannot answer' })
+      }
+      const state = stateOf(exec.agent)
+      checks.push({ check: 'session', level: 'ok', detail: `mode ${state.role}${state.specialist ? `, role ${state.specialist.id}` : ''}${state.pinned ? `, bound to ${state.pinned}` : ''}` })
+      const level = checks.some((c) => c.level === 'fail') ? 'fail' : checks.some((c) => c.level === 'warn') ? 'warn' : 'ok'
+      const problems = checks.filter((c) => c.level !== 'ok')
+      return { ok: level !== 'fail', result: level, project: result?.project ?? null, checks,
+        next: problems.length ? `Fix first: ${problems[0].check}: ${problems[0].fix ?? problems[0].detail}` : 'Everything is in place.' }
+    },
+  })
+
   const status = jsonTool({
     name: 'pl_status',
     description: 'The full Polier state as JSON: the factory line, the running task with scope and brief, ready tasks with handoffs, live claims, policy limits, pending approvals and open questions. The <polier> context already shows the summary; call this only when you need the details.',
@@ -540,5 +583,5 @@ export function tools(ctx, config) {
     },
   })
 
-  return [status, gate, scope, review, check, next, state, factory, mode, roleTool, bind, approval]
+  return [preflight, status, gate, scope, review, check, next, state, factory, mode, roleTool, bind, approval]
 }
