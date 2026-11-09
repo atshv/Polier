@@ -14,7 +14,6 @@ error.
 """
 from __future__ import annotations
 
-import re
 from pathlib import Path
 from typing import List, Optional
 
@@ -25,7 +24,6 @@ from .policy import (DEFAULTS, checks as policy_checks, enabled as policy_enable
                      limits as policy_limits, load_policy, manifest_match)
 
 REVIEW = Path("reviews")
-VERDICT = re.compile(r"(?im)^[\s>*-]*verdict\s*:\s*([A-Za-z_-]+)")
 ACTIVE = ("claimed", "in_progress", "verifying", "review", "rework")
 
 
@@ -44,15 +42,7 @@ def _attempts(root, task_id: str) -> int:
 def _review(root, task_id: str) -> dict:
     """The review file of a task: project-relative path, presence and verdict."""
     path = Path(root) / REVIEW / f"{task_id}.md"
-    verdict = None
-    try:
-        text = path.read_text(encoding="utf-8")
-    except OSError:
-        text = ""
-    if text:
-        match = VERDICT.search(text)
-        if match:
-            verdict = match.group(1).lower()
+    verdict = evidence.review_verdict(root, task_id)
     return {"file": f"reviews/{task_id}.md", "present": path.is_file(), "verdict": verdict}
 
 

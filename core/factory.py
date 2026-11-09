@@ -671,10 +671,10 @@ def status_line(root, data: Optional[Dict[str, Any]] = None) -> str:
             parts.append(f"{station} ✓")
         elif station == current:
             done = sum(1 for i in ids if items[i].get("status") in RESOLVED)
-            parts.append(f"**{station} {done}/{len(ids)}**")
+            parts.append(f"**{station} ({done}/{len(ids)} checklist items)**")
         else:
             parts.append(station)
-    return "Factory: " + " · ".join(parts)
+    return "Factory line (✓ closed, bold = current station): " + " · ".join(parts)
 
 
 def render_markdown(root, data: Optional[Dict[str, Any]] = None) -> str:

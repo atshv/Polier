@@ -239,7 +239,7 @@
     {"id": "REL-DSK-04", "station": "release", "level": "must", "title": "Update feed", "detail": "Published update feed tested from the previous version.", "platforms": ["desktop"], "evidence": "docs/store/desktop.md"},
     {"id": "REL-CLI-01", "station": "release", "level": "must", "title": "Package published", "detail": "PyPI, npm, Homebrew or release binaries with checksums.", "platforms": ["cli"], "evidence": "docs/releasing.md"},
 
-    {"id": "OPS-01", "station": "operate", "level": "must", "title": "Error tracking", "detail": "Crashes and exceptions reported (Sentry, Crashlytics) without personal data.", "evidence": "docs/runbook.md"},
+    {"id": "OPS-01", "station": "operate", "level": "must", "title": "Error tracking", "detail": "Crashes and exceptions reported (Sentry, Crashlytics) without personal data.", "platforms": ["web", "ios", "android", "desktop", "service"], "evidence": "docs/runbook.md"},
     {"id": "OPS-02", "station": "operate", "level": "must", "title": "Logging", "detail": "Structured logs with retention; no secrets or personal data in logs.", "traits": ["backend"], "evidence": "docs/runbook.md"},
     {"id": "OPS-03", "station": "operate", "level": "must", "title": "Uptime monitoring", "detail": "Health checks with alerts to a named person.", "traits": ["deploys"], "evidence": "docs/runbook.md"},
     {"id": "OPS-04", "station": "operate", "level": "must", "title": "Backups watched", "detail": "Backup success monitored and a restore drill scheduled.", "traits": ["database"], "evidence": "docs/runbook.md"},

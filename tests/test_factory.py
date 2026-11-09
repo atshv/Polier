@@ -269,7 +269,7 @@ class Tooling(unittest.TestCase):
     def test_status_line(self):
         root = make_project([])
         factory.init(root, ["cli"], [])
-        self.assertTrue(factory.status_line(root).startswith("Factory: **idea 0/"))
+        self.assertIn("**idea (0/", factory.status_line(root))
         self.assertEqual(factory.status_line(make_project([])), "")
 
     def test_show_and_catalog_scope(self):

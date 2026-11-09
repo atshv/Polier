@@ -175,7 +175,7 @@ test('registers the tools, the live context and the skill with the real services
   await ctx.plugin(plugin)
   await new Promise((r) => setTimeout(r, 100))
   const names = ctx.get('tools').schemas().map((s) => s.name)
-  for (const n of ['pl_status', 'pl_gate', 'pl_scope_check', 'pl_check', 'pl_next', 'pl_state', 'pl_factory', 'pl_mode', 'pl_role', 'pl_task', 'pl_approval']) {
+  for (const n of ['pl_status', 'pl_gate', 'pl_scope_check', 'pl_review', 'pl_check', 'pl_next', 'pl_state', 'pl_factory', 'pl_mode', 'pl_role', 'pl_task', 'pl_approval']) {
     assert.ok(names.includes(n), n)
   }
   const skills = await ctx.get('skills').list({})
@@ -440,10 +440,12 @@ test('pl_factory works before the board exists and closes a station only with th
   assert.equal(next.value.station, 'idea')
   assert.ok(next.value.items.some((item) => item.id === 'IDEA-01'))
 
-  for (const item of ['IDEA-01', 'IDEA-02', 'IDEA-03', 'IDEA-04']) {
-    const done = await call(tools, a, 'pl_factory', { action: 'done', item, evidence: ['project-input.md'] })
-    assert.equal(done.value.ok, true, done.text)
-  }
+  const batch = await call(tools, a, 'pl_factory', {
+    action: 'done',
+    batch: ['IDEA-01', 'IDEA-02', 'IDEA-03', 'IDEA-04'].map((item) => ({ item, evidence: ['project-input.md'] })),
+  })
+  assert.equal(batch.value.ok, true, batch.text)
+  assert.equal(batch.value.results.length, 4)
   assert.equal((await call(tools, a, 'pl_factory', { action: 'done', item: 'IDEA-05', evidence: ['factory.json'] })).value.ok, true)
   const noEvidence = await call(tools, a, 'pl_factory', { action: 'done', item: 'IDEA-06', evidence: ['missing.md'] })
   assert.equal(noEvidence.value.ok, false)
@@ -462,6 +464,23 @@ test('pl_factory works before the board exists and closes a station only with th
   const snapshot = plugin.liveContext(ctx, config, a)
   assert.match(snapshot, /Factory: station concept \(2\/9/)
   assert.match(snapshot, /CON-02 Prioritised feature list/)
+})
+
+test('tool results name pl_* tools, and pl_review packs a task for the reviewer', async () => {
+  const root = project([task('M01', 'in_progress', { gates: ['tests'] })])
+  const { tools } = await boot({}, { approval: approvals('allowed-once') })
+  const lead = agent(root)
+  await mode(tools, lead, 'lead')
+  const shown = await call(tools, lead, 'pl_state', { task: 'M01' })
+  assert.doesNotMatch(shown.text, /python3? \S*tools\/state\.py/)
+  const worker = agent(root)
+  await call(tools, worker, 'pl_task', { task: 'M01' })
+  await call(tools, worker, 'write', { file_path: 'src/app.py', content: 'x = 2\n' })
+  await call(tools, worker, 'pl_gate', { task: 'M01', gate: 'tests', command: `${PY} -c pass` })
+  const packet = await call(tools, worker, 'pl_review', { task: 'M01' })
+  assert.equal(packet.value.gates_green, true, packet.text)
+  assert.deepEqual(packet.value.files, ['src/app.py'])
+  assert.match(packet.value.diff, /\+x = 2/)
 })
 
 test('pl_factory writes need the lead while tasks run', async () => {
@@ -535,10 +554,12 @@ test('pl_task gives a builder the task role and leaves a reviewer a reviewer', a
   const bound = await call(tools, builder, 'pl_task', { task: 'M01' })
   assert.equal(bound.value.role, 'backend-builder', bound.text)
   assert.match(bound.value.next, /tasks\/M01.md/)
-  await call(tools, builder, 'pl_task', {})
+  // The builder still holds the claim: a reviewer binds without one.
   const reviewer = agent(root)
   assert.equal((await call(tools, reviewer, 'pl_role', { role: 'reviewer' })).value.mode, 'reviewer')
-  assert.equal((await call(tools, reviewer, 'pl_task', { task: 'M01' })).value.role, null)
+  const review = await call(tools, reviewer, 'pl_task', { task: 'M01' })
+  assert.equal(review.value.role, null, review.text)
+  assert.equal(review.value.claimed, false)
   const code = await call(tools, reviewer, 'write', { file_path: 'src/app.py', content: 'x = 9\n' })
   assert.match(code.text, /reviewer session writes only under reviews/)
 })

@@ -175,6 +175,8 @@ def main(argv=None) -> int:
     set_p.add_argument("status", choices=state.STATUSES, help="new status")
     set_p.add_argument("--actor", default="lead", help="who changes the state (default: lead)")
     set_p.add_argument("--note", help="reason; required for rework, blocked and failed")
+    set_p.add_argument("--handoff", action="append",
+                       help="a handoff line for the dependent tasks (repeat, max. 3); stored with the task")
     set_p.add_argument("--force", action="store_true",
                        help="override a checkpoint; needs a granted state_override approval")
     root_arg(set_p)
@@ -212,7 +214,7 @@ def main(argv=None) -> int:
             return _check_text(args.task, args.status, result)
 
         result = state.set_status(root, args.task, args.status, actor=args.actor,
-                                  note=args.note, force=args.force)
+                                  note=args.note, force=args.force, handoff=args.handoff)
         _set_text(result)
         return 0
     except state.TransitionBlocked as exc:

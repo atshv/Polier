@@ -10,6 +10,8 @@ Two entry points with deliberately different rules, kept as they shipped:
 """
 from __future__ import annotations
 
+import hashlib
+import json
 import subprocess
 from pathlib import Path
 from typing import Iterable, List, NamedTuple, Optional, Tuple, Union
@@ -17,13 +19,17 @@ from typing import Iterable, List, NamedTuple, Optional, Tuple, Union
 from .board import load_board, pick_task, tasks_of
 from .claims import live_claims
 from .errors import PolierError
-from .paths import inside, is_main_checkout, normalized, outside, relative, resolve
+from .paths import git_common_dir, inside, is_main_checkout, normalized, outside, relative, resolve
 
 # Always writable: gate logs and records belong to the task that produced them.
 ALWAYS_ALLOWED = ("reviews/evidence",)
 # Lead-owned files: a worker must not edit the board, the generated status, the
 # briefs or the run records (both are written by the tools).
 BOARD_FILES = ("board.json", "STATUS.md", "tasks", "runs")
+# Records the Polier tools write (state, line, approvals). In the stop check they
+# never count against a worker: the lead's tools change them while a task runs.
+RECORDS = ("board.json", "STATUS.md", "STATUS.html", "factory.json", "docs/factory.md",
+           "runs", "reviews/approvals")
 # The only folder a reviewer session writes to.
 REVIEWS = "reviews"
 # Approval records are the approver's: a reviewer writes review material, never
@@ -239,14 +245,64 @@ def _foreign_changes(found: List[Tuple[str, str]], task: dict, root=None) -> Lis
     return foreign
 
 
+def _fingerprint(root, rel: str) -> str:
+    path = Path(root) / rel
+    if not path.is_file():
+        return "missing"
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _baseline_file(root, task_id: str) -> Path:
+    return Path(git_common_dir(root)) / "polier" / "baselines" / f"{task_id}.json"
+
+
+def snapshot(root, task_id: str) -> dict:
+    """Record the changed files before a task starts; the stop check ignores them while unchanged."""
+    root = Path(root)
+    changes = {rel: _fingerprint(root, rel) for rel in changed_files(root)}
+    target = _baseline_file(root, task_id)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    tmp = target.with_suffix(".tmp")
+    tmp.write_text(json.dumps({"task": task_id, "root": str(root), "changes": changes}), encoding="utf-8")
+    tmp.replace(target)
+    return {"task": task_id, "baseline": sorted(changes)}
+
+
+def _baseline(root, task_id: Optional[str]) -> dict:
+    if not root or not task_id:
+        return {}
+    try:
+        data = json.loads(_baseline_file(root, task_id).read_text(encoding="utf-8"))
+    except (OSError, ValueError, PolierError):
+        return {}
+    if data.get("root") != str(Path(root)):
+        return {}
+    changes = data.get("changes")
+    return changes if isinstance(changes, dict) else {}
+
+
 def check_stop(changed: List[str], task: dict, allow_board: bool = False, root=None) -> dict:
     """Compare changed files (project-relative) with one task's scope.
 
-    With `root`, changed files that belong to another live claim's scope are
-    reported separately under `foreign` and do not count as violations of this
-    task; `ok` is driven by the violations only.
+    With `root`: files that were already changed when the task was bound
+    (``snapshot``) and are unchanged since are listed under `baseline` and skipped, records the tools write
+    are listed under `records` but never count, and changed files that belong
+    to another live claim's scope are reported under `foreign`. `ok` is driven
+    by the violations only.
     """
-    found = violations(changed, task, allow_board)
+    before = _baseline(root, task.get("id"))
+    records: List[str] = []
+    unchanged: List[str] = []
+    mine: List[str] = []
+    for path in changed:
+        if root is not None and path in before and before[path] == _fingerprint(root, path):
+            unchanged.append(path)
+            continue
+        if any(inside(path, r) for r in RECORDS):
+            records.append(path)
+            continue
+        mine.append(path)
+    found = violations(mine, task, allow_board)
     foreign = _foreign_changes(found, task, root)
     if foreign:
         foreign_paths = {item["path"] for item in foreign}
@@ -257,6 +313,8 @@ def check_stop(changed: List[str], task: dict, allow_board: bool = False, root=N
         "changed": list(changed),
         "violations": [{"path": p, "reason": r} for p, r in found],
         "foreign": foreign,
+        "records": records,
+        "baseline": unchanged,
         "scope_write": task.get("scope_write", []),
     }
 

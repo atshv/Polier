@@ -17,7 +17,7 @@
     "approver": "owner"
   },
   "commands": {
-    "deny": ["git push*", "npm publish*", "pnpm publish*", "yarn publish*", "docker push*", "gh release*", "kubectl apply*", "kubectl delete*", "terraform apply*", "rm -rf /*"],
+    "deny": ["git push*", "git tag*", "npm publish*", "pnpm publish*", "yarn publish*", "docker push*", "gh release*", "kubectl apply*", "kubectl delete*", "terraform apply*", "rm -rf /*"],
     "lead_only": ["*tools/state.py set*", "*tools/approve.py grant*", "*tools/approve.py deny*", "*tools/worktree.py finish*"],
     "warn": ["*kill*", "*pkill*", "killall*"]
   },

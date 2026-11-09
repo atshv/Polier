@@ -17,14 +17,32 @@ import { liveClaims, polierSlot, releaseClaim, ROLES, stateOf, takeClaim } from 
 const ANY = {}
 const PROJECT = { type: 'string', description: 'Project folder. Default: the session directory or the nearest parent with board.json or factory.json.' }
 
+// The Python tools print their headless commands; inside DSH the agent calls the pl_* tools.
+const TOOL_WORDS = [
+  [/python3? (?:\S*\/)?tools\/state\.py set (\S+) (\S+)/g, 'pl_state (task $1, status $2)'],
+  [/python3? (?:\S*\/)?tools\/state\.py show (\S+?)(?: --json)?(?=[\s"',;)]|$)/g, 'pl_state (task $1)'],
+  [/python3? (?:\S*\/)?tools\/state\.py show(?: --json)?/g, 'pl_state'],
+  [/python3? (?:\S*\/)?tools\/dispatch\.py(?: --json)?/g, 'pl_next'],
+  [/python3? (?:\S*\/)?tools\/approve\.py request --action (\S+)/g, 'pl_approval (action $1)'],
+  [/python3? (?:\S*\/)?tools\/approve\.py (?:grant|deny) \S+ --by \S+/g, 'the owner answers the pl_approval prompt'],
+  [/python3? (?:\S*\/)?tools\/render_status\.py[^"\n]*/g, 'pl_check (regenerates STATUS.md)'],
+]
+
+function toolWords(value) {
+  if (typeof value === 'string') return TOOL_WORDS.reduce((text, [pattern, words]) => text.replace(pattern, words), value)
+  if (Array.isArray(value)) return value.map(toolWords)
+  if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, toolWords(v)]))
+  return value
+}
+
 function jsonTool(def) {
-  return { ...def, output: { schema: ANY, render: (_args, value) => [{ type: 'text', text: JSON.stringify(value, null, 2) }] } }
+  return { ...def, output: { schema: ANY, render: (_args, value) => [{ type: 'text', text: JSON.stringify(toolWords(value), null, 2) }] } }
 }
 
 function projectRoot(ctx, agent, project) {
   const base = agentCwd(ctx, agent)
   const root = findProject(project ? path.resolve(base, project) : base)
-  if (!root) throw new Error('no board.json or factory.json in this folder or above; is this a Polier project?')
+  if (!root) throw new Error('no board.json or factory.json in this folder or above. To start a Polier project here, write project-input.md and call pl_factory with action init, platforms and traits.')
   return root
 }
 
@@ -190,13 +208,31 @@ export function tools(ctx, config) {
     },
   })
 
+  const review = jsonTool({
+    name: 'pl_review',
+    description: 'The review packet of one task: brief, acceptance IDs, earlier review verdicts, the latest gate record per gate (green or not), the changed files inside the scope and their diff. Hand it to the reviewer instead of collecting files by hand.',
+    parameters: { type: 'object', properties: { task: { type: 'string', description: 'Task ID. Default: the bound or running task.' }, project: PROJECT } },
+    isConcurrencySafe: () => true,
+    async execute(args, exec) {
+      const { root } = needBoard(ctx, exec.agent, args.project)
+      const argv = py(config, 'review.py', root)
+      const task = args.task || stateOf(exec.agent).pinned
+      if (task) argv.push('--task', String(task))
+      const result = await run(ctx, exec.agent, argv, { cwd: root, timeoutMs: 60_000, signal: exec.signal })
+      const value = lastJson(result.stdout)
+      if (value === undefined) return { ok: false, exit_code: result.code, error: (result.stderr || result.stdout).trim().slice(-2000) }
+      return { ok: value.ok !== false, ...value }
+    },
+  })
+
   const check = jsonTool({
     name: 'pl_check',
-    description: 'Run tools/check.py on the project: mandatory files, word budgets, board consistency, traceability, gate evidence and the factory line. ok: true means no errors.',
+    description: 'Regenerate STATUS.md and docs/factory.md, then run tools/check.py on the project: mandatory files, word budgets, board consistency, traceability, gate evidence and the factory line. ok: true means no errors.',
     parameters: { type: 'object', properties: { project: PROJECT } },
     isConcurrencySafe: () => true,
     async execute(args, exec) {
       const { root } = needBoard(ctx, exec.agent, args.project)
+      await render(ctx, config, exec.agent, root, exec.signal)
       const result = await run(ctx, exec.agent, py(config, 'check.py', root), { cwd: root, timeoutMs: 120_000, signal: exec.signal })
       return { ok: result.code === 0, exit_code: result.code, output: outputOf(result) }
     },
@@ -228,6 +264,7 @@ export function tools(ctx, config) {
         status: { type: 'string', description: 'New status. Omit to read.' },
         note: { type: 'string', description: 'Reason; required for rework, blocked and failed.' },
         force: { type: 'boolean', description: 'Override a checkpoint; needs a granted state_override approval.' },
+        handoff: { type: 'array', items: { type: 'string' }, description: 'With status done: 1–3 lines the dependent tasks need (what exists now, where, how to use it).' },
         project: PROJECT,
       },
     },
@@ -243,6 +280,9 @@ export function tools(ctx, config) {
         const argv = py(config, 'state.py', 'set', taskId, newStatus, '--actor', 'lead', '--root', root)
         if (typeof args.note === 'string' && args.note.trim()) argv.push('--note', args.note.trim())
         if (args.force === true) argv.push('--force')
+        for (const line of Array.isArray(args.handoff) ? args.handoff : []) {
+          if (typeof line === 'string' && line.trim()) argv.push('--handoff', line.trim())
+        }
         const result = await run(ctx, exec.agent, argv, { cwd: root, timeoutMs: 120_000, signal: exec.signal })
         if (result.code === 0) await render(ctx, config, exec.agent, root, exec.signal)
         return { ok: result.code === 0, task: taskId, status: newStatus, exit_code: result.code, output: outputOf(result) }
@@ -269,6 +309,11 @@ export function tools(ctx, config) {
         evidence: { type: 'array', items: { type: 'string' }, description: 'Project paths for done, e.g. docs/concept.md#user-stories.' },
         reason: { type: 'string', description: 'Reason for na or defer; a note for advance.' },
         tasks: { type: 'array', items: { type: 'string' }, description: 'Board task IDs for link.' },
+        batch: {
+          type: 'array',
+          description: 'Several items with the same action in one call (done, na, defer, link): each entry has item and its own evidence, reason or tasks.',
+          items: { type: 'object', properties: { item: { type: 'string' }, evidence: { type: 'array', items: { type: 'string' } }, reason: { type: 'string' }, tasks: { type: 'array', items: { type: 'string' } } }, required: ['item'] },
+        },
         project: PROJECT,
       },
     },
@@ -290,25 +335,39 @@ export function tools(ctx, config) {
         const view = await run(ctx, exec.agent, [...base, 'next', '--json'], { cwd: root, timeoutMs: 60_000, signal: exec.signal })
         const station = lastJson(view.stdout)?.station
         if (!station) return { ok: false, error: 'every station is already closed' }
-        const answer = await askOwner(ctx, exec, `Close the Polier station "${station}" and open the next one?`)
+        const status = lastJson((await run(ctx, exec.agent, [...base, 'status', '--json'], { cwd: root, timeoutMs: 60_000, signal: exec.signal })).stdout)
+        const row = (status?.stations ?? []).find((s) => s.id === station)
+        const counts = row ? ` ${row.done} done, ${row.na} n/a, ${row.deferred} deferred, ${row.open} open.` : ''
+        const answer = await askOwner(ctx, exec, `Close the Polier station "${station}" and open the next one?${counts} Details: docs/factory.md.`)
         if (!answer.ok) return { ok: false, station, approval: answer.outcome, ...(answer.note ? { note: answer.note } : {}) }
         const argv = [...base, 'advance', '--by', `${config.owner} (approved in DSH)`]
         if (typeof args.reason === 'string' && args.reason.trim()) argv.push('--note', args.reason.trim())
         const result = await run(ctx, exec.agent, argv, { cwd: root, timeoutMs: 60_000, signal: exec.signal })
         if (result.code === 0) await render(ctx, config, exec.agent, root, exec.signal)
-        return { ok: result.code === 0, station, approval: answer.outcome, output: outputOf(result) }
+        const closed = { ok: result.code === 0, station, approval: answer.outcome, output: outputOf(result) }
+        if (result.code === 0 && station === 'plan') closed.next = 'Commit the plan files (one commit, e.g. "chore: plan"), then start the first task from pl_next.'
+        return closed
       }
-      const item = typeof args.item === 'string' ? args.item.trim().toUpperCase() : ''
-      if (!item) throw new Error(`pl_factory ${action} needs the item ID`)
-      const argv = [...base, action, item]
-      if (action === 'done') for (const value of args.evidence ?? []) argv.push('--evidence', String(value))
-      if (action === 'na' || action === 'defer') argv.push('--reason', String(args.reason ?? ''))
-      if (action === 'link') argv.push('--task', (args.tasks ?? []).map(String).join(','))
-      argv.push('--by', stateOf(exec.agent).role === 'lead' ? 'lead' : 'planner')
-      const result = await run(ctx, exec.agent, argv, { cwd: root, timeoutMs: 60_000, signal: exec.signal })
-      if (result.code !== 0) return { ok: false, action, item, exit_code: result.code, output: outputOf(result) }
-      await render(ctx, config, exec.agent, root, exec.signal)
-      return { ok: true, action, item, output: outputOf(result), ...(await whatIsLeft(base, root, exec)) }
+      const entries = Array.isArray(args.batch) && args.batch.length ? args.batch : [args]
+      const by = stateOf(exec.agent).role === 'lead' ? 'lead' : 'planner'
+      const results = []
+      for (const entry of entries) {
+        const item = typeof entry?.item === 'string' ? entry.item.trim().toUpperCase() : ''
+        if (!item) throw new Error(`pl_factory ${action} needs the item ID`)
+        const argv = [...base, action, item]
+        if (action === 'done') for (const value of entry.evidence ?? []) argv.push('--evidence', String(value))
+        if (action === 'na' || action === 'defer') argv.push('--reason', String(entry.reason ?? ''))
+        if (action === 'link') argv.push('--task', (entry.tasks ?? []).map(String).join(','))
+        argv.push('--by', by)
+        const result = await run(ctx, exec.agent, argv, { cwd: root, timeoutMs: 60_000, signal: exec.signal })
+        results.push(result.code === 0
+          ? { ok: true, item, output: outputOf(result) }
+          : { ok: false, item, exit_code: result.code, output: outputOf(result) })
+      }
+      if (results.some((r) => r.ok)) await render(ctx, config, exec.agent, root, exec.signal)
+      const left = await whatIsLeft(base, root, exec)
+      if (results.length === 1) return { ...results[0], action, ...(results[0].ok ? left : {}) }
+      return { ok: results.every((r) => r.ok), action, results, ...left }
     },
   })
 
@@ -420,13 +479,23 @@ export function tools(ctx, config) {
       }
       const entry = board.tasks.find((t) => t?.id === id)
       if (!entry) throw new Error(`task ${id} is not on the board`)
+      // A reviewer keeps reviewing: the task's role and its claim are for the session that builds it.
+      const builds = state.role !== 'reviewer'
+      if (!builds) {
+        state.pinned = id
+        return { ok: true, bound: id, claimed: false, role: null,
+          next: `Review ${id}: read tasks/${id}.md, the diff and the gate records in reviews/evidence/, then write reviews/${id}.md.` }
+      }
+      const held = state.claims.includes(id)
       const taken = await takeClaim(ctx, config, exec.agent, root, id)
       if (!taken.ok && taken.code !== 2) return { ok: false, bound: state.pinned ?? null, error: `cannot claim ${id}: ${taken.message}` }
       state.pinned = id
       if (taken.ok) state.claims = [...new Set([...state.claims, id])]
-      // A reviewer keeps reviewing: the task's role is for the session that builds it.
-      const builds = state.role !== 'reviewer'
-      const role = builds && typeof entry.role === 'string' && entry.role ? await takeRole(exec, root, entry.role) : undefined
+      // What was already changed before this session took the task is not the builder's doing.
+      if (taken.ok && !held) {
+        await run(ctx, exec.agent, py(config, 'scope_check.py', root, '--task', id, '--snapshot'), { cwd: root, timeoutMs: 60_000, signal: exec.signal })
+      }
+      const role = typeof entry.role === 'string' && entry.role ? await takeRole(exec, root, entry.role) : undefined
       return {
         ok: true, bound: id, claimed: taken.ok, role: role?.id ?? null,
         ...(taken.ok ? {} : { note: `no claim taken: ${taken.message}` }),
@@ -471,5 +540,5 @@ export function tools(ctx, config) {
     },
   })
 
-  return [status, gate, scope, check, next, state, factory, mode, roleTool, bind, approval]
+  return [status, gate, scope, review, check, next, state, factory, mode, roleTool, bind, approval]
 }

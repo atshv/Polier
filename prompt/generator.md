@@ -92,7 +92,7 @@ Every station runs the same way: `pl_factory next` (or `tools/factory.py next`) 
 | `max_in_progress` | 1 | 2 | 3 |
 | `max_attempts_per_task` · `max_review_rounds` | 3 · 3 | 3 · 3 | 3 · 3 |
 
-`tools/check.py` checks the budgets; the board overrides one only with `budgets.<key> = {limit, reason}`. A raised limit needs a reason in the board's `decisions`. **Side strand at S:** allowed only with a fully separate write area and a shared contract fixed first in `docs/contracts/<name>.md` as its own task.
+`tools/check.py` checks the budgets; the board overrides one only with `budgets.<key> = {limit, reason}`. **Side strand at S:** allowed only with a fully separate write area and a shared contract fixed first in `docs/contracts/<name>.md` as its own task.
 
 Close the interview with 5–10 lines: profile, team, platforms and traits, top risks, runtime resources, release path.
 
@@ -124,7 +124,7 @@ Fill in `templates/ARCHITECTURE.md` without adding sections. Every applicable ar
 
 ### Board
 
-`board.json` per `templates/board.schema.json`. Task IDs are `M03` or `P3-02`, `ENG-14`. Each task has: ID, title, one-sentence goal, why, `satisfies` (D-items), scope and out of scope, acceptance `A1..An` as WHEN–THEN, gates, `scope_write` / `scope_read` / `scope_write_forbidden`, `depends_on`, complexity 1–10, stage, `parallel_group` if independent. Where they apply: `package`, `exclusive`, `resources`, `contract_followups`, and `role` (the specialist from `roles/roles.json` or `docs/roles/`). Board level: `generator_version`, `decisions`, `open_questions`, and optionally:
+`board.json` per `templates/board.schema.json`. Task IDs are `M03` or `P3-02`, `ENG-14`. Each task has: ID, title, one-sentence goal, why, `satisfies` (D-items), scope and out of scope, `acceptance` as the IDs `["A1", "A2"]` (the WHEN–THEN text lives in the brief), gates, `scope_write` / `scope_read` / `scope_write_forbidden`, `depends_on`, complexity 1–10, stage, `parallel_group` if independent. Where they apply: `package`, `exclusive`, `resources`, `contract_followups`, and `role` (the specialist from `roles/roles.json` or `docs/roles/`). Board level: `generator_version`, `decisions` (references to ADRs: `{id: "ADR-001", date, title, file}`), `open_questions`, and optionally:
 
 - `stages`: `{id, title, goal, exit_criteria[], exit_gates[], owner_decision, depends_on[]}`. Later-stage tasks become ready only when blocking stages are complete.
 - `packages` (L): `{path, kind, may_import[]}`; a task with `package` writes inside it.
@@ -134,7 +134,7 @@ Fill in `templates/ARCHITECTURE.md` without adding sections. Every applicable ar
 
 Complexity ≥ 7 → split. No cycles. Only stage 1 in full. Tasks sharing files or implicit decisions are never parallel. Never mix UI and data access in one task. Show the DAG as table and Mermaid. **M/L:** a scope critique and a test-design check before approval.
 
-**Factory mapping:** every applicable build and verify item is delivered by a task, whose acceptance names it (`A3 (BLD-36): WHEN …`), linked with `factory.py link BLD-36 --task M07`, or marked `na` with a reason. The plan station refuses to close while an open build or verify item has no task (`PLN-04`).
+**Factory mapping:** every applicable build and verify item is delivered by a task, whose brief names it (`A3 WHEN …, THEN … (BLD-36)`), linked with `factory.py link BLD-36 --task M07`, or marked `na` with a reason. The plan station refuses to close while an open build or verify item has no task (`PLN-04`).
 
 ### Policy, gates, contracts
 
@@ -148,7 +148,7 @@ Complexity ≥ 7 → split. No cycles. Only stage 1 in full. Tasks sharing files
 
 ### Briefs
 
-Briefs for the next 3–5 tasks from `templates/task-brief.md`, saved as `tasks/<ID>.md`, each with a context pack and gates. A UI task also gets the **UI specification**: values in px/ms/tokens, every applicable state, "do not", screenshot evidence; **a UI task without numbers is not ready.** Boilerplate lives once in `AGENTS.md`.
+Briefs for the next 3–5 tasks from `templates/task-brief.md`, saved as `tasks/<ID>.md`, each with a context pack and gates. The `**Scope:**` line under Limits lists the board's `scope_write` in backticks; acceptance lines start with `A1 WHEN`. A UI task also gets the **UI specification**: values in px/ms/tokens, every applicable state, "do not", screenshot evidence; **a UI task without numbers is not ready.** Boilerplate lives once in `AGENTS.md`.
 
 ### Scaffold
 
@@ -171,7 +171,7 @@ Briefs for the next 3–5 tasks from `templates/task-brief.md`, saved as `tasks/
 └── src/              # S/M: created by M01
 ```
 
-- `docs/quality.md`: every D-item is covered by a task's `satisfies` (trace D → task → acceptance → gate).
+- `docs/quality.md` (from `templates/quality.md`): every D-item is covered by a task's `satisfies` (trace D → task → acceptance → gate).
 - **Runtime setup** (servers or a database): `resources` on the board, `.polier-slot` in `.gitignore`, and a `tools/dev/setup` that reads the slot file:
 
 ```bash
@@ -212,7 +212,7 @@ You are the lead of <project>. Rules: policy.json. Plan: board.json.
 Switch with pl_mode lead (the owner approves). Read pl_next and take the first wave
 within max_in_progress. For each task: create its worktree when the board requires one,
 record the start with pl_state (in_progress), hand the worker prompt to a fresh subagent
-with the task's role, then review. A blocked task is escalated with pl_state (blocked,
+with the task's role, then give pl_review's packet to a fresh reviewer. A blocked task is escalated with pl_state (blocked,
 note), never retried. Approvals only with pl_approval.
 ```
 
@@ -231,10 +231,10 @@ status. A new dependency needs pl_approval (new_dependency, Mxx, why) first.
 **Review:**
 
 ```text
-You review Mxx; you did not write it. Call pl_mode reviewer. Read ARCHITECTURE.md,
-tasks/Mxx.md, the diff and the gate records in reviews/evidence/. Check every acceptance
+You review Mxx; you did not write it. Call pl_mode reviewer, pl_task Mxx and pl_review.
+Read ARCHITECTURE.md and what the packet names: brief, diff, gate records, earlier rounds. Check every acceptance
 criterion, the gates, the scope and side effects. infra, busy or timeout records are not
-evidence. Write reviews/Mxx.md per templates/review-feedback.md. No style remarks,
+evidence. Write reviews/Mxx.md per templates/review-feedback.md (append a round, never rewrite). No style remarks,
 no code edits.
 ```
 

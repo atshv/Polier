@@ -48,13 +48,15 @@ class CheckWrite(unittest.TestCase):
 
 class StopCheck(unittest.TestCase):
     def test_check_stop_without_git(self):
-        result = check_stop(["src/app.py", "README.md", "board.json", "reviews/evidence/a.log"], task())
+        result = check_stop(["src/app.py", "README.md", "board.json", "tasks/M01.md",
+                             "reviews/evidence/a.log"], task())
         self.assertFalse(result["ok"])
         self.assertEqual(result["violations"], [
             {"path": "README.md", "reason": "outside scope"},
-            {"path": "board.json", "reason": "lead-owned (board, status or brief)"},
+            {"path": "tasks/M01.md", "reason": "lead-owned (board, status or brief)"},
         ])
-        self.assertTrue(check_stop(["board.json"], task(), allow_board=True)["ok"])
+        self.assertEqual(result["records"], ["board.json"])
+        self.assertTrue(check_stop(["tasks/M01.md"], task(), allow_board=True)["ok"])
 
     def test_forbidden_wins_over_evidence(self):
         t = task(scope_write=["src/"], scope_write_forbidden=["reviews/"])

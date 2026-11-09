@@ -120,8 +120,8 @@ def command_denial(root, role: str, task_ids: List[str], command: str) -> Option
         tasks, _ = _tasks(root, task_ids)
         task = _bound(tasks)
         on = f", task {task}" if task else ""
-        return (f"Polier: command blocked, {denial['reason']}. This rule applies to every role, "
-                "a lead included: do not run it another way. If the action is part of the task, "
+        return (f"Polier: command blocked, {denial['reason']}, a lead included. Do not run it "
+                "another way. If the action is part of the task, "
                 f"stop and ask for it with pl_approval (action release{on}) and report it under "
                 "open_questions.")
     return (f"Polier: command blocked, {denial['reason']}. A worker or reviewer reports the needed "

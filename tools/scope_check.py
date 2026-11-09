@@ -3,11 +3,15 @@
 
 Usage:
     python3 tools/scope_check.py [project] [--task M03] [--allow-board] [--json]
+    python3 tools/scope_check.py [project] --task M03 --snapshot   # at task start
 
 Changed files are everything `git status` reports: modified, staged, untracked,
 deleted and both sides of a rename. Ignored files are not counted. Changed
 files that are inside the scope of a task claimed by another live session are
 printed separately as FOREIGN and do not count as violations of this task.
+Files that were already changed when the task was bound (--snapshot) and are
+unchanged since are skipped; records the Polier tools write (board.json,
+STATUS.md, factory.json, runs/ …) are listed as RECORDS and never count.
 
 Exit 0 = every change is inside the task's scope, 1 = at least one violation,
 2 = usage or environment error (no git repo, invalid board, no unique task).
@@ -27,7 +31,7 @@ from core.board import load_board, pick_task  # noqa: E402
 from core.errors import PolierError as ScopeError  # noqa: E402
 from core.paths import inside, normalized  # noqa: E402
 from core.scope import ALWAYS_ALLOWED, BOARD_FILES, changed_files, violations  # noqa: E402
-from core.scope import scope_check as check  # noqa: E402
+from core.scope import scope_check as check, snapshot  # noqa: E402
 
 __all__ = ["ALWAYS_ALLOWED", "BOARD_FILES", "ScopeError", "changed_files", "check", "inside",
            "load_board", "main", "normalized", "pick_task", "violations"]
@@ -40,10 +44,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--allow-board", action="store_true",
                         help="allow changes to board.json, STATUS.md and tasks/ (lead)")
     parser.add_argument("--json", action="store_true", help="print the result as JSON")
+    parser.add_argument("--snapshot", action="store_true",
+                        help="record the files already changed before the task starts")
     args = parser.parse_args(argv)
 
     root = Path(args.project).resolve()
     try:
+        if args.snapshot:
+            if not args.task:
+                raise ScopeError("--snapshot needs --task")
+            result = snapshot(root, args.task)
+            print(json.dumps(result) if args.json else f"BASELINE {args.task}: {len(result['baseline'])} changed file(s)")
+            return 0
         result = check(root, args.task, args.allow_board)
     except ScopeError as exc:
         if args.json:
@@ -57,6 +69,10 @@ def main(argv: list[str] | None = None) -> int:
     elif result["ok"]:
         suffix = "" if result["changed"] else " (no changes)"
         print(f"SCOPE OK {result['task']}{suffix}")
+        if result.get("baseline"):
+            print(f"BASELINE (changed before the task was bound, unchanged since): {', '.join(result['baseline'])}")
+        if result.get("records"):
+            print(f"RECORDS (written by the Polier tools, not counted): {', '.join(result['records'])}")
         for item in result.get("foreign") or []:
             print(f"FOREIGN (task {item['task']}, harness {item['harness']}): {item['path']}")
     else:

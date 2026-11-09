@@ -2,7 +2,21 @@
 
 What changed per version. Polier is not released yet: every 0.x version is a pre-release, 1.0 will be the first release. The current version is in `VERSION`; projects record theirs in `board.json` → `generator_version`.
 
-## 0.4.4
+## 0.4.5
+
+**First end-to-end run.** A small CLI (habit tracker, profile S) went through all nine stations with the real plugin and DSH packages: three tasks, independent reviewer agents, two rework rounds, a tagged release. 28 findings; these are fixed:
+
+- **Stop check.** It no longer blames a worker for the lead's records (`board.json`, `STATUS.md`, `factory.json`, `runs/`) and no longer tells it to undo them. `pl_task` takes a snapshot when a builder binds the task; files changed before are listed as `baseline` and skipped while unchanged.
+- **Review.** The last `verdict:` in `reviews/<ID>.md` counts, so an appended round 2 pass is seen (one reader in `core/evidence.py`). New `pl_review` (`tools/review.py`) gives the reviewer the brief, earlier verdicts, the latest record per gate, the changed files and the diff. A reviewer binds with `pl_task` without taking the builder's claim.
+- **Done.** `pl_state` takes `handoff` lines with `done`; nobody edits `board.json` for it. A done or failed task releases its claim. `pl_check` accepts the passing `pl_gate` records as evidence; before, every done task failed for a board field no tool writes.
+- **pl_factory.** `batch` records several items in one call. The close prompt shows done, n/a, deferred and open counts. After the plan station closes it says to commit the plan first.
+- **Wording.** Tool results name `pl_state`, `pl_next`, `pl_approval` instead of `python3 tools/…` commands. The error outside a project says how to start one. The deny message no longer repeats itself. `STATUS.md` explains its factory line.
+- **pl_check.** Regenerates `STATUS.md` and `docs/factory.md` first. `docs/module-map.md` needs a `## Layers` or `## Package map` section, not the words UI/logic/data. Board acceptance may hold `A1: …` text; the brief's `**Scope:**` error says where the line belongs. `pl_state` in `AGENTS.md` satisfies the state-tool hint.
+- **Templates.** New `templates/quality.md`. `AGENTS.template.md` uses the `pl_*` tools. `policy.json` denies `git tag*`. `OPS-01` (error tracking) no longer applies to a CLI. The generator states that board `acceptance` holds IDs and `decisions` holds ADR references.
+
+Still open: gate records carry no hash of the working tree, and minor review findings are not collected as follow-ups.
+
+
 
 **One guard, written once.** The write and command rules now exist only in Python (`core/guard.py`). Before every write and every `bash` command inside a Polier project the plugin asks `tools/guard.py` and shows its answer. The JavaScript copies of the scope, policy and kill rules and their mirror tests are gone. A write the guard cannot decide is blocked with the reason; a command goes through and the stop check still sees what it wrote.
 

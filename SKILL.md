@@ -13,13 +13,13 @@ description: AI software factory for DeepSeek Harness. Runs a software project t
 |---|---|
 | start the line | `pl_factory` init with platforms and traits — the owner sees the plan and approves it |
 | what is open, what next | read `<polier>`; details with `pl_factory` (next) or `pl_next` |
-| record an item | `pl_factory` done (evidence), na or defer (reason), link (tasks) |
+| record an item | `pl_factory` done (evidence), na or defer (reason), link (tasks); several at once with `batch` |
 | close a station | `pl_factory` advance — the owner answers the approval prompt |
 | plan, merge, record status | `pl_mode` lead (owner approves), then `pl_state` |
 | take a specialist role | `pl_role` (frontend-builder, backend-builder, reviewer …; `docs/roles.md`) |
 | work on a task | `pl_task` (takes the task's role too), then `pl_gate` per gate and `pl_scope_check` |
 | delegate a task | fresh subagent: `pl_role` with the task's role, then `pl_task` |
-| review | fresh subagent, `pl_role` reviewer, writes `reviews/<ID>.md` |
+| review | fresh subagent, `pl_role` reviewer, `pl_task`, `pl_review` (the packet), appends a round to `reviews/<ID>.md` |
 | a risky action | `pl_approval` — the owner answers the prompt |
 | lint the project | `pl_check` |
 

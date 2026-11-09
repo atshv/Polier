@@ -3,9 +3,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import subprocess
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 # A record with one of these results is not proof that the gate passed: it
 # describes the infrastructure around the gate, so the task must be
@@ -41,6 +42,9 @@ def verify_evidence(root, board: dict) -> Tuple[List[str], List[str]]:
         tid = task.get("id", "?")
         entries = [e for e in task.get("evidence", []) if isinstance(e, str)]
         records = [e for e in entries if e.strip().endswith(".json")]
+        if not entries:
+            # No list on the board: the passing records pl_gate wrote for this task are the evidence.
+            records = [f"reviews/evidence/{path.name}" for path in record_files(root, tid, passing_only=True)]
         if entries and not records:
             warnings.append(f"{tid}: evidence is free text; use the record paths printed by tools/gate.py")
             continue
@@ -95,6 +99,24 @@ def verify_evidence(root, board: dict) -> Tuple[List[str], List[str]]:
 # gate records as checkpoints (1.1)
 # ---------------------------------------------------------------------------
 
+def record_files(root, task_id: str, passing_only: bool = False) -> List[Path]:
+    folder = Path(root) / "reviews" / "evidence"
+    if not folder.is_dir():
+        return []
+    found: List[Path] = []
+    for path in sorted(folder.glob("*.json")):
+        try:
+            record = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if not isinstance(record, dict) or record.get("task") != task_id:
+            continue
+        if passing_only and (record.get("exit_code") != 0 or record.get("result") in INFRA_RESULTS):
+            continue
+        found.append(path)
+    return found
+
+
 def gate_records(root, task_id=None) -> List[dict]:
     """Every readable gate record in ``<root>/reviews/evidence``, in file order.
 
@@ -136,3 +158,16 @@ def passing_gates(root, task_id=None) -> set:
             continue
         passed.add(gate)
     return passed
+
+
+REVIEW_VERDICT = re.compile(r"(?im)^[\s>*-]*verdict\s*:\s*([A-Za-z_-]+)")
+
+
+def review_verdict(root, task_id: str) -> Optional[str]:
+    """The verdict of ``reviews/<ID>.md``; later rounds are appended, so the last one counts."""
+    try:
+        text = (Path(root) / "reviews" / f"{task_id}.md").read_text(encoding="utf-8")
+    except OSError:
+        return None
+    found = REVIEW_VERDICT.findall(text)
+    return found[-1].lower() if found else None

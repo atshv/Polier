@@ -34,9 +34,18 @@ Compare every changed file (git status) with the write scope of a task. Run it b
 | `task` | string |  | Task ID. Default: the bound or running task. |
 | `project` | string |  | Project folder. Default: the session directory or the nearest parent with board.json or factory.json. |
 
+## `pl_review`
+
+The review packet of one task: brief, acceptance IDs, earlier review verdicts, the latest gate record per gate (green or not), the changed files inside the scope and their diff. Hand it to the reviewer instead of collecting files by hand.
+
+| Parameter | Type | Required | Meaning |
+| --- | --- | --- | --- |
+| `task` | string |  | Task ID. Default: the bound or running task. |
+| `project` | string |  | Project folder. Default: the session directory or the nearest parent with board.json or factory.json. |
+
 ## `pl_check`
 
-Run tools/check.py on the project: mandatory files, word budgets, board consistency, traceability, gate evidence and the factory line. ok: true means no errors.
+Regenerate STATUS.md and docs/factory.md, then run tools/check.py on the project: mandatory files, word budgets, board consistency, traceability, gate evidence and the factory line. ok: true means no errors.
 
 | Parameter | Type | Required | Meaning |
 | --- | --- | --- | --- |
@@ -61,6 +70,7 @@ Read the execution state of the board or of one task, or (lead session) move a t
 | `status` | string |  | New status. Omit to read. |
 | `note` | string |  | Reason; required for rework, blocked and failed. |
 | `force` | boolean |  | Override a checkpoint; needs a granted state_override approval. |
+| `handoff` | list of string |  | With status done: 1–3 lines the dependent tasks need (what exists now, where, how to use it). |
 | `project` | string |  | Project folder. Default: the session directory or the nearest parent with board.json or factory.json. |
 
 ## `pl_factory`
@@ -76,6 +86,7 @@ The factory line (factory.json). init shows the owner the planned line (platform
 | `evidence` | list of string |  | Project paths for done, e.g. docs/concept.md#user-stories. |
 | `reason` | string |  | Reason for na or defer; a note for advance. |
 | `tasks` | list of string |  | Board task IDs for link. |
+| `batch` | list of object |  | Several items with the same action in one call (done, na, defer, link): each entry has item and its own evidence, reason or tasks. |
 | `project` | string |  | Project folder. Default: the session directory or the nearest parent with board.json or factory.json. |
 
 ## `pl_mode`
@@ -131,6 +142,7 @@ This session is inside a Polier project: an AI software factory with nine statio
 - Evidence, not ticks: an item is done with a project file (optionally #heading) or with linked tasks that are done; must items are never deferred. A task is done with recorded gates, a passing review and a handoff.
 - A whole station is long work: when goal tools exist and the human asks for it, create a goal such as "Close Polier station design: resolve every open item with evidence"; the <polier> block shows what is left each round.
 - Specialists: a task names its role (frontend-builder, backend-builder, reviewer …). Delegate it to a fresh subagent whose first steps are pl_role with that role and pl_task with the task; pick the model strength the role suggests when the subagent tool lets you. A role only narrows what a session may do.
-- Independent review: a fresh subagent in the reviewer role that sees only the brief, the diff and the gate records and writes reviews/<ID>.md.
+- Independent review: a fresh subagent in the reviewer role that gets the pl_review packet (brief, diff, gate records, earlier rounds) and writes reviews/<ID>.md; later rounds are appended and the last verdict counts.
+- A task is done with pl_state done and, when other tasks depend on it, 1–3 handoff lines in the same call.
 - A Ralph or subagent report is a claim, not evidence: gates go through pl_gate and status through pl_state.
 ```

@@ -90,21 +90,55 @@ class ScopeCheck(unittest.TestCase):
         (root / "reviews" / "evidence" / "M01-tests.log").write_text("ok\n")
         self.assertEqual(self.run_check(root).returncode, 0)
 
-    def test_board_files_need_allow_board(self):
+    def test_briefs_need_allow_board(self):
+        root = make_project([task()])
+        (root / "tasks").mkdir()
+        (root / "tasks" / "M01.md").write_text("# M01 — changed\n")
+        result = self.run_check(root)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("lead-owned", result.stdout)
+        self.assertEqual(self.run_check(root, "--allow-board").returncode, 0)
+
+    def test_board_changes_are_records_not_violations(self):
         root = make_project([task()])
         board = json.loads((root / "board.json").read_text())
         board["stage"] = 2
         (root / "board.json").write_text(json.dumps(board))
         result = self.run_check(root)
-        self.assertEqual(result.returncode, 1)
-        self.assertIn("lead-owned", result.stdout)
-        self.assertEqual(self.run_check(root, "--allow-board").returncode, 0)
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("RECORDS", result.stdout)
 
     def test_no_changes(self):
         root = make_project([task()])
         result = self.run_check(root)
         self.assertEqual(result.returncode, 0)
         self.assertIn("no changes", result.stdout)
+
+class Baseline(unittest.TestCase):
+    """What was changed before the task was bound, and the tools' records, are not the builder's."""
+
+    def test_records_and_baseline_do_not_count(self):
+        root = make_project([task(scope_write=["src/app.py"])])
+        (root / "README.md").write_text("lead edit before the task\n", encoding="utf-8")
+        (root / "runs").mkdir()
+        (root / "runs" / "M01.json").write_text("{}", encoding="utf-8")
+        self.assertEqual(run_tool("scope_check.py", str(root), "--task", "M01", "--snapshot").returncode, 0)
+        (root / "STATUS.md").write_text("regenerated\n", encoding="utf-8")
+        (root / "src" / "app.py").write_text("x = 2\n", encoding="utf-8")
+        result = run_tool("scope_check.py", str(root), "--task", "M01", "--json")
+        data = json.loads(result.stdout)
+        self.assertTrue(data["ok"], data)
+        self.assertIn("STATUS.md", data["records"])
+        self.assertIn("README.md", data["baseline"])
+
+    def test_a_baseline_file_changed_again_counts(self):
+        root = make_project([task(scope_write=["src/app.py"])])
+        (root / "README.md").write_text("before\n", encoding="utf-8")
+        run_tool("scope_check.py", str(root), "--task", "M01", "--snapshot")
+        (root / "README.md").write_text("changed by the builder\n", encoding="utf-8")
+        data = json.loads(run_tool("scope_check.py", str(root), "--task", "M01", "--json").stdout)
+        self.assertFalse(data["ok"])
+        self.assertEqual([v["path"] for v in data["violations"]], ["README.md"])
 
 
 if __name__ == "__main__":
@@ -118,14 +152,13 @@ class OneOneScopeCodes(unittest.TestCase):
     def run_check(self, root, *args):
         return run_tool("scope_check.py", str(root), *args)
 
-    def test_run_records_are_lead_owned(self):
+    def test_run_records_do_not_count_against_the_worker(self):
         root = make_project([task()])
         (root / "runs").mkdir()
         (root / "runs" / "M01.json").write_text("{}\n", encoding="utf-8")
-        result = self.run_check(root)
-        self.assertEqual(result.returncode, 1)
-        self.assertIn("runs/M01.json: lead-owned", result.stdout)
-        self.assertEqual(self.run_check(root, "--allow-board").returncode, 0)
+        result = self.run_check(root, "--json")
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(json.loads(result.stdout)["records"], ["runs/M01.json"])
 
     def test_reviewer_may_not_write_the_approval_ledger(self):
         from core.scope import check_write

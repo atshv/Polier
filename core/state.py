@@ -21,12 +21,11 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import time
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from . import evidence
+from . import claims, evidence
 from .approvals import has_grant, load_all, pending as pending_approvals
 from .board import (BOARD, load_board, stage_report, task_stage_id, tasks_of)
 from .errors import PolierError
@@ -60,7 +59,6 @@ NEXT_STATUS = {
     "done": None,
 }
 REVIEW = Path("reviews")
-VERDICT = re.compile(r"(?im)^[\s>*-]*verdict\s*:\s*([A-Za-z_-]+)")
 
 
 class TransitionBlocked(PolierError):
@@ -136,13 +134,7 @@ def _policy(root) -> Tuple[dict, Optional[str]]:
 
 
 def _review_verdict(root, task_id: str) -> Optional[str]:
-    path = Path(root) / REVIEW / f"{task_id}.md"
-    try:
-        text = path.read_text(encoding="utf-8")
-    except OSError:
-        return None
-    match = VERDICT.search(text)
-    return match.group(1).lower() if match else None
+    return evidence.review_verdict(root, task_id)
 
 
 def _review_problem(root, task_id: str) -> Optional[str]:
@@ -405,7 +397,7 @@ def check_transition(root, board, task, new_status, *, actor: str = "lead",
                     pre.append(f"{task_id}: {problem} "
                                f"(depended on by {', '.join(dependents)})")
                     req("handoff")
-                    need("handoff", f"board.json: task {task_id}, field handoff",
+                    need("handoff", f"pl_state {task_id} done with handoff lines (headless: tools/state.py set {task_id} done --handoff \"…\")",
                          "add 1–3 handoff lines for the dependent tasks")
             if flags["run_record"] and not run_path(root, task_id).is_file():
                 pre.append(f"{task_id}: no run record runs/{task_id}.json")
@@ -511,7 +503,7 @@ def _next_command(task_id: str, status: str) -> Optional[str]:
 
 
 def set_status(root, task_id, new_status, *, actor: str = "lead", note=None,
-               force: bool = False) -> dict:
+               force: bool = False, handoff: Optional[List[str]] = None) -> dict:
     """Change one task status after its checkpoints passed, and record it.
 
     Raises :class:`TransitionBlocked` (with ``.errors`` and ``.actions``) when a
@@ -525,6 +517,10 @@ def set_status(root, task_id, new_status, *, actor: str = "lead", note=None,
     board_file = root / BOARD
     with FileLock(board_file.with_name(board_file.name + ".lock")):
         board = load_board(root)
+        if handoff:
+            target = next((item for item in tasks_of(board) if item.get("id") == task_id), None)
+            if target is not None:
+                target["handoff"] = [str(line).strip() for line in handoff if str(line).strip()]
         result = check_transition(root, board, task_id, new_status,
                                   actor=actor, note=note, force=force)
         if not result["ok"]:
@@ -563,6 +559,11 @@ def set_status(root, task_id, new_status, *, actor: str = "lead", note=None,
 
         entry["status"] = new_status
         _write_board(root, board)
+        if new_status in ("done", "failed"):
+            try:  # a finished task needs no builder any more
+                claims.release(root, task_id)
+            except (PolierError, OSError):
+                pass
         attempts = attempt_count(root, task_id)
         return {
             "ok": True,

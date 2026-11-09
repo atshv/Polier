@@ -365,7 +365,7 @@ class OrchestrationChecks(unittest.TestCase):
         errors, warnings = self.run_checks(root, self.board(task()))
         self.assertEqual(errors, [])
         joined = "\n".join(warnings)
-        self.assertIn("tools/state.py is not mentioned", joined)
+        self.assertIn("is not mentioned — state changes go through it", joined)
         self.assertIn("docs/orchestration.md is missing", joined)
         self.assertIn("runs/ is not mentioned", joined)
         self.assertIn("policy.json is not mentioned", joined)

@@ -214,5 +214,5 @@ test('a denied command is a denial in ask mode as well, never a question', async
   const push = await call(tools, agent(root), 'bash', { command: 'git push origin main' })
   assert.equal(push.error, true)
   assert.match(push.text, /command blocked/)
-  assert.match(push.text, /applies to every role/)
+  assert.match(push.text, /blocked for every role, a lead included/)
 })

@@ -62,7 +62,7 @@ class Commands(unittest.TestCase):
 
     def test_deny_and_lead_only(self):
         deny = decide(request(self.root, command="git push origin main"))["deny"]
-        self.assertIn("applies to every role", deny)
+        self.assertIn("blocked for every role, a lead included", deny)
         self.assertIn("deny", decide(request(self.root, role="lead", command="git push"))["deny"])
         worker = decide(request(self.root, command="python3 tools/state.py set M01 done"))["deny"]
         self.assertIn("only the lead may run", worker)

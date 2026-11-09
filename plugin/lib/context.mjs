@@ -23,7 +23,7 @@ function hint({ view, board, state, running, ready, pending }) {
   }
   if (!board) return 'No board yet: follow the Polier skill (prompt/generator.md) from the idea station.'
   if (state.role === 'worker' && running.length === 1) return `Work only inside the scope of ${running[0].id}; prove it with pl_gate, check with pl_scope_check, report to the lead.`
-  if (state.role === 'reviewer') return 'Review only: read the diff, the brief and the gate records, write reviews/<ID>.md, change no code.'
+  if (state.role === 'reviewer') return 'Review only: pl_review gives the brief, the diff and the gate records; write reviews/<ID>.md (append a round), change no code.'
   if (running.length === 0 && ready.length > 0) return `Next task: ${ready[0].id}. The lead starts it with pl_state (in_progress); a worker binds it with pl_task.`
   if (view?.current === 'build' || view?.current === 'verify') return 'Done tasks unlock their linked factory items: record them with pl_factory done.'
   return 'pl_next shows the dispatch plan.'
@@ -87,7 +87,8 @@ This session is inside a Polier project: an AI software factory with nine statio
 - Evidence, not ticks: an item is done with a project file (optionally #heading) or with linked tasks that are done; must items are never deferred. A task is done with recorded gates, a passing review and a handoff.
 - A whole station is long work: when goal tools exist and the human asks for it, create a goal such as "Close Polier station design: resolve every open item with evidence"; the <polier> block shows what is left each round.
 - Specialists: a task names its role (frontend-builder, backend-builder, reviewer …). Delegate it to a fresh subagent whose first steps are pl_role with that role and pl_task with the task; pick the model strength the role suggests when the subagent tool lets you. A role only narrows what a session may do.
-- Independent review: a fresh subagent in the reviewer role that sees only the brief, the diff and the gate records and writes reviews/<ID>.md.
+- Independent review: a fresh subagent in the reviewer role that gets the pl_review packet (brief, diff, gate records, earlier rounds) and writes reviews/<ID>.md; later rounds are appended and the last verdict counts.
+- A task is done with pl_state done and, when other tasks depend on it, 1–3 handoff lines in the same call.
 - A Ralph or subagent report is a claim, not evidence: gates go through pl_gate and status through pl_state.`
 
 /** The instructions of the session's role, '' without one. */

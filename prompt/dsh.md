@@ -66,8 +66,8 @@ Subagents and `workflow` only read, research and criticise during planning.
 | start | worktree when required, `pl_state` → `in_progress` | `pl_role <role>`, `pl_task M03` (binds and claims) |
 | build | — | code inside the scope, `pl_gate` per gate, `pl_scope_check` |
 | check | `pl_state` → `verifying`, `review` | — |
-| review | fresh reviewer subagent writes `reviews/M03.md` | — |
-| close | `pl_state` → `done` or `rework`; `pl_factory done` for linked items | — |
+| review | `pl_review` packet to a fresh reviewer subagent, which appends a round to `reviews/M03.md` | — |
+| close | `pl_state` → `done` (with handoff lines) or `rework`; `pl_factory done` for linked items; commit | — |
 
 `STATUS.md` and `docs/factory.md` regenerate after every recorded change. Checkpoints, attempts, rounds, approvals and budgets are described once, in `prompt/orchestration.md`. DSH does not hand token counts to plugins: with a budget the lead records them with `tools/usage.py record <ID> --tokens N`.
 
@@ -75,7 +75,7 @@ Subagents and `workflow` only read, research and criticise during planning.
 - **Gates:** `pl_gate` runs `tools/gate.py` in the harness shell, passes the slot and locks the task's `exclusive` resources. A busy resource reports BUSY; `infra | busy | timeout` is never evidence.
 - **Stop condition:** `create_goal` "gates green for Mxx" with a small `max_goal_rounds`. Only the owner resumes a blocked goal.
 - **Runtime:** ports, database and bucket from `.polier-slot` (`tools/slot.py show`). Never stop a process you did not start; the plugin warns once per turn.
-- **Reviewer:** a fresh subagent in `reviewer` mode; sees only diff, criteria and records; writes only under `reviews/`.
+- **Reviewer:** a fresh subagent in `reviewer` mode with the `pl_review` packet; sees only diff, criteria and records; writes only under `reviews/`; binds with `pl_task` without taking the builder's claim.
 
 **M — lead + 2–3 workers.** Workers, best option first: `spawn_teammate` (Agent Teams; inherits the lead's model), a fresh `subagent` per task continued with `send_message`, or sessions the owner starts. One worktree per task (`worktrees: required`). `wait_agent` instead of polling; `interrupt_agent` for a worker that leaves its scope. At most 3 workers, never with overlapping scopes.
 

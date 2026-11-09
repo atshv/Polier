@@ -66,6 +66,17 @@ class VerifyEvidence(unittest.TestCase):
         errors, _ = verify_evidence(root, board)
         self.assertEqual(errors, ["M01: no passing gate record for 'lint' (run it with tools/gate.py --name lint)"])
 
+    def test_without_an_evidence_list_the_folder_counts(self):
+        root = project([task()])
+        run_gate(PY + ["fail"], "M01", "tests", root)  # an earlier red run is history, not an error
+        run_gate(PY + ["pass"], "M01", "tests", root)
+        set_board(root, tasks=[task(status="done")])
+        board = json.loads((root / "board.json").read_text())
+        self.assertEqual(verify_evidence(root, board), ([], []))
+        board["tasks"][0]["gates"] = ["tests", "lint"]
+        errors, _ = verify_evidence(root, board)
+        self.assertEqual(errors, ["M01: no passing gate record for 'lint' (run it with tools/gate.py --name lint)"])
+
     def test_tampered_log(self):
         root = project([task()])
         result = run_gate(PY + ["pass"], "M01", "tests", root)

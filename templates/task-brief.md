@@ -86,7 +86,7 @@ If a gate fails: read the cause, fix the code, rerun the gate. Never adjust the 
 
 ## Limits
 
-- **Scope:** only `<paths>` — inside the task's package; contract paths are the only exception
+- **Scope:** only `<path>`, `<path>` — exactly the board's `scope_write`, each in backticks (`tools/check.py` compares them); at L inside the task's package, contract paths are the only exception
 - **Stop:** <max. rounds/time/tokens>; when blocked, `status: blocked` + reason
 - No architecture change; no new dependencies without approval
 

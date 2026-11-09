@@ -279,7 +279,7 @@ Outputs: `docs/runbook.md`
 
 | ID | Level | Item | Applies to | Evidence |
 | --- | --- | --- | --- | --- |
-| OPS-01 | must | **Error tracking** — Crashes and exceptions reported (Sentry, Crashlytics) without personal data. | all | `docs/runbook.md` |
+| OPS-01 | must | **Error tracking** — Crashes and exceptions reported (Sentry, Crashlytics) without personal data. | web, ios, android, desktop, service | `docs/runbook.md` |
 | OPS-02 | must | **Logging** — Structured logs with retention; no secrets or personal data in logs. | backend | `docs/runbook.md` |
 | OPS-03 | must | **Uptime monitoring** — Health checks with alerts to a named person. | deploys | `docs/runbook.md` |
 | OPS-04 | must | **Backups watched** — Backup success monitored and a restore drill scheduled. | database | `docs/runbook.md` |
