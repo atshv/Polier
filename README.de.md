@@ -50,7 +50,7 @@ Ein „ja“ im Chat ändert nichts. Entscheidungen sind Freigabeabfragen, Eintr
 | 8 | Release | `docs/legal.md`, `docs/store/*` | CI ab Tags, Rechtstexte, Store-Einträge, Signierung, Notarisierung |
 | 9 | Betrieb | `docs/runbook.md` | Fehler, Erreichbarkeit, Backups, Support, Updates, Store-Pflege |
 
-Die vollständige Checkliste – 175 Punkte, jeweils mit den Plattformen und Eigenschaften, für die sie gelten – steht in [`factory/CATALOG.md`](factory/CATALOG.md) (Englisch). Eine Web-App mit Konten bekommt rund 100 davon, ein CLI rund 50.
+Die vollständige Checkliste – 176 Punkte, jeweils mit den Plattformen und Eigenschaften, für die sie gelten – steht in [`factory/CATALOG.md`](factory/CATALOG.md) (Englisch). Eine Web-App mit Konten bekommt rund 100 davon, ein CLI rund 50.
 
 ## Nachweise statt Versprechen
 
@@ -68,7 +68,7 @@ Die vollständige Checkliste – 175 Punkte, jeweils mit den Plattformen und Eig
 | [`factory/`](factory) | der Katalog der Stationen und Punkte |
 | [`roles/`](roles) | Fachrollen – Frontend-, Backend- und Mobile-Builder, Reviewer, Release-Manager ([`docs/roles.md`](docs/roles.md), Englisch) |
 | [`core/`](core), [`tools/`](tools) | die Regeln und die Python-Tools darunter (auch ohne Oberfläche nutzbar) |
-| [`prompt/`](prompt), [`templates/`](templates) | der Ablauf, die Bewertung und alle Dokumentvorlagen |
+| [`prompt/`](prompt), [`templates/`](templates) | der Ablauf, die Bewertung und alle Dokumentvorlagen; Web-Oberflächen nehmen ihre Komponenten aus [Magic UI](https://magicui.design) und shadcn/ui ([`templates/ui/magic-ui.md`](templates/ui/magic-ui.md)) |
 
 ## Mehr erfahren
 

@@ -29,7 +29,7 @@ description: AI software factory for DeepSeek Harness. Runs a software project t
 |---|---|
 | 1 idea | `templates/project-input.md`, `factory/CATALOG.md` (or `tools/factory.py catalog --platforms … --traits …`) |
 | 2 concept | `templates/concept.md`; research via `tools/research.py note` |
-| 3 design | `templates/ux-flows.md`, `templates/design-rules.md` |
+| 3 design | `templates/ux-flows.md`, `templates/design-rules.md`; web with React + Tailwind: `templates/ui/magic-ui.md` |
 | 4 architecture | `templates/ARCHITECTURE.md`, `templates/module-map.md`, `templates/adr.md`, `templates/versions.md`; L: `templates/monorepo-layout.md`, `templates/package-ARCHITECTURE.md`, `templates/package-AGENTS.md`, `templates/contract.md` |
 | 5 plan | `templates/board.schema.json`, `templates/policy.json`, `templates/gates/<stack>.md`, `templates/task-brief.md`, `templates/AGENTS.template.md`, `templates/orchestration.md`, `templates/review-feedback.md`; `prompt/rubric.md` §3–4 |
 | 6–7 build, verify | `prompt/orchestration.md`, `docs/roles.md`; `templates/skills/` for worker sessions |

@@ -103,6 +103,7 @@
     {"id": "DES-13", "station": "design", "level": "must", "title": "Platform conventions", "detail": "Apple Human Interface Guidelines / Material Design: navigation, back, gestures, system controls.", "platforms": ["ios", "android"], "evidence": "docs/design-rules.md#platform"},
     {"id": "DES-14", "station": "design", "level": "should", "title": "Desktop conventions", "detail": "Menus, keyboard shortcuts, window sizes, tray/menu-bar behaviour per OS.", "platforms": ["desktop"], "evidence": "docs/design-rules.md#platform"},
     {"id": "DES-15", "station": "design", "level": "must", "title": "Command interface", "detail": "Commands, flags, help text, exit codes, human output and --json output.", "platforms": ["cli"], "evidence": "docs/ux-flows.md#commands"},
+    {"id": "DES-16", "station": "design", "level": "should", "title": "UI components", "detail": "Component source chosen and every used component listed; React + Tailwind web front ends default to shadcn/ui with Magic UI (templates/ui/magic-ui.md).", "platforms": ["web"], "traits": ["ui"], "evidence": "docs/design-rules.md#components"},
 
     {"id": "ARC-01", "station": "architecture", "level": "must", "title": "Tech stack with sources", "detail": "Languages, frameworks and services with versions from a manifest or a cited source.", "evidence": "docs/versions.md"},
     {"id": "ARC-02", "station": "architecture", "level": "must", "title": "Layers and modules", "detail": "Three to five layers or a package map, one dependency direction, no cycles.", "evidence": "docs/module-map.md"},

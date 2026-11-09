@@ -174,7 +174,7 @@ Run `tools/factory.py next`. Write `docs/concept.md` from `templates/concept.md`
 
 ## Station 3 — Design
 
-Only with the `ui` trait (or a CLI's command interface, `DES-15`); otherwise the station closes on its own. Write `docs/ux-flows.md` from `templates/ux-flows.md` (one flow per MVP story with its error path, one row per screen with its states, onboarding and permission texts) and `docs/design-rules.md` from `templates/design-rules.md` (tokens with values, states, light and dark, accessibility, platform conventions per shipped platform, brand assets, copy). Numbers, not adjectives: a screen without spacing, sizes and states is not designed. Mockups and prototype findings go to `docs/design/` when they exist. Mark the items, render, close.
+Only with the `ui` trait (or a CLI's command interface, `DES-15`); otherwise the station closes on its own. Write `docs/ux-flows.md` from `templates/ux-flows.md` (one flow per MVP story with its error path, one row per screen with its states, onboarding and permission texts) and `docs/design-rules.md` from `templates/design-rules.md` (tokens with values, states, light and dark, accessibility, platform conventions per shipped platform, brand assets, copy). Numbers, not adjectives: a screen without spacing, sizes and states is not designed. Web front ends on React and Tailwind take their components from shadcn/ui and Magic UI (`templates/ui/magic-ui.md`): list each used component with its install command under `## Components` (`DES-16`); never invent look-alikes of a library component. Mockups and prototype findings go to `docs/design/` when they exist. Mark the items, render, close.
 
 ## Station 4 — Architecture (Phase C)
 

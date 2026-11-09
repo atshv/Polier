@@ -43,6 +43,16 @@ Every interactive element defines all applicable states: rest, hover, pressed, f
 - Semantic HTML first; images have alt text; form errors are text, not colour only.
 - No text below 11 px, no truncated text without ellipsis, no emoji as an icon.
 
+## Components
+
+> Where the UI components come from. React + Tailwind web front ends: shadcn/ui plus Magic UI for motion (`templates/ui/magic-ui.md`). Native apps: the platform's own components.
+
+| Component | Source | Install | Used in | Notes |
+| --- | --- | --- | --- | --- |
+| `<Marquee>` | Magic UI | `npx shadcn@latest add @magicui/marquee` | `<Landing: logos>` | `<reduced motion → static row>` |
+
+A component not in this table is not used.
+
 ## Light and dark
 
 - Every colour token has a light and a dark value; components never branch on the scheme.

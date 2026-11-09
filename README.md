@@ -50,7 +50,7 @@ A "yes" in the chat changes nothing. Decisions are approval prompts, records are
 | 8 | Release | `docs/legal.md`, `docs/store/*` | CI from tags, legal texts, store listings, signing, notarisation |
 | 9 | Operate | `docs/runbook.md` | errors, uptime, backups, support, updates, store upkeep |
 
-The full checklist — 175 items, each with the platforms and traits it applies to — is [`factory/CATALOG.md`](factory/CATALOG.md). A web app with accounts gets about 100 of them, a CLI about 50.
+The full checklist — 176 items, each with the platforms and traits it applies to — is [`factory/CATALOG.md`](factory/CATALOG.md). A web app with accounts gets about 100 of them, a CLI about 50.
 
 ## Proof, not promises
 
@@ -68,7 +68,7 @@ The full checklist — 175 items, each with the platforms and traits it applies 
 | [`factory/`](factory) | the catalog of stations and items |
 | [`roles/`](roles) | specialist roles — frontend, backend and mobile builders, reviewers, release manager ([`docs/roles.md`](docs/roles.md)) |
 | [`core/`](core), [`tools/`](tools) | the rules and the Python tools underneath (also usable headless) |
-| [`prompt/`](prompt), [`templates/`](templates) | the process, the rubric and every document template |
+| [`prompt/`](prompt), [`templates/`](templates) | the process, the rubric and every document template; web front ends take their components from [Magic UI](https://magicui.design) and shadcn/ui ([`templates/ui/magic-ui.md`](templates/ui/magic-ui.md)) |
 
 ## Learn more
 

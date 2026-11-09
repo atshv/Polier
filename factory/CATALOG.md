@@ -95,6 +95,7 @@ Outputs: `docs/ux-flows.md`, `docs/design-rules.md`
 | DES-13 | must | **Platform conventions** — Apple Human Interface Guidelines / Material Design: navigation, back, gestures, system controls. | ios, android | `docs/design-rules.md#platform` |
 | DES-14 | should | **Desktop conventions** — Menus, keyboard shortcuts, window sizes, tray/menu-bar behaviour per OS. | desktop | `docs/design-rules.md#platform` |
 | DES-15 | must | **Command interface** — Commands, flags, help text, exit codes, human output and --json output. | cli | `docs/ux-flows.md#commands` |
+| DES-16 | should | **UI components** — Component source chosen and every used component listed; React + Tailwind web front ends default to shadcn/ui with Magic UI (templates/ui/magic-ui.md). | web, ui | `docs/design-rules.md#components` |
 
 ## Architecture — architect
 
