@@ -49,8 +49,10 @@ export function liveContext(ctx, config, agent) {
   const pending = policy && policyEnabled(policy) ? pendingApprovals(root) : []
   const lines = [
     '<polier>',
-    `Project: ${board?.project ?? '(no board yet)'} · root ${root} · role ${state.role} · guard ${config.enforce}${state.pinned ? ` · bound to ${state.pinned}` : ''}`,
+    `Project: ${board?.project ?? '(no board yet)'} · root ${root} · mode ${state.role} · guard ${config.enforce}${state.pinned ? ` · bound to ${state.pinned}` : ''}`,
   ]
+  const role = state.specialist
+  if (role) lines.push(`Role: ${role.title}${role.name ? ` (${role.name})` : ''} · ${role.focus}`)
   if (view) {
     if (view.current) {
       const open = view.open.map((item) => `${item.id} ${item.title}`)
@@ -62,7 +64,7 @@ export function liveContext(ctx, config, agent) {
   }
   if (board) {
     for (const task of running.slice(0, 3)) {
-      lines.push(`Running: ${task.id} ${task.title ?? ''} · scope ${(task.scope_write ?? []).join(', ') || 'none'} · gates ${(task.gates ?? []).join(', ') || 'none'}`)
+      lines.push(`Running: ${task.id} ${task.title ?? ''}${task.role ? ` [${task.role}]` : ''} · scope ${(task.scope_write ?? []).join(', ') || 'none'} · gates ${(task.gates ?? []).join(', ') || 'none'}`)
     }
     if (ready.length) lines.push(`Ready: ${list(ready.map((t) => t.id), 8)}`)
     if (policy && policyEnabled(policy)) {
@@ -84,8 +86,16 @@ This session is inside a Polier project: an AI software factory with nine statio
 - Human decisions are approval prompts, not chat: pl_mode lead, pl_factory advance and pl_approval open a prompt the owner answers. A "yes" in the chat is not an approval; call the tool.
 - Evidence, not ticks: an item is done with a project file (optionally #heading) or with linked tasks that are done; must items are never deferred. A task is done with recorded gates, a passing review and a handoff.
 - A whole station is long work: when goal tools exist and the human asks for it, create a goal such as "Close Polier station design: resolve every open item with evidence"; the <polier> block shows what is left each round.
-- Independent review: a fresh subagent that sees only the brief, the diff and the gate records; it switches itself to pl_mode reviewer and writes reviews/<ID>.md.
+- Specialists: a task names its role (frontend-builder, backend-builder, reviewer …). Delegate it to a fresh subagent whose first steps are pl_role with that role and pl_task with the task; pick the model strength the role suggests when the subagent tool lets you. A role only narrows what a session may do.
+- Independent review: a fresh subagent in the reviewer role that sees only the brief, the diff and the gate records and writes reviews/<ID>.md.
 - A Ralph or subagent report is a claim, not evidence: gates go through pl_gate and status through pl_state.`
+
+/** The instructions of the session's role, '' without one. */
+export function roleText(agent) {
+  const role = agent ? stateOf(agent).specialist : undefined
+  if (!role?.instructions) return ''
+  return `# Your Polier role: ${role.title}${role.name ? ` (${role.name})` : ''}\n\n${role.instructions}`
+}
 
 /** The guide for sessions inside a Polier project, '' elsewhere. */
 export function guideText(ctx, agent) {

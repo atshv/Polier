@@ -235,7 +235,7 @@ Budgets are per profile (`S/M/L`: architecture 600/700/800, agents 300/350/400, 
 
 Produce `board.json` per `templates/board.schema.json`. A 1.0 board starts with `"schema_version": "1.0"` (a 0.9 board omits it; 1.0 fields are then rejected). Task IDs are `M03` or a prefixed form `P3-02`, `ENG-14` (prefix 1–6 characters, then `-NN`). 1.1 adds no board field: a 1.1 project keeps board schema 1.0 and puts the new state in `policy.json`, `runs/` and `reviews/approvals/`.
 
-Each task has: ID, title, one-sentence goal, why (what builds on it), `satisfies` (definition-of-done items `D1` … from `docs/quality.md`), scope and out of scope, acceptance `A1..An` as WHEN–THEN, gates, `scope_write` / `scope_read` / `scope_write_forbidden`, `depends_on`, complexity 1–10, stage, `parallel_group` if independent, estimate. At 1.0 also, where they apply: `package` (a `packages[].path`), `exclusive` (resources the gates hold alone, e.g. `["e2e"]`), `resources` (`ports`, `db`, `bucket`), `contract_followups` (dependants a task leaves to a lead-approved follow-up). `claim` is runtime claim data for tooling and is never edited by hand. Board-level: `generator_version` (from the package's `VERSION`), `decisions` (ADRs) and `open_questions`, plus the optional 1.0 blocks below.
+Each task has: ID, title, one-sentence goal, why (what builds on it), `satisfies` (definition-of-done items `D1` … from `docs/quality.md`), scope and out of scope, acceptance `A1..An` as WHEN–THEN, gates, `scope_write` / `scope_read` / `scope_write_forbidden`, `depends_on`, complexity 1–10, stage, `parallel_group` if independent, estimate. At 1.0 also, where they apply: `package` (a `packages[].path`), `exclusive` (resources the gates hold alone, e.g. `["e2e"]`), `resources` (`ports`, `db`, `bucket`), `contract_followups` (dependants a task leaves to a lead-approved follow-up), `role` (the specialist who builds it: `frontend-builder`, `backend-builder`, `mobile-builder`, … from `roles/roles.json` or the project's `docs/roles/`). `claim` is runtime claim data for tooling and is never edited by hand. Board-level: `generator_version` (from the package's `VERSION`), `decisions` (ADRs) and `open_questions`, plus the optional 1.0 blocks below.
 
 **Board 1.0 blocks:**
 
@@ -277,7 +277,7 @@ Show the DAG as table and Mermaid.
 
 The rules below apply to every profile and go into `AGENTS.md` (roles, permissions, commands), the briefs and `docs/orchestration.md` (loop, checkpoints, approvals, escalation); there is no separate agents folder. The full model is `prompt/orchestration.md`:
 
-- **Roles:** lead/integrator, worker, verifier, reviewer, researcher, merger if needed.
+- **Roles:** lead/integrator, worker, verifier, reviewer, researcher, merger if needed. Specialist roles (`docs/roles.md`) sit on top: every build task names one, a fresh session or subagent takes it with `pl_role` (or gets it from `pl_task`), and its instructions join that session's system prompt. Keep to three or four builder roles per project; a project adds or adjusts roles in `docs/roles/roles.json` and `docs/roles/<id>.md`, including a display `name` and a narrower `writes` list. A role never grants lead or widens a scope.
 - **Permissions:** who writes, reads, merges, sets `done`; exactly one writer per path.
 - **Handoff:** `task_id`, `goal`, `acceptance`, `scope`, `context_files`, `constraints`, `gates`, `budget`, `output_schema`, `stop_conditions`.
 - **WorkResult:** `status`, `changed_files`, `evidence[]`, `acceptance[]`, `open_questions[]`.

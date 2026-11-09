@@ -57,6 +57,7 @@ The full checklist — 175 items, each with the platforms and traits it applies 
 - An item is done only with evidence: a file in the project (`docs/concept.md#user-stories`) or linked tasks that are done. `must` items are never deferred.
 - A task is done only with recorded gate runs, a passing independent review and a handoff.
 - A worker writes only inside its task's scope; protected paths, dependency manifests and denied commands follow `policy.json`.
+- Every task names a specialist role. A fresh subagent takes it and gets that role's instructions; a role only narrows what it may do.
 - DSH goals, subagents and Ralph loops fit in, but their reports are claims: gates and checkpoints decide.
 
 ## Inside
@@ -65,6 +66,7 @@ The full checklist — 175 items, each with the platforms and traits it applies 
 |---|---|
 | [`plugin/`](plugin) | the DSH plugin: live context, guide, guard, stop check, the `pl_*` tools |
 | [`factory/`](factory) | the catalog of stations and items |
+| [`roles/`](roles) | specialist roles — frontend, backend and mobile builders, reviewers, release manager ([`docs/roles.md`](docs/roles.md)) |
 | [`core/`](core), [`tools/`](tools) | the rules and the Python tools underneath (also usable headless) |
 | [`prompt/`](prompt), [`templates/`](templates) | the process, the rubric and every document template |
 

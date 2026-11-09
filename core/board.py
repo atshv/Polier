@@ -59,7 +59,7 @@ TASK_FIELDS_09 = frozenset(TASK_REQUIRED + (
     "worktree", "round", "evidence", "scope_write_forbidden", "handoff",
 ))
 TASK_FIELDS_10 = frozenset(TASK_FIELDS_09 | {
-    "package", "exclusive", "resources", "claim", "contract_followups",
+    "package", "exclusive", "resources", "claim", "contract_followups", "role",
 })
 TASK_FIELDS_11 = frozenset(TASK_FIELDS_10 | {"labels", "estimate_hours"})
 TASK_FIELDS_12 = frozenset(TASK_FIELDS_11 | {"planned_start", "target"})
@@ -347,6 +347,10 @@ def _check_task(task, version: str, known_ids: set, errors: List[str], stage_id_
             errors.append(f"{label}: handoff has {len(handoff)} lines (max. 3)")
         elif any(len(line) > 200 for line in handoff):
             errors.append(f"{label}: handoff line longer than 200 characters")
+
+    if "role" in task and (not isinstance(task.get("role"), str)
+                           or not re.match(r"^[a-z][a-z0-9-]{1,40}$", task["role"])):
+        errors.append(f"{label}: role must be a role id such as frontend-builder")
 
     if "package" in task:
         package = task.get("package")

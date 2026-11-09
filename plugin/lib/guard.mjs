@@ -8,7 +8,7 @@ import {
   approver, commandDenial, dependencyApproval, enabled as policyEnabled, hasGrant, loadPolicy,
   manifestMatch, protectedMatch,
 } from './policy.mjs'
-import { checkPath, processKills, relative } from './project.mjs'
+import { checkPath, inside, processKills, relative } from './project.mjs'
 import { run } from './run.mjs'
 import { beatClaims, context, stateOf } from './session.mjs'
 
@@ -77,6 +77,15 @@ function policyCommandDenial(config, info, command) {
   return `Polier: command blocked, ${denial.reason}. A worker or reviewer reports the needed change instead of running it; the lead runs it (pl_mode lead, approved by the owner).`
 }
 
+/** A role with its own write list narrows the task scope further; evidence stays writable. */
+function roleDenial(info, rel, shown) {
+  const role = info.state.specialist
+  const writes = Array.isArray(role?.writes) ? role.writes : []
+  if (!writes.length || info.state.role !== 'worker' || info.tasks.length === 0) return undefined
+  if (inside(rel, 'reviews/evidence') || writes.some((entry) => inside(rel, entry))) return undefined
+  return `Polier: write to ${shown} blocked, the role ${role.title} writes only ${writes.join(', ')}. If the change is needed, report it under open_questions for the right role.`
+}
+
 /**
  * The guard decision for one tool call.
  * @returns {string|undefined} a denial reason, or undefined to allow
@@ -90,7 +99,7 @@ export function checkWrite(ctx, config, exec) {
   const rel = relative(info.root, path.resolve(info.cwd, target))
   const shown = rel || target
   const verdict = checkPath(rel, info.tasks, info.state.role, { board: info.board, root: info.root, cwd: info.cwd })
-  if (verdict.ok) return policyPathDenial(info, rel, shown)
+  if (verdict.ok) return roleDenial(info, rel, shown) ?? policyPathDenial(info, rel, shown)
   if (info.state.role === 'reviewer') {
     return `Polier: write to ${shown} blocked, a reviewer session writes only under reviews/. Report the problem in the review instead of fixing it.`
   }

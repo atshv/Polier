@@ -19,7 +19,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from core import approvals, audit, dispatch, factory, runs  # noqa: E402
+from core import approvals, audit, dispatch, factory, roles, runs  # noqa: E402
 from core.board import board_errors, stage_report, task_stage_id  # noqa: E402
 from core.errors import PolierError  # noqa: E402
 from core.evidence import verify_evidence  # noqa: E402
@@ -761,6 +761,9 @@ def main() -> int:
             check_versions(root, board, warnings)
             check_status_fresh(root, board, errors)
             check_orchestration(root, board, errors, warnings)
+            errors.extend(roles.task_errors(root, board))
+            if (root / roles.PROJECT_DIR).is_dir():
+                errors.extend(f"docs/roles: {e}" for e in roles.errors(root))
 
     if board is not None and isinstance(board.get("resources"), dict):
         gitignore = root / ".gitignore"

@@ -87,9 +87,18 @@ Switch the role of this session. worker (default: writes only inside the running
 | `role` | `worker` · `reviewer` · `lead` · `off` | yes |  |
 | `reason` | string |  | Why the session needs this role; shown to the owner. |
 
+## `pl_role`
+
+Take a specialist role for this session (analyst, designer, architect, frontend-builder, backend-builder, mobile-builder, reviewer, security-reviewer, release-manager, or one the project adds in docs/roles/). The role adds its instructions to the system prompt, sets the session to worker or reviewer mode and may narrow where it writes; it never widens anything. Without role: drop it.
+
+| Parameter | Type | Required | Meaning |
+| --- | --- | --- | --- |
+| `role` | string |  | Role id. Omit to drop the role. |
+| `project` | string |  | Project folder. Default: the session directory or the nearest parent with board.json or factory.json. |
+
 ## `pl_task`
 
-Bind this session to one task and take its claim, so the guard uses that task's scope and no other session works on it. Without task: release the binding and the claims of this session.
+Bind this session to one task and take its claim, so the guard uses that task's scope and no other session works on it. A task with a role gives the session that role. Without task: release the binding and the claims of this session.
 
 | Parameter | Type | Required | Meaning |
 | --- | --- | --- | --- |
@@ -121,6 +130,7 @@ This session is inside a Polier project: an AI software factory with nine statio
 - Human decisions are approval prompts, not chat: pl_mode lead, pl_factory advance and pl_approval open a prompt the owner answers. A "yes" in the chat is not an approval; call the tool.
 - Evidence, not ticks: an item is done with a project file (optionally #heading) or with linked tasks that are done; must items are never deferred. A task is done with recorded gates, a passing review and a handoff.
 - A whole station is long work: when goal tools exist and the human asks for it, create a goal such as "Close Polier station design: resolve every open item with evidence"; the <polier> block shows what is left each round.
-- Independent review: a fresh subagent that sees only the brief, the diff and the gate records; it switches itself to pl_mode reviewer and writes reviews/<ID>.md.
+- Specialists: a task names its role (frontend-builder, backend-builder, reviewer …). Delegate it to a fresh subagent whose first steps are pl_role with that role and pl_task with the task; pick the model strength the role suggests when the subagent tool lets you. A role only narrows what a session may do.
+- Independent review: a fresh subagent in the reviewer role that sees only the brief, the diff and the gate records and writes reviews/<ID>.md.
 - A Ralph or subagent report is a claim, not evidence: gates go through pl_gate and status through pl_state.
 ```

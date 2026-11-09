@@ -37,7 +37,8 @@
     "prompt/",
     "templates/",
     "tools/*.py",
-    "guide/"
+    "guide/",
+    "roles/"
   ],
   "engines": {
     "node": ">=20"
@@ -60,6 +61,6 @@
   "scripts": {
     "test": "node --test plugin/test/*.test.mjs && python3 -m unittest discover -s tests && python3 -m unittest discover -s core/tests -t .",
     "check": "python3 scripts/check.py",
-    "docs": "node scripts/tools-doc.mjs && python3 tools/factory.py catalog --write"
+    "docs": "node scripts/tools-doc.mjs && python3 scripts/roles-doc.py && python3 tools/factory.py catalog --write"
   }
 }

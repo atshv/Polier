@@ -1,0 +1,32 @@
+{
+  "roles_version": "1",
+  "roles": [
+    {"id": "analyst", "title": "Analyst", "stations": ["idea", "concept"], "mode": "worker", "model": "standard",
+     "focus": "Turns the owner's idea into a sourced concept with testable done scenarios.",
+     "reads": ["project-input.md", "factory/CATALOG.md", "templates/concept.md"], "gates": []},
+    {"id": "designer", "title": "Designer", "stations": ["design"], "mode": "worker", "model": "standard",
+     "focus": "Flows, screens, states and design tokens with numbers, never adjectives.",
+     "reads": ["docs/concept.md", "templates/ux-flows.md", "templates/design-rules.md"], "gates": []},
+    {"id": "architect", "title": "Architect", "stations": ["architecture", "plan"], "mode": "worker", "model": "strong",
+     "focus": "Stack, layers, data, interfaces and the task plan; every choice sourced.",
+     "reads": ["docs/concept.md", "docs/ux-flows.md", "docs/design-rules.md", "templates/ARCHITECTURE.md"], "gates": ["check"]},
+    {"id": "frontend-builder", "title": "Frontend builder", "stations": ["build"], "mode": "worker", "model": "standard",
+     "focus": "Builds UI tasks to the design rules: tokens, states, accessibility, responsive layout.",
+     "reads": ["docs/design-rules.md", "docs/ux-flows.md", "docs/module-map.md"], "gates": ["lint", "types", "tests", "e2e", "a11y"]},
+    {"id": "backend-builder", "title": "Backend builder", "stations": ["build"], "mode": "worker", "model": "standard",
+     "focus": "Builds server, data and API tasks: validation, authorization, migrations, tests against a real database.",
+     "reads": ["docs/data-model.md", "docs/contracts/", "docs/module-map.md"], "gates": ["lint", "types", "tests", "integration"]},
+    {"id": "mobile-builder", "title": "Mobile builder", "stations": ["build"], "mode": "worker", "model": "standard",
+     "focus": "Builds iOS and Android tasks: platform conventions, permissions, privacy manifest, simulators.",
+     "reads": ["docs/design-rules.md", "docs/module-map.md", "docs/gates/"], "gates": ["build", "tests", "ui-tests"]},
+    {"id": "reviewer", "title": "Reviewer", "stations": ["build", "verify"], "mode": "reviewer", "model": "strong",
+     "focus": "Checks one task against its brief, its diff and its gate records; never edits code.",
+     "reads": ["tasks/", "templates/review-feedback.md"], "gates": []},
+    {"id": "security-reviewer", "title": "Security reviewer", "stations": ["verify"], "mode": "reviewer", "model": "strong",
+     "focus": "Reviews the product against OWASP Top 10 or MASVS, secrets and dependencies; never edits code.",
+     "reads": ["policy.json", "docs/environments.md", "ARCHITECTURE.md"], "gates": ["audit"]},
+    {"id": "release-manager", "title": "Release manager", "stations": ["release", "operate"], "mode": "worker", "model": "standard",
+     "focus": "Prepares releases, legal texts, store listings and the runbook; never publishes or tags.",
+     "reads": ["docs/releasing.md", "docs/environments.md", "templates/legal.md", "templates/store/"], "gates": ["release-clean", "smoke"]}
+  ]
+}

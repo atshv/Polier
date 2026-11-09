@@ -18,7 +18,7 @@ export function stateOf(agent) {
   if (!id) return { role: 'worker', pinned: undefined, claims: [], stop: { turn: -1, count: 0 } }
   let state = sessions.get(id)
   if (!state) {
-    state = { role: 'worker', pinned: undefined, claims: [], lastBeat: 0, stop: { turn: -1, count: 0 }, turn: 0, killTurn: -1 }
+    state = { role: 'worker', specialist: undefined, pinned: undefined, claims: [], lastBeat: 0, stop: { turn: -1, count: 0 }, turn: 0, killTurn: -1 }
     sessions.set(id, state)
   }
   return state

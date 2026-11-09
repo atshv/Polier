@@ -289,6 +289,11 @@
           "minLength": 1,
           "description": "Folder of the package/service/app this task belongs to; must be one of packages[].path (1.0)."
         },
+        "role": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{1,40}$",
+          "description": "Specialist role that builds or reviews the task, e.g. frontend-builder; one of roles/roles.json or docs/roles/roles.json (1.0)."
+        },
         "labels": {
           "type": "array",
           "uniqueItems": true,

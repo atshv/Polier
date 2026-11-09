@@ -8,7 +8,7 @@
 //   protects paths, manifests and commands, and a stop check compares the git
 //   diff with the scope before a turn ends;
 // - tools: pl_status, pl_gate, pl_scope_check, pl_check, pl_next, pl_state,
-//   pl_factory, pl_mode, pl_task, pl_approval — human decisions are harness
+//   pl_factory, pl_mode, pl_role, pl_task, pl_approval — human decisions are harness
 //   approval prompts, never chat;
 // - the Polier skill, with its files resolved inside this package.
 //
@@ -20,7 +20,7 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { GUIDE, guideText, liveContext } from './lib/context.mjs'
+import { GUIDE, guideText, liveContext, roleText } from './lib/context.mjs'
 import { checkWrite, onToolPreExecute, onTurnStopping } from './lib/guard.mjs'
 import { findProject } from './lib/project.mjs'
 import { agentCwd } from './lib/run.mjs'
@@ -130,6 +130,7 @@ export function apply(ctx, rawConfig) {
   if (config.context) {
     ctx.inject(['systemPrompt'], (c) => {
       c.systemPrompt.section({ name: 'polier:guide', order: 2950, interpolate: false, text: (assembly) => guideText(c, assembly?.agent) })
+      c.systemPrompt.section({ name: 'polier:role', order: 2960, interpolate: false, text: (assembly) => roleText(assembly?.agent) })
       c.systemPrompt.context({ name: 'polier:state', order: 130, interpolate: false, text: (assembly) => liveContext(c, config, assembly?.agent) })
     })
   }

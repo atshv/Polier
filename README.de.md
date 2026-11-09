@@ -57,6 +57,7 @@ Die vollständige Checkliste – 175 Punkte, jeweils mit den Plattformen und Eig
 - Ein Punkt ist erst erledigt mit Nachweis, also einer Datei im Projekt (`docs/concept.md#user-stories`) oder verknüpften Aufgaben, die fertig sind. `must`-Punkte werden nie verschoben.
 - Eine Aufgabe ist erst fertig mit aufgezeichneten Gate-Läufen, bestandenem unabhängigem Review und einer Übergabe.
 - Ein Worker schreibt nur in seinem Aufgabenbereich, geschützte Pfade, Abhängigkeiten und verbotene Befehle folgen `policy.json`.
+- Jede Aufgabe hat eine Fachrolle. Ein frischer Subagent übernimmt sie und bekommt die Anleitung dieser Rolle, eine Rolle schränkt nur ein, nie aus.
 - DSH-Goals, Subagents und Ralph-Schleifen passen dazu, ihre Berichte sind aber Behauptungen – entscheiden tun Gates und Prüfpunkte.
 
 ## Was drin ist
@@ -65,6 +66,7 @@ Die vollständige Checkliste – 175 Punkte, jeweils mit den Plattformen und Eig
 |---|---|
 | [`plugin/`](plugin) | das DSH-Plugin – Live-Kontext, Leitfaden, Write Guard, Stop-Check, die `pl_*`-Tools |
 | [`factory/`](factory) | der Katalog der Stationen und Punkte |
+| [`roles/`](roles) | Fachrollen – Frontend-, Backend- und Mobile-Builder, Reviewer, Release-Manager ([`docs/roles.md`](docs/roles.md), Englisch) |
 | [`core/`](core), [`tools/`](tools) | die Regeln und die Python-Tools darunter (auch ohne Oberfläche nutzbar) |
 | [`prompt/`](prompt), [`templates/`](templates) | der Ablauf, die Bewertung und alle Dokumentvorlagen |
 

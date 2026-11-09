@@ -175,7 +175,7 @@ test('registers the tools, the live context and the skill with the real services
   await ctx.plugin(plugin)
   await new Promise((r) => setTimeout(r, 100))
   const names = ctx.get('tools').schemas().map((s) => s.name)
-  for (const n of ['pl_status', 'pl_gate', 'pl_scope_check', 'pl_check', 'pl_next', 'pl_state', 'pl_factory', 'pl_mode', 'pl_task', 'pl_approval']) {
+  for (const n of ['pl_status', 'pl_gate', 'pl_scope_check', 'pl_check', 'pl_next', 'pl_state', 'pl_factory', 'pl_mode', 'pl_role', 'pl_task', 'pl_approval']) {
     assert.ok(names.includes(n), n)
   }
   const skills = await ctx.get('skills').list({})
@@ -527,4 +527,41 @@ test('pl_factory init shows the plan, waits for the owner and then writes the li
   assert.ok(existsSync(path.join(root, 'docs', 'factory.md')))
   const again = await call(tools, a, 'pl_factory', { action: 'init', platforms: ['web'] })
   assert.match(again.value.error, /already exists/)
+})
+
+test('pl_role adds the role instructions and only narrows the session', async () => {
+  const root = project([task('M01', 'in_progress', { scope_write: ['src/', 'README.md'] })], {
+    files: { 'docs/roles/roles.json': JSON.stringify({ roles: [{ id: 'frontend-builder', name: 'Lena', writes: ['src/ui/'] }] }) },
+  })
+  const { ctx, tools, config } = await boot()
+  const a = agent(root)
+  const taken = await call(tools, a, 'pl_role', { role: 'frontend-builder' })
+  assert.equal(taken.value.ok, true, taken.text)
+  assert.equal(taken.value.mode, 'worker')
+  assert.match(plugin.liveContext(ctx, config, a), /Role: Frontend builder \(Lena\)/)
+  const assembly = await ctx.get('systemPrompt').assemble({ agent: a })
+  assert.ok(assembly.sections.some((s) => s.name === 'polier:role' && /frontend builder on one UI task/.test(s.text)))
+  assert.equal((await call(tools, a, 'write', { file_path: 'src/ui/button.js', content: 'x' })).error, false)
+  const outside = await call(tools, a, 'write', { file_path: 'src/app.py', content: 'x = 3\n' })
+  assert.equal(outside.error, true)
+  assert.match(outside.text, /role Frontend builder writes only src\/ui\//)
+  const unknown = await call(tools, a, 'pl_role', { role: 'astronaut' })
+  assert.equal(unknown.error, true)
+  assert.equal((await call(tools, a, 'pl_role', {})).value.role, null)
+  assert.equal((await call(tools, a, 'write', { file_path: 'src/app.py', content: 'x = 4\n' })).error, false)
+})
+
+test('pl_task gives a builder the task role and leaves a reviewer a reviewer', async () => {
+  const root = project([task('M01', 'in_progress', { role: 'backend-builder' })])
+  const { tools } = await boot()
+  const builder = agent(root)
+  const bound = await call(tools, builder, 'pl_task', { task: 'M01' })
+  assert.equal(bound.value.role, 'backend-builder', bound.text)
+  assert.match(bound.value.next, /tasks\/M01.md/)
+  await call(tools, builder, 'pl_task', {})
+  const reviewer = agent(root)
+  assert.equal((await call(tools, reviewer, 'pl_role', { role: 'reviewer' })).value.mode, 'reviewer')
+  assert.equal((await call(tools, reviewer, 'pl_task', { task: 'M01' })).value.role, null)
+  const code = await call(tools, reviewer, 'write', { file_path: 'src/app.py', content: 'x = 9\n' })
+  assert.match(code.text, /reviewer session writes only under reviews/)
 })

@@ -1,0 +1,138 @@
+"""Specialist roles: who builds, reviews or plans a task, and with what.
+
+The package ships ``roles/roles.json`` (id, title, stations, base mode, model
+hint, focus, files to read, typical gates) and one instruction file per role,
+``roles/<id>.md``. A project may adjust them in ``docs/roles/roles.json``
+(entries merged by id, new ids added) and ``docs/roles/<id>.md`` (replaces the
+instructions). A task names its role in ``board.json`` → ``role``.
+
+A role never widens what a session may do: its base mode is ``worker`` or
+``reviewer``, and an optional ``writes`` list narrows the task's scope further.
+
+Standard library only.
+"""
+from __future__ import annotations
+
+import json
+import re
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+from .errors import PolierError
+
+PACKAGE = Path(__file__).resolve().parent.parent
+ROLE_ID = re.compile(r"^[a-z][a-z0-9-]{1,40}$")
+MODES = ("worker", "reviewer")
+MODELS = ("fast", "standard", "strong")
+FIELDS = {"id", "title", "name", "stations", "mode", "model", "focus", "reads", "gates", "writes"}
+PROJECT_DIR = Path("docs") / "roles"
+
+
+def _read_json(path: Path) -> Dict[str, Any]:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise PolierError(f"cannot read {path}: {exc}")
+    if not isinstance(data, dict) or not isinstance(data.get("roles"), list):
+        raise PolierError(f"{path}: needs an object with a roles list")
+    return data
+
+
+def load(root=None) -> Dict[str, Dict[str, Any]]:
+    """Every role by id: the package's, merged with the project's adjustments."""
+    roles: Dict[str, Dict[str, Any]] = {}
+    for entry in _read_json(PACKAGE / "roles" / "roles.json")["roles"]:
+        roles[entry["id"]] = {**entry, "source": "package"}
+    if root is not None:
+        project = Path(root) / PROJECT_DIR / "roles.json"
+        if project.is_file():
+            for entry in _read_json(project)["roles"]:
+                if isinstance(entry, dict) and isinstance(entry.get("id"), str):
+                    roles[entry["id"]] = {**roles.get(entry["id"], {}), **entry, "source": "project"}
+    return roles
+
+
+def instructions(role_id: str, root=None) -> str:
+    """The instruction text of a role: the project's file, else the package's."""
+    if root is not None:
+        own = Path(root) / PROJECT_DIR / f"{role_id}.md"
+        if own.is_file():
+            return own.read_text(encoding="utf-8").strip()
+    path = PACKAGE / "roles" / f"{role_id}.md"
+    return path.read_text(encoding="utf-8").strip() if path.is_file() else ""
+
+
+def errors(root=None, station_ids: Optional[List[str]] = None) -> List[str]:
+    """Problems of the merged role list (package tests and check.py)."""
+    found: List[str] = []
+    try:
+        roles = load(root)
+    except PolierError as exc:
+        return [str(exc)]
+    for role_id, role in roles.items():
+        label = f"role {role_id}"
+        if not ROLE_ID.match(role_id):
+            found.append(f"{label}: id must be lower-case letters, digits and dashes")
+        for field in sorted(set(role) - FIELDS - {"source"}):
+            found.append(f"{label}: unknown field {field!r}")
+        if not isinstance(role.get("title"), str) or not role["title"].strip():
+            found.append(f"{label}: title is missing")
+        if role.get("mode") not in MODES:
+            found.append(f"{label}: mode must be worker or reviewer (a role never grants lead)")
+        if role.get("model") not in MODELS:
+            found.append(f"{label}: model must be fast, standard or strong")
+        for key in ("stations", "reads", "gates", "writes"):
+            value = role.get(key, [])
+            if not isinstance(value, list) or not all(isinstance(v, str) and v for v in value):
+                found.append(f"{label}: {key} must be a list of strings")
+        if station_ids is not None:
+            for station in role.get("stations") or []:
+                if station not in station_ids:
+                    found.append(f"{label}: unknown station {station!r}")
+        if not instructions(role_id, root):
+            found.append(f"{label}: no instructions (roles/{role_id}.md or docs/roles/{role_id}.md)")
+    return found
+
+
+def task_errors(root, board: Dict[str, Any]) -> List[str]:
+    """Tasks that name a role the project does not have."""
+    try:
+        known = load(root)
+    except PolierError as exc:
+        return [str(exc)]
+    found = []
+    for task in board.get("tasks") or []:
+        if isinstance(task, dict) and isinstance(task.get("role"), str) and task["role"] not in known:
+            found.append(f"board.json: task {task.get('id')}: unknown role {task['role']!r} "
+                         f"(known: {', '.join(sorted(known))})")
+    return found
+
+
+def markdown() -> str:
+    """docs/roles.md: the package's roles as a reference page."""
+    roles = load()
+    lines = [
+        "# Roles",
+        "",
+        "> Generated by `python3 scripts/roles-doc.py` from `roles/`. Do not edit by hand.",
+        "",
+        "A task names its role in `board.json` → `role`. A session takes it with `pl_role`, or binds the task with "
+        "`pl_task` and gets its role. The role adds its instructions to the session's system prompt and its focus to "
+        "the `<polier>` block; it never widens what the session may write. A project adjusts roles in "
+        "`docs/roles/roles.json` and `docs/roles/<id>.md`.",
+        "",
+        "| Role | Stations | Mode | Model | Focus |",
+        "| --- | --- | --- | --- | --- |",
+    ]
+    for role in roles.values():
+        lines.append(f"| `{role['id']}` {role['title']} | {', '.join(role.get('stations') or [])} | "
+                     f"{role['mode']} | {role['model']} | {role['focus']} |")
+    lines.append("")
+    for role in roles.values():
+        lines += [f"## {role['title']} (`{role['id']}`)", ""]
+        if role.get("reads"):
+            lines.append("Reads first: " + ", ".join(f"`{r}`" for r in role["reads"]))
+        if role.get("gates"):
+            lines.append("Typical gates: " + ", ".join(f"`{g}`" for g in role["gates"]))
+        lines += ["", instructions(role["id"]), ""]
+    return "\n".join(lines).rstrip() + "\n"

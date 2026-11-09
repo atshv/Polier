@@ -10,10 +10,11 @@ Polier is a DeepSeek Harness plugin plus the Python rules and tools it calls. Th
 | `core/` | the rules, Python standard library only; `core/tests/` |
 | `tools/` | one CLI per rule set; the plugin calls these, never re-implements them |
 | `factory/` | `catalog.json` (source) and `CATALOG.md` (generated) |
+| `roles/` | `roles.json` and one instruction file per specialist role |
 | `prompt/`, `templates/`, `guide/` | the process, the rubric, document templates, the owner's cheatsheet |
 | `tests/` | tool tests; `tests/fixtures/` holds the S and L reference projects |
-| `scripts/` | repository scripts: `check.py`, `tools-doc.mjs`, `release.py` |
-| `docs/` | `architecture.md`, `tools.md` (generated), `guard-limits.md` |
+| `scripts/` | repository scripts: `check.py`, `tools-doc.mjs`, `roles-doc.py`, `release.py` |
+| `docs/` | `architecture.md`, `tools.md` and `roles.md` (generated), `guard-limits.md` |
 
 ## Commands
 
@@ -21,7 +22,7 @@ Polier is a DeepSeek Harness plugin plus the Python rules and tools it calls. Th
 - Plugin only: `node --test plugin/test/*.test.mjs`
 - Python only: `python3 -m unittest discover -s tests && python3 -m unittest discover -s core/tests -t .`
 - Checks: `npm run check` — generated pages current, pyflakes silent, no unused export in `plugin/lib`, every module parses (needs `pip install pyflakes`)
-- Generated pages: `npm run docs` after changing a tool definition, the guide or `factory/catalog.json`
+- Generated pages: `npm run docs` after changing a tool definition, the guide, `roles/` or `factory/catalog.json`
 
 ## Rules
 

@@ -58,7 +58,7 @@ Every status change goes through `pl_state` in a lead session (`tools/state.py s
 - [ ] The lead session asks for lead mode (`pl_mode lead`); you approve the prompt. It creates the worktree when the board requires one — `python3 <package>/tools/worktree.py start <ID>` (branch + slot + claim).
 - [ ] Check the slot: `tools/slot.py show` — ports, `db_name`, `bucket`. Slot 0 is the owner's checkout; never touch its data.
 - [ ] The lead records `in_progress` with `pl_state` — never by editing `board.json`; STATUS.md regenerates on its own.
-- [ ] The worker session starts in that worktree and binds itself with `pl_task <ID>` (it takes the claim). Its `<polier>` block shows the task, scope and gates.
+- [ ] The worker session starts in that worktree and binds itself with `pl_task <ID>` (it takes the claim and the task's role). Its `<polier>` block shows the role, the task, scope and gates.
 
 ## After every task
 

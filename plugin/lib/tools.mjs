@@ -373,9 +373,39 @@ export function tools(ctx, config) {
     },
   })
 
+  /** Load a role through tools/roles.py and make it this session's: mode, instructions, write list. */
+  async function takeRole(exec, root, id) {
+    const result = await run(ctx, exec.agent, py(config, 'roles.py', '--root', root, 'show', id, '--json'), { cwd: root, timeoutMs: 30_000, signal: exec.signal })
+    const role = lastJson(result.stdout)
+    if (result.code !== 0 || !role) throw new Error((result.stderr || result.stdout).trim() || `unknown role ${id}`)
+    const state = stateOf(exec.agent)
+    state.specialist = role
+    state.role = role.mode
+    return role
+  }
+
+  const roleTool = jsonTool({
+    name: 'pl_role',
+    description: 'Take a specialist role for this session (analyst, designer, architect, frontend-builder, backend-builder, mobile-builder, reviewer, security-reviewer, release-manager, or one the project adds in docs/roles/). The role adds its instructions to the system prompt, sets the session to worker or reviewer mode and may narrow where it writes; it never widens anything. Without role: drop it.',
+    parameters: { type: 'object', properties: { role: { type: 'string', description: 'Role id. Omit to drop the role.' }, project: PROJECT } },
+    async execute(args, exec) {
+      const id = typeof args.role === 'string' ? args.role.trim().toLowerCase() : ''
+      const state = stateOf(exec.agent)
+      if (!id) {
+        state.specialist = undefined
+        return { ok: true, role: null, mode: state.role }
+      }
+      const role = await takeRole(exec, projectRoot(ctx, exec.agent, args.project), id)
+      return {
+        ok: true, role: role.id, title: role.title, mode: role.mode, model: role.model, reads: role.reads ?? [], gates: role.gates ?? [],
+        next: role.mode === 'reviewer' ? 'Read the brief, the diff and the gate records; write reviews/<ID>.md.' : 'Bind your task with pl_task, then read the files the role names.',
+      }
+    },
+  })
+
   const bind = jsonTool({
     name: 'pl_task',
-    description: 'Bind this session to one task and take its claim, so the guard uses that task\'s scope and no other session works on it. Without task: release the binding and the claims of this session.',
+    description: 'Bind this session to one task and take its claim, so the guard uses that task\'s scope and no other session works on it. A task with a role gives the session that role. Without task: release the binding and the claims of this session.',
     parameters: { type: 'object', properties: { task: { type: 'string', description: 'Task ID, e.g. M03. Omit to release.' }, project: PROJECT } },
     async execute(args, exec) {
       const { root, board } = needBoard(ctx, exec.agent, args.project)
@@ -388,12 +418,20 @@ export function tools(ctx, config) {
         state.pinned = undefined
         return { ok: true, bound: null, released }
       }
-      if (!board.tasks.some((t) => t?.id === id)) throw new Error(`task ${id} is not on the board`)
+      const entry = board.tasks.find((t) => t?.id === id)
+      if (!entry) throw new Error(`task ${id} is not on the board`)
       const taken = await takeClaim(ctx, config, exec.agent, root, id)
       if (!taken.ok && taken.code !== 2) return { ok: false, bound: state.pinned ?? null, error: `cannot claim ${id}: ${taken.message}` }
       state.pinned = id
       if (taken.ok) state.claims = [...new Set([...state.claims, id])]
-      return { ok: true, bound: id, claimed: taken.ok, ...(taken.ok ? {} : { note: `no claim taken: ${taken.message}` }) }
+      // A reviewer keeps reviewing: the task's role is for the session that builds it.
+      const builds = state.role !== 'reviewer'
+      const role = builds && typeof entry.role === 'string' && entry.role ? await takeRole(exec, root, entry.role) : undefined
+      return {
+        ok: true, bound: id, claimed: taken.ok, role: role?.id ?? null,
+        ...(taken.ok ? {} : { note: `no claim taken: ${taken.message}` }),
+        next: `Read tasks/${id}.md, build inside ${(entry.scope_write ?? []).join(', ') || 'the scope'}, prove it with pl_gate (${(entry.gates ?? []).join(', ') || 'the listed gates'}).`,
+      }
     },
   })
 
@@ -433,5 +471,5 @@ export function tools(ctx, config) {
     },
   })
 
-  return [status, gate, scope, check, next, state, factory, mode, bind, approval]
+  return [status, gate, scope, check, next, state, factory, mode, roleTool, bind, approval]
 }

@@ -1,5 +1,7 @@
 # Mxx — <Name>
 
+> Role: `<frontend-builder | backend-builder | mobile-builder | …>` — the same as `role` on the board.
+
 > **Size:** 400–800 words. No brief without a context pack and gates. No boilerplate; that lives in `AGENTS.md`. Stored as `tasks/Mxx.md`.
 
 ## Goal

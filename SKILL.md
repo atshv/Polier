@@ -16,8 +16,10 @@ description: AI software factory for DeepSeek Harness. Runs a software project t
 | record an item | `pl_factory` done (evidence), na or defer (reason), link (tasks) |
 | close a station | `pl_factory` advance — the owner answers the approval prompt |
 | plan, merge, record status | `pl_mode` lead (owner approves), then `pl_state` |
-| work on a task | `pl_task`, then `pl_gate` per gate and `pl_scope_check` |
-| review | fresh subagent, `pl_mode` reviewer, writes `reviews/<ID>.md` |
+| take a specialist role | `pl_role` (frontend-builder, backend-builder, reviewer …; `docs/roles.md`) |
+| work on a task | `pl_task` (takes the task's role too), then `pl_gate` per gate and `pl_scope_check` |
+| delegate a task | fresh subagent: `pl_role` with the task's role, then `pl_task` |
+| review | fresh subagent, `pl_role` reviewer, writes `reviews/<ID>.md` |
 | a risky action | `pl_approval` — the owner answers the prompt |
 | lint the project | `pl_check` |
 
@@ -30,7 +32,7 @@ description: AI software factory for DeepSeek Harness. Runs a software project t
 | 3 design | `templates/ux-flows.md`, `templates/design-rules.md` |
 | 4 architecture | `templates/ARCHITECTURE.md`, `templates/module-map.md`, `templates/adr.md`, `templates/versions.md`; L: `templates/monorepo-layout.md`, `templates/package-ARCHITECTURE.md`, `templates/package-AGENTS.md`, `templates/contract.md` |
 | 5 plan | `templates/board.schema.json`, `templates/policy.json`, `templates/gates/<stack>.md`, `templates/task-brief.md`, `templates/AGENTS.template.md`, `templates/orchestration.md`, `templates/review-feedback.md`; `prompt/rubric.md` §3–4 |
-| 6–7 build, verify | `prompt/orchestration.md`; `templates/skills/` for worker sessions |
+| 6–7 build, verify | `prompt/orchestration.md`, `docs/roles.md`; `templates/skills/` for worker sessions |
 | 8 release | `templates/releasing.md`, `templates/environments.md`, `templates/legal.md`, `templates/store/<platform>.md` |
 | 9 operate | `templates/runbook.md` |
 | reference | `tests/fixtures/minimal-cli/` (profile S), `tests/fixtures/monorepo-mini/` (profile L) |

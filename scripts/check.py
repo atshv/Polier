@@ -5,7 +5,7 @@ Usage:
     python3 scripts/check.py        (npm run check)
 
 1. factory/CATALOG.md matches factory/catalog.json.
-2. docs/tools.md matches the plugin's tool definitions.
+2. docs/tools.md and docs/roles.md match the plugin's tools and roles/.
 3. pyflakes finds nothing in core/, tools/, scripts/ and tests/*.py.
 4. Every export of plugin/lib/*.mjs is imported somewhere else in plugin/ or scripts/.
 5. node --check passes for every plugin and script module.
@@ -29,7 +29,9 @@ def run(argv, **kw):
 
 def main() -> int:
     problems = []
-    from core import factory
+    from core import factory, roles
+    if (ROOT / "docs" / "roles.md").read_text(encoding="utf-8") != roles.markdown():
+        problems.append("docs/roles.md is stale: python3 scripts/roles-doc.py")
     if (ROOT / "factory" / "CATALOG.md").read_text(encoding="utf-8") != factory.catalog_markdown():
         problems.append("factory/CATALOG.md is stale: python3 tools/factory.py catalog --write")
     doc = run(["node", "scripts/tools-doc.mjs", "--stdout"])
