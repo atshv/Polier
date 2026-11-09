@@ -20,23 +20,17 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Plugin and tool tests
         run: npm test
-      - name: Example project passes check.py
-        run: python3 tools/check.py examples/minimal-cli
+      - name: Reference S project passes check.py
+        run: python3 tools/check.py tests/fixtures/minimal-cli
       - name: Reference L project passes check.py
-        run: python3 tools/check.py examples/monorepo-mini
+        run: python3 tools/check.py tests/fixtures/monorepo-mini
       - name: Reference L evidence chain passes audit.py
-        run: python3 tools/audit.py --root examples/monorepo-mini
-      - name: Factory example passes factory.py check
-        run: python3 tools/factory.py --root examples/factory-app check
-      - name: Factory catalog Markdown is current
+        run: python3 tools/audit.py --root tests/fixtures/monorepo-mini
+      - name: Factory catalog page is current
         run: |
           python3 tools/factory.py catalog > /tmp/CATALOG.md
           diff -u factory/CATALOG.md /tmp/CATALOG.md
-      - name: Shipped manifest is current
-        # Strict for pull requests. On main the release workflow rewrites the
-        # manifest when VERSION changes, so a stale one is only a warning there.
+      - name: No dead imports or names
         run: |
-          if ! python3 tools/manifest.py --check; then
-            if [ "${{ github.event_name }}" = "pull_request" ]; then exit 1; fi
-            echo "::warning::tools/manifest.json is stale; the release workflow updates it with the next VERSION change."
-          fi
+          python3 -m pip install --quiet pyflakes
+          python3 -m pyflakes core tools tests/*.py

@@ -253,7 +253,7 @@ class _Git:
 
     @property
     def prefix(self) -> str:
-        """The project root relative to the git top level, e.g. ``examples/app/``."""
+        """The project root relative to the git top level, e.g. ``apps/web/``."""
         if self._prefix is None:
             ok, out, _ = self.run("rev-parse", "--show-prefix")
             self._prefix = out.strip() if ok else ""

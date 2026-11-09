@@ -2,7 +2,7 @@
 """Check a generated project against the rules of Polier.
 
 Usage:
-    python3 tools/check.py examples/minimal-cli
+    python3 tools/check.py tests/fixtures/minimal-cli
     python3 tools/check.py /path/to/project
 
 No external dependencies. Exit 0 = no errors (warnings allowed),
@@ -18,12 +18,6 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-
-try:  # PL-15: optional, so a package without tools/drift.py still checks
-    import drift as _drift  # noqa: E402
-except Exception:  # noqa: BLE001
-    _drift = None
 
 from core import approvals, audit, dispatch, factory, runs  # noqa: E402
 from core.board import board_errors, stage_report, task_stage_id  # noqa: E402
@@ -43,10 +37,6 @@ REQUIRED = [
 ]
 
 PLACEHOLDER = re.compile(r"<\.\.\.>|<Name>|<Project name>|\bTODO\b|\bTBD\b")
-STATUS = {
-    "pending", "claimed", "in_progress", "verifying", "review",
-    "rework", "done", "blocked", "failed",
-}
 QUESTION_STATUS = {"open", "answered", "dropped"}
 
 
@@ -64,7 +54,6 @@ BUDGET_MINIMUM = {"architecture": 300, "brief": 400}
 # Context budgets. Tokens are estimated as characters / 4, a rough rule of thumb.
 PACK_TOKEN_WARN = 15000          # context pack of one task; the worker budget of 30k input also holds prompt, tools and conversation
 HANDOFF_MAX_LINES = 3
-HANDOFF_MAX_CHARS = 200
 TEXT_SUFFIXES = {
     ".md", ".txt", ".json", ".yaml", ".yml", ".toml", ".py", ".js", ".ts", ".tsx", ".jsx",
     ".rs", ".go", ".java", ".kt", ".swift", ".c", ".h", ".cpp", ".cs", ".rb", ".php",
@@ -172,17 +161,6 @@ def check_packages(root: Path, board: dict, errors: list[str], warnings: list[st
             errors.append(
                 f"{task.get('id')}: scope_write {scope} is outside its package {package} "
                 f"(add the contract path to board.json contracts[] if it is a shared contract)")
-
-
-def check_drift(root: Path, warnings: list[str]) -> None:
-    """Warn when the project-local generator copy differs from its manifest (PL-15)."""
-    if _drift is None:
-        return
-    try:
-        report = _drift.drift(root)
-    except Exception:  # noqa: BLE001  never fail the project check because of drift
-        return
-    warnings.extend(report.get("warnings") or [])
 
 
 def check_environments(root: Path, warnings: list[str]) -> None:
@@ -789,7 +767,6 @@ def main() -> int:
         if gitignore.exists() and ".polier-slot" not in gitignore.read_text(encoding="utf-8"):
             warnings.append(".gitignore: runtime slot file .polier-slot is not ignored")
     check_environments(root, warnings)
-    check_drift(root, warnings)
     check_links(root, errors)
     check_git(root, warnings)
     check_factory(root, errors, warnings)

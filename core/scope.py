@@ -30,9 +30,6 @@ REVIEWS = "reviews"
 # Approval records are the approver's: a reviewer writes review material, never
 # the approval ledger (tools/approve.py owns it).
 APPROVALS = "reviews/approvals"
-# Session roles: worker (default) is limited to the task scope, reviewer to reviews/,
-# lead and off are not limited.
-ROLES = ("worker", "reviewer", "lead", "off")
 
 
 class Decision(NamedTuple):
@@ -138,39 +135,6 @@ def check_write(path: str, tasks: Union[dict, Iterable[dict], None], role: str =
     return decide(rel, tasks, board=board, root=root, cwd=cwd)
 
 
-def write_denial(decision: Decision, tasks: Union[dict, Iterable[dict], None], role: str = "worker",
-                 target: str = "") -> str:
-    """The message an agent gets for a denied write."""
-    shown = decision.path or target
-    if role == "reviewer":
-        if decision.code == "approvals":
-            return (f"Polier: write to {shown} blocked, the path {decision.reason} "
-                    "(reviews/approvals is the approver's, not review material). "
-                    "Report the needed decision in the review instead.")
-        return (f"Polier: write to {shown} blocked, a reviewer session writes only under reviews/. "
-                "Report the problem in the review instead of fixing it.")
-    if isinstance(tasks, dict):
-        tasks = [tasks]
-    tasks = [t for t in (tasks or []) if isinstance(t, dict)]
-    ids = ", ".join(str(t.get("id")) for t in tasks)
-    if decision.code == "worktree":
-        return " ".join([
-            f"Polier: write to {shown} blocked, {decision.reason} ({ids}).",
-            "Do the work in the task's worktree, not in the main checkout.",
-            "If the change is needed elsewhere, stop and report it under open_questions.",
-        ])
-    allowed: List[str] = []
-    for task in tasks:
-        for entry in task.get("scope_write") or []:
-            if entry not in allowed:
-                allowed.append(entry)
-    return " ".join([
-        f"Polier: write to {shown} blocked, the path {decision.reason} of {ids}.",
-        f"Allowed: {', '.join(allowed) or 'nothing'}.",
-        "Do not try another way to write it. If the change is needed, stop and report it under open_questions.",
-    ])
-
-
 # ---------------------------------------------------------------------------
 # stop check: every changed file, after the fact
 # ---------------------------------------------------------------------------
@@ -218,17 +182,6 @@ def changed_files(root) -> List[str]:
         if rel not in out:
             out.append(rel)
     return out
-
-
-def is_tracked(root, rel: str) -> bool:
-    """True if git tracks `rel` or any file below it. Deleting an untracked file
-    undoes a write, so guards let it through."""
-    try:
-        result = subprocess.run(["git", "-C", str(root), "ls-files", "-z", "--", rel or "."],
-                                capture_output=True, check=False)
-    except FileNotFoundError:
-        return True
-    return result.returncode != 0 or bool(result.stdout.strip(b"\0"))
 
 
 def violations(paths: Iterable[str], task: dict, allow_board: bool = False) -> List[Tuple[str, str]]:
@@ -317,15 +270,3 @@ def scope_check(root, task_id: Optional[str] = None, allow_board: bool = False) 
     board = load_board(root)
     task = pick_task(board, task_id)
     return check_stop(changed_files(root), task, allow_board, root=root)
-
-
-def stop_message(task: dict, found: List[dict]) -> str:
-    """The message an agent gets when its turn ends with changes outside the scope."""
-    lines = [f"- {v.get('path')}: {v.get('reason')}" for v in found[:20]]
-    return "\n".join([
-        f"Polier: the working tree has changes outside the scope of {task.get('id')}.",
-        *lines,
-        f"Allowed: {', '.join(task.get('scope_write') or []) or 'nothing'}.",
-        "Undo these changes (git checkout/rm for files you created or edited), or, if they are needed,",
-        "keep them and report each one under open_questions in your result. Then finish.",
-    ])

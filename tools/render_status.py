@@ -2,10 +2,10 @@
 """Generate STATUS.md and STATUS.html from board.json.
 
 Usage:
-    python3 tools/render_status.py examples/minimal-cli
-    python3 tools/render_status.py examples/minimal-cli --out STATUS.md
-    python3 tools/render_status.py examples/minimal-cli --html    # also STATUS.html
-    python3 tools/render_status.py examples/minimal-cli --html --watch --interval 2
+    python3 tools/render_status.py tests/fixtures/minimal-cli
+    python3 tools/render_status.py tests/fixtures/minimal-cli --out STATUS.md
+    python3 tools/render_status.py tests/fixtures/minimal-cli --html    # also STATUS.html
+    python3 tools/render_status.py tests/fixtures/minimal-cli --html --watch --interval 2
 
 `--html` writes the same state as a self-contained web page: summary, stages,
 every task with attempts, gate records, review verdict, tokens and audit
@@ -48,10 +48,6 @@ ICONS = {
     "blocked": "[!]",
     "failed": "[!]",
 }
-
-
-def _stage_key(stage) -> str:
-    return f"stage:{stage}" if isinstance(stage, int) else f"id:{stage}"
 
 
 def _render_stages(board: dict, tasks: list, root=None) -> list:
@@ -147,7 +143,6 @@ def _render_runtime(board: dict) -> list:
     lines.append("- Ports, database and bucket names: read `.polier-slot` (`tools/slot.py show`)")
     lines.append("")
     return lines
-
 
 
 def _short_blocked_reason(reason) -> str:
@@ -1525,12 +1520,6 @@ def watch_snapshot(root) -> dict:
         except OSError:
             continue
     return snapshot
-
-
-def snapshot_changed(root, previous) -> bool:
-    """True when the watched stores differ from `previous`; pure, no loop."""
-    before = previous if isinstance(previous, dict) else {}
-    return watch_snapshot(root) != before
 
 
 def _atomic_write(path, text: str) -> None:

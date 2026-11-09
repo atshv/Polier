@@ -1,7 +1,7 @@
 """Polier core: the enforcement rules without any harness.
 
-Every adapter (DeepSeek Harness, Claude Code, git hooks) and every CLI in
-tools/ calls these functions. Standard library only, Python 3.9+.
+The DeepSeek Harness plugin (through tools/) and every CLI in tools/ call
+these functions. Standard library only, Python 3.9+.
 
 The modules group the rules:
 

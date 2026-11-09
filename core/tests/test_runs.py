@@ -4,7 +4,6 @@ from __future__ import annotations
 import json
 import re
 import unittest
-from pathlib import Path
 
 from core import runs
 from core.errors import PolierError
@@ -115,16 +114,6 @@ class Attempts(unittest.TestCase):
         root = project([task()], repo=False)
         with self.assertRaises(PolierError):
             runs.finish_attempt(root, "M01", "maybe")
-
-    def test_exhausted(self):
-        root = project([task()], repo=False)
-        runs.start_attempt(root, "M01")
-        self.assertFalse(runs.exhausted(root, "M01", 2))
-        runs.start_attempt(root, "M01")
-        self.assertTrue(runs.exhausted(root, "M01", 2))
-        runs.finish_attempt(root, "M01", "pass")
-        self.assertFalse(runs.exhausted(root, "M01", 2))
-        self.assertFalse(runs.exhausted(root, "M01", "2"))
 
 
 class Events(unittest.TestCase):

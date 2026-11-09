@@ -22,7 +22,7 @@ from helpers import PACKAGE, run_tool, task
 import render_status
 from core import runs
 
-EXAMPLE = PACKAGE / "examples" / "monorepo-mini"
+EXAMPLE = PACKAGE / "tests" / "fixtures" / "monorepo-mini"
 
 _TAG = re.compile(r"<([A-Za-z][-A-Za-z0-9]*)\b([^>]*)>")
 _ATTR = re.compile(r'([A-Za-z_:][-A-Za-z0-9_:.]*)="([^"]*)"')
@@ -107,7 +107,7 @@ class ProjectCase(unittest.TestCase):
         return root, board
 
     def copied_example(self) -> Path:
-        """A writable copy of examples/monorepo-mini (real 1.3 policy and stores)."""
+        """A writable copy of tests/fixtures/monorepo-mini (real 1.3 policy and stores)."""
         root = Path(tempfile.mkdtemp(prefix="pl-html-")) / "proj"
         shutil.copytree(EXAMPLE, root)
         self.addCleanup(shutil.rmtree, root.parent, True)
@@ -348,19 +348,19 @@ class WatchAndCli(ProjectCase):
         (root / "runs").mkdir()
         snapshot = render_status.watch_snapshot(root)
         self.assertIsInstance(snapshot, dict)
-        self.assertFalse(render_status.snapshot_changed(root, snapshot))
-        self.assertFalse(render_status.snapshot_changed(root, snapshot))  # pure read
+        self.assertFalse(render_status.watch_snapshot(root) != snapshot)
+        self.assertFalse(render_status.watch_snapshot(root) != snapshot)  # pure read
 
         # A new run record changes the snapshot.
         (root / "runs" / "X.json").write_text("{}", encoding="utf-8")
-        self.assertTrue(render_status.snapshot_changed(root, snapshot))
+        self.assertTrue(render_status.watch_snapshot(root) != snapshot)
 
         # A touched board.json changes it too.
         snapshot = render_status.watch_snapshot(root)
         board_path = root / "board.json"
         stat = board_path.stat()
         os.utime(board_path, ns=(stat.st_atime_ns, stat.st_mtime_ns + 1_000_000_000))
-        self.assertTrue(render_status.snapshot_changed(root, snapshot))
+        self.assertTrue(render_status.watch_snapshot(root) != snapshot)
 
     def test_the_html_cli_writes_the_page_and_the_markdown(self):
         root, _board = self.project([task("T1")])

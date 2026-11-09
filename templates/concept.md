@@ -6,7 +6,7 @@
 
 | Name | Situation | Goal | Frustration today |
 | --- | --- | --- | --- |
-| `<Ana, 34, field technician>` | `<on site, phone, gloves>` | `<find the fault code fast>` | `<PDF manuals, no search>` |
+| `<Ana, 34, freelance designer>` | `<between client calls, laptop>` | `<send an invoice in two minutes>` | `<spreadsheet templates, manual totals>` |
 
 ## Features
 

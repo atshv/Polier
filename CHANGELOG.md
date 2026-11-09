@@ -2,6 +2,30 @@
 
 Each release lists what a running project must do to adopt it. Update between stages, never during a task (see `guide/cheatsheet.md`). The current version is in `VERSION`; projects record theirs in `board.json` → `generator_version`. A release is published automatically when `VERSION` changes on `main` (`.github/workflows/release.yml`).
 
+## 4.0.0
+
+**Built for DeepSeek Harness, without commands.** 3.0 made Polier a software factory; 4.0 makes it live inside the DSH agent loop. Nobody types `/pl` or a Python line any more: the model sees the state on every step, the human talks plainly, and every human decision is a real DSH approval prompt.
+
+**Live context.** A `<polier>` block in the runtime context of every model step (`ctx.systemPrompt.context`): project, role, the factory station with its open items, the running task with scope and gates, ready tasks, policy limits, pending approvals and the next sensible move. A short guide joins the system prompt of sessions inside a Polier project. Both are empty elsewhere. Config `context: false` switches them off.
+
+**Decisions are approval prompts.** Built on the harness approval service (`ctx.approval`), answered in the DSH UI and logged in the session:
+- `pl_mode` — worker and reviewer switch at once; lead and off ask the owner first.
+- `pl_factory` `advance` — closing a station asks the owner; the station records `approved_by: <owner> (approved in DSH)`.
+- `pl_approval` — writes the Polier approval request, asks the owner and records granted or denied.
+Without an answerer (headless) every prompt fails closed.
+
+**Tools instead of the `/pl` command.** New `pl_mode`, `pl_task` (bind and claim, or release) and `pl_approval`; `pl_factory` gains `reopen` and `advance` and works before a board exists; `pl_status` adds the factory line and the policy summary. `pl_state` and `pl_factory` regenerate `STATUS.md` and `docs/factory.md` after every recorded change. Planning writes to `factory.json` need no lead mode while no task runs. Guard messages point to `pl_approval` and `pl_mode` instead of shell commands. The `/pl` command is gone.
+
+**Goals, subagents, Ralph.** The guide and `prompt/dsh.md` show how a DSH goal can carry a whole station, how a fresh subagent reviews in `pl_mode reviewer`, and why Ralph and subagent reports are claims, not evidence.
+
+**DSH only.** Removed: the Claude Code adapter (`adapters/claude-code/`), the MCP server (`tools/mcp.py`), `install.sh`, `update.sh`, drift detection (`tools/drift.py`, `tools/manifest.py`, `tools/manifest.json`) and `core/gates.py`. The plugin moved from `adapters/dsh/` to `plugin/` and is split into `lib/context`, `lib/guard`, `lib/session`, `lib/tools` and `lib/factory`. Dev dependencies follow DSH 0.2.2 (`@deepseek-ai/cordis` 4.1.0, `dsh-*` 0.2.2-rc.1, the native tool executor for tests).
+
+**No examples, no dead code.** `examples/` is gone; the two reference projects the tests and CI need live in `tests/fixtures/`. Removed functions only tests still used (`write_denial`, `stop_message`, `is_tracked`, `exhausted`, `task_id_pattern`, `snapshot_changed`, …), unused constants and helpers, and fixed a broken error message in the board's `resources.services` check. CI runs pyflakes.
+
+**For contributors.** A root `AGENTS.md` describes the layout, the commands and the rules for changing Polier.
+
+**Compatibility.** Project files are unchanged: board, policy, runs, reviews, approvals, gates, claims, slots, worktrees and `factory.json`. Update with `dsh plugin --profile <name> add github:atshv/polier` and restart. Claude Code and MCP users stay on 3.0.0 (`#v3.0.0`).
+
 ## 3.0.0
 
 **Polier becomes an AI software factory — and loses the dashboard.** 2.x grew a local web app with twenty views; 3.0 goes back to files and the command line and adds what was missing: the whole way from idea to operation, for every kind of software.
@@ -18,7 +42,7 @@ Each release lists what a running project must do to adopt it. Update between st
 
 **Removed.** The dashboard (`server/`, `tools/serve.py`, the handbook, screenshots and GIFs) and everything only it used: headless sessions and the assistant (`tools/session.py`, `tools/assistant.py`), agent profiles, skills and MCP connector management, automations, GitHub panel, intake, task templates, pages, saved views, settings and the plan editor (`tools/plan.py`, `tools/settings.py`, `tools/views.py`, `tools/intake.py`, `tools/templates.py`, `tools/pages.py`, `tools/automations.py`, `tools/github.py`) with their `core/` modules and tests. The removed MCP tools are gone with them.
 
-**New example.** `examples/factory-app/` — an offline fault-code app for iOS and Android, stopped in the design station.
+**Example.** A first factory example under `examples/` (removed again in 4.0.0).
 
 **Compatibility.** Board, policy, runs, reviews, approvals, gates, claims, slots and worktrees are unchanged; a 2.x project keeps working and has no factory line until `tools/factory.py init`. Project files that only the dashboard read (`dashboard.json`, `views/`, `intake/`, `templates/tasks/`, `automations.json`, `agents.json`) are ignored and can be deleted. Plugin users: `git pull`, `dsh plugin --profile <name> add ./polier` again, restart. Claude Code users: replace the package copy and re-add the MCP server if you used it. Skill-only users: `./update.sh`.
 

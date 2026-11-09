@@ -5,10 +5,8 @@ import os
 import tempfile
 import unittest
 
-from core.scope import is_tracked
 from core.shell import write_targets
 
-from .fixtures import project, task
 
 
 def found(command: str, cwd: str = "/p"):
@@ -91,17 +89,6 @@ class Commands(unittest.TestCase):
 
     def test_home(self):
         self.assertEqual(found("touch ~/x")[0], [(os.path.expanduser("~/x"), "write")])
-
-
-class Tracked(unittest.TestCase):
-    def test_is_tracked(self):
-        root = project([task()])
-        (root / "new.txt").write_text("n\n")
-        self.assertTrue(is_tracked(root, "README.md"))
-        self.assertTrue(is_tracked(root, "src"))
-        self.assertFalse(is_tracked(root, "new.txt"))
-        self.assertFalse(is_tracked(root, "missing/dir"))
-
 
 if __name__ == "__main__":
     unittest.main()

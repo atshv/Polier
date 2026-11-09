@@ -1,10 +1,12 @@
-# Bundle patch for `dsh plugin --profile <name> add dsh-polier`.
+# Bundle patch for `dsh plugin --profile <name> add github:atshv/polier`.
 # Inserts one row; the loader resolves `name` from this package's installation.
 # Optional config (defaults shown):
 #   enforce: deny          # deny | ask | off
 #   stopCheck: true        # compare the git diff with the scope before a turn ends
 #   maxStopReminders: 2
 #   python: python3        # python on Windows
+#   owner: owner           # name written into records the owner answers in an approval prompt
+#   context: true          # live <polier> block and guide for the model
 #   skill: true            # register the Polier skill
 - insert:
     - id: polier

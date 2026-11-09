@@ -196,10 +196,10 @@ class Notes(unittest.TestCase):
         result = run_tool("research.py", "note", "x", "--root", str(root), "--source", "file:///etc/passwd")
         self.assertEqual(result.returncode, 2)
 
-    def test_examples_have_no_research_findings(self):
+    def test_fixtures_have_no_research_findings(self):
         package = Path(__file__).resolve().parents[1]
         for example in ("minimal-cli", "monorepo-mini"):
-            self.assertEqual(research.note_findings(package / "examples" / example), [])
+            self.assertEqual(research.note_findings(package / "tests" / "fixtures" / example), [])
 
 
 if __name__ == "__main__":

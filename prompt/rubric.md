@@ -59,7 +59,6 @@ Score each criterion **0 or 1**. **B** marks a blocker: it prevents approval reg
 - [ ] `docs/environments.md`: each environment has a smoke URL *(check.py, warning)*; variable names only, no values.
 - [ ] `docs/versions.md`: every manifest dependency is pinned with source URL and date *(check.py, L, warnings)*.
 - [ ] Contracts (L): every board contract has a schema, at least one valid and one invalid fixture, a SemVer version and its dependants *(contracts.py)*; a changed schema has the required bump *(contracts.py)*.
-- [ ] Generator copy matches `tools/manifest.json` — "local edits or outdated copy" names the files *(check.py, warning)*.
 - [ ] No placeholders or TODOs *(check.py)*; no `[UNVERIFIED]` in critical paths.
 - [ ] Internal links resolve *(check.py)*; named paths exist or are marked new.
 - [ ] Git repo initialised *(check.py, warning)* with a first commit.

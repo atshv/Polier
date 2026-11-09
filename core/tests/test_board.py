@@ -8,8 +8,9 @@ import unittest
 from pathlib import Path
 
 from core.board import (
+    ID_10,
     board_errors, package_paths, ready_tasks, resources, schema_version, stage_ids,
-    stage_report, task_id_pattern,
+    stage_report,
 )
 
 TOOLS = Path(__file__).resolve().parents[2] / "tools"
@@ -189,7 +190,7 @@ class Schema10(unittest.TestCase):
         self.assertIn("claim has unknown field 'bogus'", "\n".join(board_errors(board)))
 
     def test_id_pattern_widened(self):
-        pattern = task_id_pattern(board_10())
+        pattern = ID_10
         for good in ("M01", "M123", "P3-02", "ENG-14", "A-01", "ABCDEF-99"):
             self.assertTrue(pattern.match(good), good)
         for bad in ("m01", "P3_02", "TOOLONG-01", "P3-2", "3-02", ""):
@@ -293,9 +294,6 @@ class Schema11(unittest.TestCase):
         board["tasks"][0]["estimate_hours"] = "6"
         self.assertTrue(any("estimate_hours" in error for error in board_errors(board)))
 
-    def test_id_pattern_is_widened_for_1_1(self):
-        board = board_11()
-        self.assertEqual(task_id_pattern(board).pattern, task_id_pattern(board_10()).pattern)
 
 
 class Schema12(unittest.TestCase):

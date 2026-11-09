@@ -101,12 +101,12 @@ export function worktreeDenial(tasks, { board, root } = {}) {
   return isMainCheckout(root) ? tree : undefined
 }
 
-/** The nearest folder at or above `start` that holds a board.json, or undefined. */
-export function findRoot(start) {
+/** The nearest folder at or above `start` with a board.json or a factory.json (a line before its plan), or undefined. */
+export function findProject(start) {
   if (!start) return undefined
   let dir = path.resolve(start)
   for (;;) {
-    if (existsSync(path.join(dir, 'board.json'))) return dir
+    if (existsSync(path.join(dir, 'board.json')) || existsSync(path.join(dir, 'factory.json'))) return dir
     const parent = path.dirname(dir)
     if (parent === dir) return undefined
     dir = parent
@@ -130,7 +130,7 @@ export function relative(root, abs) {
 
 /**
  * The tasks whose scope applies to a session.
- * Order: the task pinned with `/pl task <ID>`, the in_progress task whose
+ * Order: the task bound with `pl_task`, the in_progress task whose
  * `worktree` contains the session's directory, every in_progress task.
  * @returns {{ tasks: object[], how: 'pinned'|'worktree'|'single'|'several'|'none' }}
  */
@@ -373,9 +373,4 @@ export function processKills(command, depth = 0) {
     }
   }
   return found
-}
-
-/** True when the command contains a kill pattern (a warning, never a denial). */
-export function hasKillPattern(command) {
-  return processKills(command).length > 0
 }

@@ -33,7 +33,6 @@ from .policy import POLICY, enabled as policy_enabled, load_policy
 RUNS = "runs"
 STATES = ("idle", "running", "done", "failed", "blocked")
 RESULTS = ("pass", "fail", "cancelled")
-EVENT_KINDS = ("start", "gate", "review", "state", "approval", "note", "escalate")
 MAX_EVENTS = 500
 
 LOCK_SUFFIX = ".lock"
@@ -296,13 +295,6 @@ def attempt_count(root, task) -> int:
 def run_state(root, task) -> str:
     """idle, running, done, failed or blocked."""
     return load_run(root, task)["state"]
-
-
-def exhausted(root, task, limit) -> bool:
-    """True when the task used its attempt limit and is not done."""
-    if not _is_int(limit):
-        return False
-    return attempt_count(root, task) >= limit and run_state(root, task) != "done"
 
 
 def last_event(root, task) -> Optional[dict]:

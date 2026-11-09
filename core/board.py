@@ -182,14 +182,6 @@ def schema_version(board: Optional[dict]) -> str:
     return value if value in SCHEMAS else SCHEMA_09
 
 
-def is_legacy(board: Optional[dict]) -> bool:
-    return schema_version(board) == SCHEMA_09
-
-
-def task_id_pattern(board: Optional[dict]):
-    return ID_09 if schema_version(board) == SCHEMA_09 else ID_10
-
-
 def stage_ids(board: Optional[dict]) -> List[str]:
     """Ids of the declared stages, in board order."""
     out = []
@@ -197,11 +189,6 @@ def stage_ids(board: Optional[dict]) -> List[str]:
         if isinstance(stage, dict) and isinstance(stage.get("id"), str):
             out.append(stage["id"])
     return out
-
-
-def stage_of_task(board: Optional[dict], task: dict):
-    """The stage a task belongs to: an int (classic) or a stages[].id (1.0)."""
-    return (task or {}).get("stage")
 
 
 def stage_key(stage) -> str:
@@ -215,14 +202,6 @@ def package_paths(board: Optional[dict]) -> List[str]:
         if isinstance(package, dict) and isinstance(package.get("path"), str):
             out.append(package["path"])
     return out
-
-
-def task_package(board: Optional[dict], task: dict) -> Optional[str]:
-    """The package path a task belongs to, or None."""
-    value = (task or {}).get("package")
-    if isinstance(value, str) and value.strip():
-        return value.strip()
-    return None
 
 
 def resources(board: Optional[dict]) -> dict:
@@ -472,7 +451,7 @@ def _check_resources(raw, errors: List[str]) -> None:
     if "services" in raw:
         services = raw["services"]
         if not isinstance(services, dict):
-            errors.append(f"{label}: services must be an object of {name: port offset}")
+            errors.append(f"{label}: services must be an object of {{name: port offset}}")
         else:
             for name, offset in services.items():
                 if not _is_int(offset) or offset < 0:

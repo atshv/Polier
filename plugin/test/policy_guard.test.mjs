@@ -1,7 +1,7 @@
 // The policy guard of the DSH plugin, on a throwaway git project with a real
 // policy.json: protected paths, dependency manifests with approvals, denied
-// commands, lead-only commands, and the /pl next, /pl policy, pl_next and
-// pl_state surfaces. Boots the real tool registry. Run: npm test
+// commands, lead-only commands, and the pl_status, pl_next and pl_state
+// surfaces. Boots the real tool registry. Run: npm test
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
@@ -9,16 +9,12 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
-import { Context } from '@deepseek-ai/cordis'
-import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
-import ToolRuntime from '@deepseek-ai/dsh-tools'
-
-import * as plugin from '../index.mjs'
 import { checkPath } from '../lib/project.mjs'
+import { agent, approvals, boot as bootWith, call, mode } from './harness.mjs'
 
 const PY = process.platform === 'win32' ? 'python' : 'python3'
-const PACKAGE = path.resolve(import.meta.dirname, '../../..')
-const TABLE = JSON.parse(readFileSync(path.resolve(import.meta.dirname, '../../../core/tests/policy_cases.json'), 'utf8'))
+const PACKAGE = path.resolve(import.meta.dirname, '../..')
+const TABLE = JSON.parse(readFileSync(path.resolve(import.meta.dirname, '../../core/tests/policy_cases.json'), 'utf8'))
 // tools/state.py and tools/dispatch.py are written by another track; the tests
 // that need them skip while they are absent instead of failing the suite.
 const HAS_STATE = existsSync(path.join(PACKAGE, 'tools', 'state.py'))
@@ -53,49 +49,9 @@ function task(id = 'M01', status = 'in_progress', extra = {}) {
   }
 }
 
-let seq = 0
-function agent(cwd) {
-  const steered = []
-  return { id: `agent-${++seq}`, session: { header: { cwd } }, steer: (m) => steered.push(m), steered }
-}
-
-async function boot(config = {}) {
-  const ctx = new Context()
-  await ctx.plugin(SystemPrompt)
-  await ctx.plugin(ToolRuntime)
-  await new Promise((resolve) => ctx.inject(['tools'], (c) => {
-    c.tools.register({
-      name: 'write',
-      description: 'write a file',
-      parameters: { type: 'object', properties: { file_path: { type: 'string' }, content: { type: 'string' } }, required: ['file_path', 'content'] },
-      output: { schema: { type: 'string' }, render: (_a, v) => [{ type: 'text', text: v }] },
-      async execute(args, exec) {
-        const abs = path.resolve(exec.agent.session.header.cwd, args.file_path)
-        mkdirSync(path.dirname(abs), { recursive: true })
-        writeFileSync(abs, args.content)
-        return 'written'
-      },
-    })
-    c.tools.register({
-      name: 'bash',
-      description: 'run a shell command',
-      parameters: { type: 'object', properties: { command: { type: 'string' } }, required: ['command'] },
-      output: { schema: { type: 'string' }, render: (_a, v) => [{ type: 'text', text: String(v) }] },
-      async execute() { return 'ran' },
-    })
-    resolve()
-  }))
-  await ctx.plugin(plugin, config)
-  const tools = await new Promise((resolve) => ctx.inject(['tools'], (c) => resolve(c.tools)))
-  return { ctx, tools }
-}
-
-async function call(tools, a, name, args) {
-  const r = await tools.execute({ callId: `c${++seq}`, name, arguments: args, agent: a, signal: new AbortController().signal })
-  const text = r.content.map((b) => b.text).join('')
-  let value
-  try { value = JSON.parse(text) } catch { value = text }
-  return { error: r.isError, text, value }
+/** Every session here may become lead: the owner allows each prompt. */
+function boot(config = {}) {
+  return bootWith(config, { approval: approvals(...Array(20).fill('allowed-once')) })
 }
 
 function approval(root, { id = 'AP-001', action = 'new_dependency', task: bound = 'M01', status = 'granted',
@@ -106,11 +62,6 @@ function approval(root, { id = 'AP-001', action = 'new_dependency', task: bound 
     id, action, task: bound, status, requested_by: 'worker', requested_at: '2026-10-28T11:00:00+00:00',
     approved_by: status === 'granted' ? 'owner' : null, approved_at: status === 'granted' ? at : null, note: null,
   }))
-}
-
-async function role(ctx, a, value) {
-  const cmd = plugin.command(ctx, plugin.resolveConfig())
-  return cmd.handler({ agent: a, rawInput: value, signal: new AbortController().signal })
 }
 
 test('the guard denies a protected path and a manifest without an approval', async () => {
@@ -130,7 +81,7 @@ test('the guard denies a protected path and a manifest without an approval', asy
   const manifest = await call(tools, a, 'write', { file_path: 'package.json', content: '{"name": "x"}\n' })
   assert.equal(manifest.error, true)
   assert.match(manifest.text, /dependency manifest/)
-  assert.match(manifest.text, /tools\/approve\.py request --action new_dependency --task M01/)
+  assert.match(manifest.text, /pl_approval with action new_dependency and task M01/)
   assert.equal(readFileSync(path.join(root, 'package.json'), 'utf8'), '{"name": "t"}\n')
 
   // An ordinary in-scope file is untouched by the policy.
@@ -160,7 +111,7 @@ test('without policy.json the 1.0 guard stays exactly as it was', async () => {
 
 test('the policy command guard denies deny-list commands for every role', async () => {
   const root = project([task()], { policy: true })
-  const { ctx, tools } = await boot()
+  const { tools } = await boot()
 
   const worker = agent(root)
   const push = await call(tools, worker, 'bash', { command: 'git push origin main' })
@@ -177,14 +128,14 @@ test('the policy command guard denies deny-list commands for every role', async 
   assert.equal((await call(tools, worker, 'bash', { command: 'git status' })).error, false)
 
   const lead = agent(root)
-  await role(ctx, lead, 'lead')
+  await mode(tools, lead, 'lead')
   const leadPush = await call(tools, lead, 'bash', { command: 'git push origin main' })
   assert.equal(leadPush.error, true, 'nobody bypasses a deny command')
 })
 
 test('lead-only commands are refused to workers and reviewers, allowed to the lead', async () => {
   const root = project([task()], { policy: true })
-  const { ctx, tools } = await boot()
+  const { tools } = await boot()
   const command = 'python3 tools/state.py set M03 in_progress'
 
   const worker = agent(root)
@@ -194,13 +145,13 @@ test('lead-only commands are refused to workers and reviewers, allowed to the le
   assert.match(refused.text, /only the lead session may run it/)
 
   const reviewer = agent(root)
-  await role(ctx, reviewer, 'reviewer')
+  await mode(tools, reviewer, 'reviewer')
   assert.equal((await call(tools, reviewer, 'bash', { command })).error, true)
   // A reviewer may still read the state.
   assert.equal((await call(tools, reviewer, 'bash', { command: 'python3 tools/state.py show' })).error, false)
 
   const lead = agent(root)
-  await role(ctx, lead, 'lead')
+  await mode(tools, lead, 'lead')
   const allowed = await call(tools, lead, 'bash', { command })
   assert.equal(allowed.error, false)
   assert.equal(allowed.value, 'ran')
@@ -208,40 +159,30 @@ test('lead-only commands are refused to workers and reviewers, allowed to the le
 
 test('a lead session bypasses the path and dependency rules only', async () => {
   const root = project([task()], { policy: true })
-  const { ctx, tools } = await boot()
+  const { tools } = await boot()
   const lead = agent(root)
-  await role(ctx, lead, 'lead')
+  await mode(tools, lead, 'lead')
   assert.equal((await call(tools, lead, 'write', { file_path: '.env', content: 'SECRET=2\n' })).error, false)
   assert.equal((await call(tools, lead, 'write', { file_path: 'package.json', content: '{"name": "x"}\n' })).error, false)
   assert.equal((await call(tools, lead, 'bash', { command: 'git status' })).error, false)
 })
 
-test('/pl policy reports the rules and the disabled default; the help lists the new verbs', async () => {
+test('pl_status reports the policy and the disabled default', async () => {
   const enabledRoot = project([task()], { policy: true })
-  const enabledBoot = await boot()
-  const enabledCmd = plugin.command(enabledBoot.ctx, plugin.resolveConfig())
-  const report = await enabledCmd.handler({ agent: agent(enabledRoot), rawInput: 'policy' })
-  assert.equal(report.kind, 'success')
-  assert.match(report.text, /Policy: enabled/)
-  assert.match(report.text, /Protected paths: \.env/)
-  assert.match(report.text, /Denied commands: git push\*/)
-  assert.match(report.text, /Limits: attempts 3, in progress 2, review rounds 3/)
+  const { tools } = await boot()
+  const report = await call(tools, agent(enabledRoot), 'pl_status', {})
+  assert.equal(report.error, false, report.text)
+  assert.deepEqual(report.value.policy.protected_paths.slice(0, 1), ['.env'])
+  assert.deepEqual(report.value.policy.limits, { max_attempts_per_task: 3, max_in_progress: 2, max_review_rounds: 3 })
 
   const plainRoot = project([task()])
-  const plainBoot = await boot()
-  const plainCmd = plugin.command(plainBoot.ctx, plugin.resolveConfig())
-  const disabled = await plainCmd.handler({ agent: agent(plainRoot), rawInput: 'policy' })
-  assert.equal(disabled.kind, 'success')
-  assert.match(disabled.text, /Policy: disabled/)
-
-  const help = await enabledCmd.handler({ agent: agent(enabledRoot), rawInput: 'nonsense' })
-  assert.match(help.text, /\/pl next/)
-  assert.match(help.text, /\/pl policy/)
+  const plain = await call(tools, agent(plainRoot), 'pl_status', {})
+  assert.deepEqual(plain.value.policy, { enabled: false })
 })
 
 test('pl_next returns the dispatch plan', { skip: HAS_DISPATCH ? false : 'tools/dispatch.py not present yet' }, async () => {
   const root = project([task('M01', 'pending'), task('M02', 'pending', { depends_on: ['M01'] })])
-  const { ctx, tools } = await boot({ python: PY })
+  const { tools } = await boot({ python: PY })
   const a = agent(root)
   const plan = await call(tools, a, 'pl_next', {})
   assert.equal(plan.error, false, plan.text)
@@ -249,16 +190,11 @@ test('pl_next returns the dispatch plan', { skip: HAS_DISPATCH ? false : 'tools/
   assert.ok(Array.isArray(plan.value.next))
   assert.ok(Array.isArray(plan.value.waves))
   assert.ok(plan.value.waves.flat().some((item) => item.id === 'M01'))
-
-  const text = await plugin.command(ctx, plugin.resolveConfig({ python: PY }))
-    .handler({ agent: a, rawInput: 'next' })
-  assert.equal(text.kind, 'success', text.text)
-  assert.match(text.text, /M01/)
 })
 
 test('pl_state shows state and only a lead session may set it', { skip: HAS_STATE ? false : 'tools/state.py not present yet' }, async () => {
   const root = project([task()], { policy: true })
-  const { ctx, tools } = await boot({ python: PY })
+  const { tools } = await boot({ python: PY })
   const worker = agent(root)
 
   const refused = await call(tools, worker, 'pl_state', { action: 'set', task: 'M01', status: 'blocked', note: 'waiting' })
@@ -266,7 +202,7 @@ test('pl_state shows state and only a lead session may set it', { skip: HAS_STAT
   assert.match(refused.text, /lead session changes task state/)
 
   const lead = agent(root)
-  await role(ctx, lead, 'lead')
+  await mode(tools, lead, 'lead')
   const shown = await call(tools, lead, 'pl_state', { task: 'M01' })
   assert.equal(shown.error, false, shown.text)
   assert.ok(shown.value && typeof shown.value === 'object')

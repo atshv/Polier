@@ -35,10 +35,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from core.board import load_board, pick_task  # noqa: E402
 from core.gate import write_record  # noqa: E402
 
-# Failures that are infrastructure, not a broken deployment (same defaults as core/gate.py).
-INFRA = ("ECONNREFUSED", "ERR_CONNECTION_REFUSED", "EADDRINUSE",
-         "is already used, make sure that nothing is running on the port",
-         "address already in use", "connection refused", "timed out")
 HEADER = re.compile(r"^\s*([A-Za-z0-9-]+)\s*[:=]\s*env:([A-Za-z_][A-Za-z0-9_]*)\s*$")
 
 

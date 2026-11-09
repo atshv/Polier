@@ -1,7 +1,7 @@
 {
   "name": "dsh-polier",
-  "version": "3.0.0",
-  "description": "AI software factory: runs a project through nine stations from idea to operation (web, iOS, Android, desktop, CLI, services), maps every applicable checklist item to tasks and keeps the agents to the plan with a write guard, recorded test evidence, reviews and approvals. DeepSeek Harness plugin with Claude Code hooks and an MCP server.",
+  "version": "4.0.0",
+  "description": "AI software factory for DeepSeek Harness: runs a project through nine stations from idea to operation (web, iOS, Android, desktop, CLI, services), shows the live state in every model step, turns every owner decision into an approval prompt and keeps builder agents to the plan with a write guard, recorded test evidence and reviews.",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -16,22 +16,18 @@
     "planning",
     "polier",
     "software-factory",
-    "checklist",
-    "mcp"
+    "checklist"
   ],
   "type": "module",
-  "main": "adapters/dsh/index.mjs",
+  "main": "plugin/index.mjs",
   "exports": {
-    ".": "./adapters/dsh/index.mjs",
+    ".": "./plugin/index.mjs",
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./package.json": "./package.json"
   },
   "files": [
-    "adapters/dsh/index.mjs",
-    "adapters/dsh/lib/",
-    "adapters/claude-code/hook.py",
-    "adapters/claude-code/settings.example.json",
-    "adapters/claude-code/README.md",
+    "plugin/index.mjs",
+    "plugin/lib/",
     "core/*.py",
     "cordis.patch.yml",
     "SKILL.md",
@@ -41,9 +37,7 @@
     "prompt/",
     "templates/",
     "tools/*.py",
-    "tools/manifest.json",
-    "guide/",
-    "examples/"
+    "guide/"
   ],
   "engines": {
     "node": ">=20"
@@ -54,16 +48,16 @@
     }
   },
   "peerDependencies": {
-    "@deepseek-ai/cordis": ">=4.0.1"
+    "@deepseek-ai/cordis": ">=4.0.5"
   },
   "devDependencies": {
-    "@deepseek-ai/cordis": "4.0.5",
-    "@deepseek-ai/dsh-commands": "0.2.1-rc.3",
-    "@deepseek-ai/dsh-skill": "0.2.1-rc.3",
-    "@deepseek-ai/dsh-system-prompt": "0.2.1-rc.3",
-    "@deepseek-ai/dsh-tools": "0.2.1-rc.3"
+    "@deepseek-ai/cordis": "4.1.0",
+    "@deepseek-ai/dsh-skill": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-system-prompt": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-tool-executor-native": "^0.2.2-rc.1",
+    "@deepseek-ai/dsh-tools": "0.2.2-rc.1"
   },
   "scripts": {
-    "test": "node --test adapters/dsh/test/*.test.mjs && python3 -m unittest discover -s tests && python3 -m unittest discover -s core/tests -t . && python3 -m unittest discover -s adapters/claude-code/tests"
+    "test": "node --test plugin/test/*.test.mjs && python3 -m unittest discover -s tests && python3 -m unittest discover -s core/tests -t ."
   }
 }

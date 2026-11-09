@@ -611,7 +611,7 @@ export function hasGrant(root, action, task = null) {
   return newest
 }
 
-/** Pending approval records, newest first (for `/pl policy`). */
+/** Pending approval records, newest first (for the live context and pl_status). */
 export function pendingApprovals(root) {
   return loadApprovals(root)
     .filter((record) => record.status === 'pending')

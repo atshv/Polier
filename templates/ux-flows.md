@@ -19,7 +19,7 @@
 ## Onboarding
 
 - First run: `<steps>`.
-- Permission prompts, each asked when first needed, with its reason text: `<camera — "to scan the type plate">`.
+- Permission prompts, each asked when first needed, with its reason text: `<camera — "to scan a receipt">`.
 
 ## Prototype
 

@@ -3,79 +3,17 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 
 import { Context } from '@deepseek-ai/cordis'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
+import * as NativeExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 
 import * as plugin from '../index.mjs'
 import { readyTasks } from '../lib/project.mjs'
-
-const PY = process.platform === 'win32' ? 'python' : 'python3'
-
-function project(tasks) {
-  const root = mkdtempSync(path.join(tmpdir(), 'pl-dsh-'))
-  writeFileSync(path.join(root, 'board.json'), JSON.stringify({ project: 't', profile: 'S', base_branch: 'main', tasks }, null, 2))
-  mkdirSync(path.join(root, 'src'))
-  writeFileSync(path.join(root, 'src/app.py'), 'x = 1\n')
-  writeFileSync(path.join(root, 'README.md'), 'readme\n')
-  const git = (...a) => execFileSync('git', ['-C', root, ...a], { stdio: 'pipe' })
-  git('init', '-q', '-b', 'main')
-  git('config', 'user.email', 't@example.com')
-  git('config', 'user.name', 't')
-  git('add', '-A')
-  git('commit', '-q', '-m', 'chore: scaffold')
-  return root
-}
-
-function task(id = 'M01', status = 'in_progress', extra = {}) {
-  return {
-    id, title: `Task ${id}`, goal: 'Do it.', status, depends_on: [], complexity: 2, stage: 1,
-    scope_write: ['src/app.py'], acceptance: ['A1'], gates: ['tests'], ...extra,
-  }
-}
-
-let seq = 0
-function agent(cwd) {
-  const steered = []
-  return { id: `agent-${++seq}`, session: { header: { cwd } }, steer: (m) => steered.push(m), steered }
-}
-
-async function boot(config = {}) {
-  const ctx = new Context()
-  await ctx.plugin(SystemPrompt)
-  await ctx.plugin(ToolRuntime)
-  // A stand-in for the harness `write` tool, so the guard has something to stop.
-  await new Promise((resolve) => ctx.inject(['tools'], (c) => {
-    c.tools.register({
-      name: 'write',
-      description: 'write a file',
-      parameters: { type: 'object', properties: { file_path: { type: 'string' }, content: { type: 'string' } }, required: ['file_path', 'content'] },
-      output: { schema: { type: 'string' }, render: (_a, v) => [{ type: 'text', text: v }] },
-      async execute(args, exec) {
-        const abs = path.resolve(exec.agent.session.header.cwd, args.file_path)
-        mkdirSync(path.dirname(abs), { recursive: true })
-        writeFileSync(abs, args.content)
-        return 'written'
-      },
-    })
-    resolve()
-  }))
-  await ctx.plugin(plugin, config)
-  const tools = await new Promise((resolve) => ctx.inject(['tools'], (c) => resolve(c.tools)))
-  return { ctx, tools }
-}
-
-async function call(tools, a, name, args) {
-  const r = await tools.execute({ callId: `c${++seq}`, name, arguments: args, agent: a, signal: new AbortController().signal })
-  const text = r.content.map((b) => b.text).join('')
-  let value
-  try { value = JSON.parse(text) } catch { value = text }
-  return { error: r.isError, text, value }
-}
+import { agent, approvals, boot, call, mode, project, PY, task } from './harness.mjs'
 
 test('guard allows writes inside the scope and blocks the rest', async () => {
   const root = project([task()])
@@ -103,27 +41,40 @@ test('forbidden paths win and no running task means no guard', async () => {
   assert.equal((await call(tools, agent(idle), 'write', { file_path: 'README.md', content: 'ok\n' })).error, false)
 })
 
-test('/pl lead lifts the guard for that session only', async () => {
+test('pl_mode lead needs the owner and lifts the guard for that session only', async () => {
   const root = project([task()])
-  const { ctx, tools } = await boot()
-  const cmd = plugin.command(ctx, plugin.resolveConfig())
+  const service = approvals('rejected', 'allowed-once')
+  const { tools } = await boot({}, { approval: service })
   const lead = agent(root)
   const worker = agent(root)
-  const res = await cmd.handler({ agent: lead, rawInput: 'lead', signal: new AbortController().signal })
-  assert.equal(res.kind, 'success')
+  const refused = await mode(tools, lead, 'lead')
+  assert.equal(refused.value.ok, false)
+  assert.equal(refused.value.approval, 'rejected')
+  assert.equal((await call(tools, lead, 'write', { file_path: 'README.md', content: 'no\n' })).error, true)
+  assert.equal((await mode(tools, lead, 'lead')).value.ok, true)
+  assert.equal(service.asked.length, 2)
+  assert.match(service.asked[0], /Polier lead/)
   assert.equal((await call(tools, lead, 'write', { file_path: 'README.md', content: 'lead\n' })).error, false)
   assert.equal((await call(tools, worker, 'write', { file_path: 'README.md', content: 'w\n' })).error, true)
-  await cmd.handler({ agent: lead, rawInput: 'worker' })
+  assert.equal((await mode(tools, lead, 'worker')).value.ok, true)
+  assert.equal(service.asked.length, 2, 'stepping down needs no approval')
   assert.equal((await call(tools, lead, 'write', { file_path: 'README.md', content: 'x\n' })).error, true)
 })
 
-test('/pl reviewer may write only under reviews/, with or without a running task', async () => {
+test('pl_mode lead fails closed without an approval service', async () => {
+  const root = project([task()])
+  const { tools } = await boot()
+  const res = await mode(tools, agent(root), 'lead')
+  assert.equal(res.value.ok, false)
+  assert.equal(res.value.approval, 'unavailable')
+})
+
+test('pl_mode reviewer may write only under reviews/, with or without a running task', async () => {
   for (const status of ['in_progress', 'pending']) {
     const root = project([task('M01', status)])
-    const { ctx, tools } = await boot()
-    const cmd = plugin.command(ctx, plugin.resolveConfig())
+    const { tools } = await boot()
     const r = agent(root)
-    await cmd.handler({ agent: r, rawInput: 'reviewer' })
+    assert.equal((await mode(tools, r, 'reviewer')).value.ok, true)
     assert.equal((await call(tools, r, 'write', { file_path: 'reviews/M01.md', content: 'verdict: pass\n' })).error, false)
     const code = await call(tools, r, 'write', { file_path: 'src/app.py', content: 'x = 9\n' })
     assert.equal(code.error, true)
@@ -131,14 +82,13 @@ test('/pl reviewer may write only under reviews/, with or without a running task
   }
 })
 
-test('/pl task binds a session when several tasks run', async () => {
+test('pl_task binds a session when several tasks run', async () => {
   const root = project([task('M01'), task('M02', 'in_progress', { scope_write: ['README.md'] })])
-  const { ctx, tools } = await boot()
+  const { tools } = await boot()
   const a = agent(root)
   // Unbound: the union of both scopes applies.
   assert.equal((await call(tools, a, 'write', { file_path: 'README.md', content: '1\n' })).error, false)
-  const cmd = plugin.command(ctx, plugin.resolveConfig())
-  await cmd.handler({ agent: a, rawInput: 'task m01' })
+  assert.equal((await call(tools, a, 'pl_task', { task: 'm01' })).value.bound, 'M01')
   assert.equal((await call(tools, a, 'write', { file_path: 'README.md', content: '2\n' })).error, true)
 })
 
@@ -202,7 +152,7 @@ test('pl_scope_check and the stop check see writes made outside the tools', asyn
 
 test('pl_check runs tools/check.py', async () => {
   const { tools } = await boot({ python: PY })
-  const example = path.resolve(import.meta.dirname, '../../../examples/minimal-cli')
+  const example = path.resolve(import.meta.dirname, '../../tests/fixtures/minimal-cli')
   const res = await call(tools, agent(example), 'pl_check', {})
   assert.equal(res.value.ok, true, res.value.output)
 })
@@ -214,22 +164,30 @@ test('the bundled skill parses', () => {
   assert.match(s.content, /Package folder/)
 })
 
-test('registers tools, the /pl command and the skill with the real services', async () => {
-  const Commands = await import('@deepseek-ai/dsh-commands')
+test('registers the tools, the live context and the skill with the real services', async () => {
   const Skill = await import('@deepseek-ai/dsh-skill')
   const ctx = new Context()
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
-  await ctx.plugin(Commands.default ?? Commands)
+  await ctx.plugin(NativeExecutor)
   await ctx.plugin(Skill.default)
   await ctx.plugin(plugin)
   await new Promise((r) => setTimeout(r, 100))
   const names = ctx.get('tools').schemas().map((s) => s.name)
-  for (const n of ['pl_status', 'pl_gate', 'pl_scope_check', 'pl_check']) assert.ok(names.includes(n), n)
-  const fake = { id: 'x', ctx, session: { header: {} } }
-  assert.deepEqual(ctx.get('commands').list(fake).map((c) => c.name), ['pl'])
+  for (const n of ['pl_status', 'pl_gate', 'pl_scope_check', 'pl_check', 'pl_next', 'pl_state', 'pl_factory', 'pl_mode', 'pl_task', 'pl_approval']) {
+    assert.ok(names.includes(n), n)
+  }
   const skills = await ctx.get('skills').list({})
   assert.ok(skills.some((s) => s.name === 'polier'))
+
+  const root = project([task()])
+  const assembly = await ctx.get('systemPrompt').assemble({ agent: agent(root) })
+  const state = assembly.contexts.find((c) => c.name === 'polier:state')
+  assert.match(state.text, /<polier>/)
+  assert.match(state.text, /Running: M01/)
+  assert.ok(assembly.sections.some((s) => s.name === 'polier:guide' && /AI software factory/.test(s.text)))
+  const elsewhere = await ctx.get('systemPrompt').assemble({ agent: agent(path.dirname(root)) })
+  assert.equal(elsewhere.contexts.find((c) => c.name === 'polier:state')?.text ?? '', '')
 })
 
 // ---------------------------------------------------------------------------
@@ -238,7 +196,7 @@ test('registers tools, the /pl command and the skill with the real services', as
 
 import { checkPath, inside } from '../lib/project.mjs'
 
-const CLAIM_TOOL = path.resolve(import.meta.dirname, '../../../tools/claim.py')
+const CLAIM_TOOL = path.resolve(import.meta.dirname, '../../tools/claim.py')
 
 function claimPath(root, id) {
   return path.join(root, '.git', 'polier', 'claims', `${id}.json`)
@@ -248,7 +206,7 @@ function readClaim(root, id) {
   return JSON.parse(readFileSync(claimPath(root, id), 'utf8'))
 }
 
-function claimTakeCli(root, id, harness = 'claude-code', session = 'other') {
+function claimTakeCli(root, id, harness = 'cli', session = 'other') {
   execFileSync(PY, [CLAIM_TOOL, 'take', id, '--harness', harness, '--session', session, '--root', root], { stdio: 'pipe' })
 }
 
@@ -273,29 +231,12 @@ async function waitFor(check, timeoutMs = 5000) {
   return false
 }
 
-/** boot() plus a stand-in for the harness `bash` tool (the kill warning guards it). */
-async function bootWithBash(config = {}) {
-  const booted = await boot(config)
-  await new Promise((resolve) => booted.ctx.inject(['tools'], (c) => {
-    c.tools.register({
-      name: 'bash',
-      description: 'run a shell command',
-      parameters: { type: 'object', properties: { command: { type: 'string' } }, required: ['command'] },
-      output: { schema: { type: 'string' }, render: (_a, v) => [{ type: 'text', text: String(v) }] },
-      async execute() { return 'ran' },
-    })
-    resolve()
-  }))
-  return booted
-}
-
-test('/pl task takes the claim and pl_status lists the live claims', async () => {
+test('pl_task takes the claim and pl_status lists the live claims', async () => {
   const root = project([task()])
   const { ctx, tools } = await boot({ python: PY })
   const a = agent(root)
-  const cmd = plugin.command(ctx, plugin.resolveConfig({ python: PY }))
-  const res = await cmd.handler({ agent: a, rawInput: 'task m01', signal: new AbortController().signal })
-  assert.equal(res.kind, 'success', res.text)
+  const res = await call(tools, a, 'pl_task', { task: 'M01' })
+  assert.equal(res.value.claimed, true, res.text)
   const claim = readClaim(root, 'M01')
   assert.equal(claim.task, 'M01')
   assert.equal(claim.harness, 'dsh')
@@ -307,25 +248,23 @@ test('/pl task takes the claim and pl_status lists the live claims', async () =>
   assert.equal(status.value.claims[0].harness, 'dsh')
 })
 
-test('/pl task refuses a task claimed by another harness and names the holder', async () => {
+test('pl_task refuses a task claimed by another harness and names the holder', async () => {
   const root = project([task()])
-  claimTakeCli(root, 'M01', 'claude-code', 'claude-9')
-  const { ctx } = await boot({ python: PY })
+  claimTakeCli(root, 'M01', 'cli', 'cli-9')
+  const { tools } = await boot()
   const a = agent(root)
-  const cmd = plugin.command(ctx, plugin.resolveConfig({ python: PY }))
-  const res = await cmd.handler({ agent: a, rawInput: 'task m01' })
-  assert.equal(res.kind, 'error')
-  assert.match(res.text, /claude-code/)
-  assert.match(res.text, /claude-9/)
-  assert.equal(readClaim(root, 'M01').session, 'claude-9')
+  const res = await call(tools, a, 'pl_task', { task: 'M01' })
+  assert.equal(res.value.ok, false)
+  assert.match(res.value.error, /cli/)
+  assert.match(res.value.error, /cli-9/)
+  assert.equal(readClaim(root, 'M01').session, 'cli-9')
 })
 
 test('tool calls refresh the claim heartbeat at most once per minute', async () => {
   const root = project([task()])
   const { ctx, tools } = await boot({ python: PY })
   const a = agent(root)
-  const cmd = plugin.command(ctx, plugin.resolveConfig({ python: PY }))
-  await cmd.handler({ agent: a, rawInput: 'task m01' })
+  await call(tools, a, 'pl_task', { task: 'M01' })
   const stale = () => {
     const claim = readClaim(root, 'M01')
     claim.heartbeat = '2020-01-01T00:00:00+00:00'
@@ -342,10 +281,9 @@ test('tool calls refresh the claim heartbeat at most once per minute', async () 
 
 test('disposing an agent releases the claims it held', async () => {
   const root = project([task()])
-  const { ctx } = await boot({ python: PY })
+  const { ctx, tools } = await boot()
   const a = agent(root)
-  const cmd = plugin.command(ctx, plugin.resolveConfig({ python: PY }))
-  await cmd.handler({ agent: a, rawInput: 'task m01' })
+  await call(tools, a, 'pl_task', { task: 'M01' })
   assert.ok(existsSync(claimPath(root, 'M01')))
   ctx.emit('agent/disposed', { agent: a })
   assert.ok(await waitFor(() => !existsSync(claimPath(root, 'M01'))))
@@ -368,9 +306,8 @@ test('foreign changes are reported separately and do not trigger the stop remind
   claimTakeCli(root, 'M02', 'dsh', 'other-agent')
   const { ctx, tools } = await boot({ python: PY })
   const a = agent(root)
-  const cmd = plugin.command(ctx, plugin.resolveConfig({ python: PY }))
   const config = plugin.resolveConfig({ python: PY })
-  await cmd.handler({ agent: a, rawInput: 'task m01' })
+  await call(tools, a, 'pl_task', { task: 'M01' })
   mkdirSync(path.join(root, 'docs'), { recursive: true })
   writeFileSync(path.join(root, 'docs', 'x.md'), 'foreign\n')
 
@@ -395,7 +332,7 @@ test('foreign changes are reported separately and do not trigger the stop remind
 
 test('a bash kill command steers once per turn and is never a denial', async () => {
   const root = project([task()])
-  const { tools } = await bootWithBash()
+  const { tools } = await boot()
   const a = agent(root)
   const first = await call(tools, a, 'bash', { command: "pkill -f 'next dev'" })
   assert.equal(first.error, false)
@@ -461,7 +398,7 @@ test('pl_gate passes the slot and the exclusive resources of the task', { skip: 
 function gateSupportsExclusive() {
   if (gateSupportsExclusive.cache !== undefined) return gateSupportsExclusive.cache
   try {
-    const help = execFileSync(PY, [path.resolve(import.meta.dirname, '../../../tools/gate.py'), '--help'], { encoding: 'utf8' })
+    const help = execFileSync(PY, [path.resolve(import.meta.dirname, '../../tools/gate.py'), '--help'], { encoding: 'utf8' })
     gateSupportsExclusive.cache = !help.includes('--exclusive')
       ? 'tools/gate.py has no --exclusive yet (PL-03)'
       : !help.includes('--lock-wait') ? 'tools/gate.py has no --lock-wait yet (PL-03)' : false
@@ -511,20 +448,64 @@ test('ready tasks respect stage exit gates and the owner decision', () => {
 // 3.0 factory line
 // ---------------------------------------------------------------------------
 
-const FACTORY_TOOL = path.resolve(import.meta.dirname, '../../../tools/factory.py')
+const FACTORY_TOOL = path.resolve(import.meta.dirname, '../../tools/factory.py')
 
-test('pl_factory shows the line and only a lead session writes it', async () => {
-  const root = project([task('M01', 'pending')])
+test('pl_factory works before the board exists and closes a station only with the owner', async () => {
+  const root = project(null, { files: { 'project-input.md': '# Input\n' } })
   execFileSync(PY, [FACTORY_TOOL, '--root', root, 'init', '--platforms', 'ios'], { stdio: 'pipe' })
-  const { tools } = await boot()
+  const service = approvals('rejected', 'allowed-once')
+  const { ctx, tools, config } = await boot({}, { approval: service })
   const a = agent(root)
-  const status = await call(tools, a, 'pl_factory', {})
-  assert.equal(status.error, false, status.text)
+  const status = await call(tools, a, 'pl_factory', { action: 'status' })
   assert.equal(status.value.current, 'idea')
-  const next = await call(tools, a, 'pl_factory', { action: 'next' })
+  const next = await call(tools, a, 'pl_factory', {})
   assert.equal(next.value.station, 'idea')
   assert.ok(next.value.items.some((item) => item.id === 'IDEA-01'))
-  const refused = await call(tools, a, 'pl_factory', { action: 'na', item: 'IDEA-06', reason: 'hobby' })
+
+  for (const item of ['IDEA-01', 'IDEA-02', 'IDEA-03', 'IDEA-04']) {
+    const done = await call(tools, a, 'pl_factory', { action: 'done', item, evidence: ['project-input.md'] })
+    assert.equal(done.value.ok, true, done.text)
+  }
+  assert.equal((await call(tools, a, 'pl_factory', { action: 'done', item: 'IDEA-05', evidence: ['factory.json'] })).value.ok, true)
+  const noEvidence = await call(tools, a, 'pl_factory', { action: 'done', item: 'IDEA-06', evidence: ['missing.md'] })
+  assert.equal(noEvidence.value.ok, false)
+  assert.equal((await call(tools, a, 'pl_factory', { action: 'defer', item: 'IDEA-06', reason: 'no budget yet' })).value.ok, true)
+  assert.ok(existsSync(path.join(root, 'docs', 'factory.md')), 'docs/factory.md is rendered on its own')
+
+  const rejected = await call(tools, a, 'pl_factory', { action: 'advance' })
+  assert.equal(rejected.value.ok, false)
+  assert.equal(rejected.value.approval, 'rejected')
+  const closed = await call(tools, a, 'pl_factory', { action: 'advance' })
+  assert.equal(closed.value.ok, true, closed.text)
+  assert.match(service.asked[0], /station "idea"/)
+  const line = JSON.parse(readFileSync(path.join(root, 'factory.json'), 'utf8'))
+  assert.equal(line.stations.idea.approved_by, 'owner (approved in DSH)')
+
+  const snapshot = plugin.liveContext(ctx, config, a)
+  assert.match(snapshot, /Factory: station concept \(2\/9/)
+  assert.match(snapshot, /CON-02 Prioritised feature list/)
+})
+
+test('pl_factory writes need the lead while tasks run', async () => {
+  const root = project([task('M01', 'in_progress')])
+  execFileSync(PY, [FACTORY_TOOL, '--root', root, 'init', '--platforms', 'cli'], { stdio: 'pipe' })
+  const { tools } = await boot()
+  const refused = await call(tools, agent(root), 'pl_factory', { action: 'na', item: 'IDEA-06', reason: 'hobby' })
   assert.equal(refused.error, true)
   assert.match(refused.text, /lead/)
+})
+
+test('pl_approval records the owner answer from the prompt', async () => {
+  const root = project([task('M01', 'in_progress')])
+  const service = approvals('allowed-once', 'rejected')
+  const { tools } = await boot({}, { approval: service })
+  const a = agent(root)
+  const granted = await call(tools, a, 'pl_approval', { action: 'new_dependency', task: 'M01', note: 'adds httpx' })
+  assert.equal(granted.value.status, 'granted', granted.text)
+  const record = JSON.parse(readFileSync(path.join(root, 'reviews', 'approvals', `${granted.value.id}.json`), 'utf8'))
+  assert.equal(record.status, 'granted')
+  assert.equal(record.approved_by, 'owner')
+  const denied = await call(tools, a, 'pl_approval', { action: 'release', note: 'ship 1.0' })
+  assert.equal(denied.value.status, 'denied')
+  assert.match(service.asked[0], /new_dependency for M01\. adds httpx/)
 })

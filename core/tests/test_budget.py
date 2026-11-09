@@ -1,7 +1,6 @@
-"""Token budget: policy section, usage store, checkpoint and the Claude Code transcript reader."""
+"""Token budget: policy section, usage store, checkpoint and dispatch."""
 from __future__ import annotations
 
-import importlib.util
 import json
 import tempfile
 import unittest
@@ -11,14 +10,7 @@ from core import policy, runs, state
 
 from .fixtures import project, task, write_policy
 
-HOOK = Path(__file__).resolve().parents[2] / "adapters" / "claude-code" / "hook.py"
 
-
-def load_hook():
-    spec = importlib.util.spec_from_file_location("polier_hook_budget", HOOK)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
 
 
 def budget_project(tokens=10_000, warn=0.8, tasks=None):
@@ -107,47 +99,6 @@ class Dispatch(unittest.TestCase):
         self.assertIn("token budget used", report["blocked"][0]["reason"])
 
 
-class Transcript(unittest.TestCase):
-    def write(self, entries) -> Path:
-        path = Path(tempfile.mkdtemp()) / "t.jsonl"
-        path.write_text("\n".join(json.dumps(entry) for entry in entries) + "\nnot json\n")
-        return path
-
-    def test_counts_each_message_once_without_cache_reads(self):
-        hook = load_hook()
-        usage = {"input_tokens": 100, "output_tokens": 50, "cache_creation_input_tokens": 10,
-                 "cache_read_input_tokens": 99_999}
-        path = self.write([
-            {"type": "user", "message": {"role": "user", "content": "hi"}},
-            {"type": "assistant", "timestamp": "2026-10-29T10:00:00.000Z",
-             "message": {"id": "m1", "usage": {"input_tokens": 100, "output_tokens": 5}}},
-            {"type": "assistant", "timestamp": "2026-10-29T10:00:01.000Z",
-             "message": {"id": "m1", "usage": usage}},
-            {"type": "assistant", "timestamp": "2026-10-29T11:00:00.000Z",
-             "message": {"id": "m2", "usage": {"input_tokens": 1_000, "output_tokens": 0}}},
-        ])
-        self.assertEqual(hook.transcript_tokens(path), 160 + 1_000)
-        since = hook._parse_time("2026-10-29T10:30:00+00:00")
-        self.assertEqual(hook.transcript_tokens(path, since=since), 1_000)
-        self.assertEqual(hook.transcript_tokens(path.parent / "missing.jsonl"), 0)
-
-    def test_stop_records_usage_and_warns_at_budget(self):
-        hook = load_hook()
-        root = budget_project(tokens=1_000, tasks=[task("M01", status="in_progress")])
-        path = self.write([{"type": "assistant", "timestamp": "2026-10-29T10:00:00Z",
-                            "message": {"id": "m1", "usage": {"input_tokens": 1_200}}}])
-        event = {"cwd": str(root), "session_id": "s1", "transcript_path": str(path)}
-        output = hook.stop(event, {"POLIER_TASK": "M01", "POLIER_STOP_CHECK": "0"})
-        self.assertEqual(runs.usage_total(root, "M01"), 1_200)
-        self.assertIn("used its token budget", output["systemMessage"])
-
-    def test_usage_can_be_switched_off(self):
-        hook = load_hook()
-        root = budget_project(tasks=[task("M01", status="in_progress")])
-        path = self.write([{"type": "assistant", "message": {"id": "m1", "usage": {"input_tokens": 5}}}])
-        event = {"cwd": str(root), "session_id": "s1", "transcript_path": str(path)}
-        hook.stop(event, {"POLIER_TASK": "M01", "POLIER_STOP_CHECK": "0", "POLIER_USAGE": "0"})
-        self.assertEqual(runs.usage_total(root, "M01"), 0)
 
 
 if __name__ == "__main__":

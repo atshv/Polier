@@ -13,7 +13,7 @@ import {
   protectedMatch,
 } from '../lib/policy.mjs'
 
-const table = JSON.parse(readFileSync(path.resolve(import.meta.dirname, '../../../core/tests/policy_cases.json'), 'utf8'))
+const table = JSON.parse(readFileSync(path.resolve(import.meta.dirname, '../../core/tests/policy_cases.json'), 'utf8'))
 
 // The table's policy as a loaded one: every section comes from the table, the
 // loader adds `enabled` and the validation result.

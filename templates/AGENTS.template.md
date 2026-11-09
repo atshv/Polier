@@ -27,9 +27,9 @@ Details: `ARCHITECTURE.md`. Progress: `STATUS.md`. Structure: `docs/module-map.m
 - Start from `python3 <package>/tools/dispatch.py`: take the first wave, never a blocked task.
 - One claim per task; work in its worktree when the board requires one.
 - The lead records status with `python3 <package>/tools/state.py set <ID> <status>` (`in_progress` → `verifying` → `review` → `done`, or `rework`/`blocked`/`failed` with a note) and runs `tools/render_status.py` afterwards; a worker reports and never sets status or edits `board.json`.
-- Gates only with `pl_gate` or `python3 <package>/tools/gate.py --task <ID> --name <gate> --shell "<command>"`, names from `board.json`; the printed record is the evidence, committed with `reviews/evidence/`.
+- Gates only with `pl_gate`, names from `board.json`; the printed record is the evidence, committed with `reviews/evidence/`.
 - Approvals only with `python3 <package>/tools/approve.py request|grant|deny`; a new dependency, merge, release or reopened done task needs a granted record in `reviews/approvals/` first. Protected paths (`.env`, keys) are lead-only.
-- The factory line (`factory.json`) changes only with `python3 <package>/tools/factory.py` (lead): a done task makes its linked items ready; report which item your task delivers, never edit `factory.json`.
+- The factory line (`factory.json`) changes only with `pl_factory`: a done task makes its linked items ready; report which item your task delivers, never edit `factory.json`.
 - `runs/<ID>.json` is the execution record; never edit `runs/`, `reviews/approvals/` or `board.json` by hand. Commit `runs/` and `policy.json` (the rules file).
 - Read `ARCHITECTURE.md`, `STATUS.md`, `docs/module-map.md` and your brief first (AGENTS.md is loaded); unclear: `open_questions`, do not guess.
 - Stay inside your scope. One commit per task (`<ID>: <title>`); check `git status` before finishing. No push or PRs without approval.

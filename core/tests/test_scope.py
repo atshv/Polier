@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 
 from core.errors import PolierError
-from core.scope import changed_files, check_stop, check_write, scope_check, stop_message, write_denial
+from core.scope import changed_files, check_stop, check_write, scope_check
 
 from .fixtures import git, project, set_board, task
 
@@ -40,16 +40,10 @@ class CheckWrite(unittest.TestCase):
     def test_single_task_dict(self):
         self.assertTrue(check_write("src/app.py", task()).ok)
 
-    def test_denial_messages(self):
+    def test_denials_name_the_reason(self):
         tasks = [task("M01"), task("M02", scope_write=["README.md", "src/app.py"])]
-        decision = check_write("docs/x.md", tasks)
-        self.assertEqual(
-            write_denial(decision, tasks),
-            "Polier: write to docs/x.md blocked, the path is outside the write scope of M01, M02. "
-            "Allowed: src/app.py, tests/, README.md. Do not try another way to write it. "
-            "If the change is needed, stop and report it under open_questions.")
-        reviewer = check_write("src/app.py", tasks, role="reviewer")
-        self.assertIn("a reviewer session writes only under reviews/", write_denial(reviewer, tasks, "reviewer"))
+        self.assertEqual(check_write("docs/x.md", tasks).reason, "is outside the write scope")
+        self.assertFalse(check_write("src/app.py", tasks, role="reviewer").ok)
 
 
 class StopCheck(unittest.TestCase):
@@ -103,11 +97,6 @@ class StopCheck(unittest.TestCase):
         with self.assertRaisesRegex(PolierError, "no task list"):
             scope_check(root)
 
-    def test_stop_message(self):
-        text = stop_message(task(), [{"path": "README.md", "reason": "outside scope"}])
-        self.assertTrue(text.startswith("Polier: the working tree has changes outside the scope of M01.\n"))
-        self.assertIn("- README.md: outside scope\nAllowed: src/app.py, tests/.", text)
-
 
 if __name__ == "__main__":
     unittest.main()
@@ -154,7 +143,6 @@ class WorktreeRule(unittest.TestCase):
         self.assertFalse(decision.ok)
         self.assertEqual(decision.code, "worktree")
         self.assertEqual(decision.reason, f"work in {self.task['worktree']}")
-        self.assertIn(f"work in {self.task['worktree']}", write_denial(decision, [self.task]))
         self.assertFalse(decision.path == "")
 
     def test_evidence_stays_writable_in_the_main_checkout(self):

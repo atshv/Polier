@@ -1,9 +1,9 @@
-"""Cross-harness task claims with a heartbeat (PL-04).
+"""Task claims with a heartbeat (PL-04).
 
 A claim says "this session works on this task right now". It lives in
 ``<git-common-dir>/polier/claims/<task>.json``, shared by every worktree of the
-repository, so a DeepSeek Harness session and a Claude Code session see each
-other. ``board.json`` is never written here: claims are runtime state, not plan
+repository, so every DSH session and every command-line user see each other
+(older claims may name the harness ``claude-code``; the value stays valid). ``board.json`` is never written here: claims are runtime state, not plan
 state (that keeps parallel sessions from creating merge conflicts).
 
 A claim is live while ``now - heartbeat < ttl`` (default 600 s). The holder

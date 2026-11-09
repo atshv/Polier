@@ -2,7 +2,7 @@ name: release
 
 # Publishes a release whenever VERSION changes on main.
 # Steps: read VERSION, require a matching "## X.Y.Z" section in CHANGELOG.md,
-# sync package.json and tools/manifest.json, run the tests, tag vX.Y.Z and
+# sync package.json, run the tests, tag vX.Y.Z and
 # create a GitHub Release with that changelog section as notes.
 # An existing tag or release is never moved or overwritten.
 # "Run workflow" (manual) also publishes a missing release for the current VERSION.
@@ -57,7 +57,7 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
 
-      - name: Sync package.json and manifest
+      - name: Sync package.json
         run: |
           set -euo pipefail
           V="${{ steps.meta.outputs.version }}"
@@ -69,28 +69,23 @@ jobs:
               fs.writeFileSync("package.json", JSON.stringify(p, null, 2) + "\n");
             }
           ' "$V"
-          if ! python3 tools/manifest.py --check; then
-            python3 tools/manifest.py --write
-          fi
 
       - name: Run tests
         run: |
           npm install --no-audit --no-fund
           npm test
-          python3 tools/check.py examples/minimal-cli
-          python3 tools/check.py examples/monorepo-mini
-          python3 tools/audit.py --root examples/monorepo-mini
-          python3 tools/factory.py --root examples/factory-app check
-          python3 tools/manifest.py --check
+          python3 tools/check.py tests/fixtures/minimal-cli
+          python3 tools/check.py tests/fixtures/monorepo-mini
+          python3 tools/audit.py --root tests/fixtures/monorepo-mini
 
       - name: Commit synced files
         run: |
           set -euo pipefail
-          if [ -n "$(git status --porcelain -- package.json tools/manifest.json)" ]; then
+          if [ -n "$(git status --porcelain -- package.json)" ]; then
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add package.json tools/manifest.json
-            git commit -m "release: sync package.json and manifest for ${{ steps.meta.outputs.tag }}"
+            git add package.json
+            git commit -m "release: sync package.json for ${{ steps.meta.outputs.tag }}"
             git push origin HEAD:main
           fi
 

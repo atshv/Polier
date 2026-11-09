@@ -18,7 +18,7 @@ Each package gets:
 - `<package>/ARCHITECTURE.md` (≤ 400 words): purpose, inputs, outputs, invariants, allowed imports, build/test commands.
 - `<package>/AGENTS.md` (optional, ≤ 200 words): commands, deviations from the root file, pitfalls.
 
-DSH loads a nested `AGENTS.md` automatically; Claude Code reads it through the brief's context pack.
+DSH loads a nested `AGENTS.md` automatically; the brief's context pack does not need to list it.
 
 **Stage 1:** write per-package files only for the packages created in stage 1. Later packages get theirs in the stage that creates them — no empty folders.
 

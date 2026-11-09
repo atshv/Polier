@@ -1,8 +1,21 @@
-# DeepSeek Harness: Using Its Strengths
+# DeepSeek Harness: How Polier Runs Inside It
 
-Maps each phase of `prompt/generator.md`, and the execution of the generated project, to the DeepSeek Harness (DSH) tool that does it best, with a fallback.
+Polier is built for the DeepSeek Harness (DSH). This file maps each station of `prompt/generator.md`, and the execution of the generated project, to the DSH seam or tool that does it best.
 
-> **Verified (2026-10-28)** against the DSH docs (`docs/tool-catalog.md` and `docs/subsystems/` on `master`) and this package's `adapters/dsh/`, `core/` and `tools/` as shipped in 1.1.0: claims, slots, worktrees, exclusive gates, the guard extras, and the policy, state, dispatch and approval tools are what the code does. Details the docs do not state are marked `[UNVERIFIED]`.
+> **Verified (2026-11-09)** against the published DSH packages `@deepseek-ai/dsh` 0.2.2-rc.1 (READMEs and type declarations of `dsh-system-prompt`, `dsh-tools`, `dsh-user-approval`, `dsh-goal`, `dsh-tool-goal`, `dsh-tool-subagent`, `dsh-tool-ralph`, `dsh-workflow`) and this package's `plugin/`, `core/` and `tools/`. Details the packages do not state are marked `[UNVERIFIED]`.
+
+## 0. No commands: what the plugin gives every session
+
+| Seam | What Polier does with it |
+|---|---|
+| Runtime context (`ctx.systemPrompt.context`) | A live `<polier>` block in every model step: project, role, the factory station with its open items, the running task with scope and gates, ready tasks, policy limits, pending approvals and the next sensible move. Empty outside a Polier project. |
+| System prompt section (`ctx.systemPrompt.section`) | A short guide in sessions inside a Polier project: map plain language to tools, records only through tools, decisions only through approval prompts, evidence instead of ticks. |
+| Approval service (`ctx.approval`) | Every human decision is a real DSH approval prompt: `pl_mode lead`/`off`, `pl_factory advance` (closing a station) and `pl_approval` (Polier approval records). The answer is logged in the session and written into the record. Without an approval answerer (headless, CI) the prompt fails closed. |
+| Tool guard (`ctx.tools.guard`) and `tools/pre-execute` | The write guard, the policy command guard, claim heartbeats and the kill warning. |
+| `agent/turn-stopping` | The stop check: git diff against the task scope, sent back to the agent. |
+| Skills (`ctx.skills`) | The `polier` skill, with its files resolved inside the package. |
+
+The human talks plainly ("weiter", "what is missing?", "close the station", "take M03"); the agent calls the matching tool. Nobody types a slash command or a Python line. The Python tools in `tools/` stay the single implementation underneath and the way to work headless.
 
 ## 1. Before you start: what is available
 
@@ -35,18 +48,21 @@ Runtime and orchestration state are not a harness feature; they are files shared
 |---|---|---|
 | `.polier-slot` | `tools/slot.py acquire` (also `tools/worktree.py start`) | the session, `tools/dev/setup`, gates and servers |
 | `<git-common-dir>/polier/slots.json` | `tools/slot.py` | `slot.py list` |
-| `<git-common-dir>/polier/claims/<task>.json` | `tools/claim.py` (`/pl task` in the plugin) | every harness, `pl_status` |
+| `<git-common-dir>/polier/claims/<task>.json` | `tools/claim.py` (`pl_task` in the plugin) | every session, `pl_status` |
 | `<git-common-dir>/polier/locks/<resource>.lock` | `tools/gate.py --exclusive` (`pl_gate`) | every harness |
 | `policy.json` | the generator, later the owner (committed) | the guard, `tools/state.py`, `dispatch.py`, `audit.py`, `check.py`, `pl_next` |
 | `runs/<ID>.json` | `tools/state.py`; gate events by `tools/gate.py` (committed) | `tools/state.py`, `dispatch.py`, `audit.py`, `check.py`, `pl_state`, `pl_next` |
-| `reviews/approvals/AP-NNN.json` | `tools/approve.py` (committed) | the guard, `tools/state.py`, `audit.py`, `check.py` |
+| `reviews/approvals/AP-NNN.json` | `tools/approve.py`, `pl_approval` (committed) | the guard, `tools/state.py`, `audit.py`, `check.py` |
+| `factory.json`, `docs/factory.md` | `tools/factory.py`, `pl_factory` (committed) | the live context, `check.py`, `render_status.py` |
 
 ## 2. Running the generator: phase → tool
 
 | Phase | Use | How | Fallback |
 |---|---|---|---|
 | all | `todo_write` | One item per phase (A, B, C+D, E, F, G, H, I); mark each when its approval or check is done. | none needed |
-| A1 tool check | session tool list | Fill in section 1 for this session and name the fallbacks in the profile proposal. Check for the plugin tools and for `tools/slot.py`, `tools/claim.py`, `tools/worktree.py`; for a 1.1 project also `tools/state.py`, `tools/approve.py`, `tools/dispatch.py` and `tools/audit.py` (`pl_next`, `pl_state`). | ask the user |
+| A1 tool check | session tool list | Fill in section 1 for this session and name the fallbacks in the profile proposal. With the plugin the `pl_*` tools and the `<polier>` block exist; without it, call `tools/*.py` with `bash`. | ask the user |
+| A4 start the line | `bash` once, then `pl_factory` | `python3 <package>/tools/factory.py init --platforms … --traits …`; from then on `pl_factory` records items and `pl_factory advance` asks the owner to close the station. | `tools/factory.py` |
+| every station | `create_goal` | When the human asks to finish a station, a goal such as "Close Polier station concept: resolve every open item with evidence"; the `<polier>` block shows what is left in each round. | work turn by turn |
 | A2 interview | `ask_user_question` | Max. 10 questions per call. Give `options` where the answer space is closed (mode, profile, platform, yes/no), with the recommended option first; free text otherwise. | questions in chat |
 | A, B, F facts | `web_search`, `web_fetch` | Check library versions, APIs and formats before writing them down. Record the answer with `tools/research.py note` and versions with `tools/research.py versions --lookup --write`; briefs link the note. | `[UNVERIFIED]` + ask |
 | B recon | `subagent` or `workflow` | Read-only children, one per top-level area of the repo, each returning facts with file paths. Use a cheaper model if `list_subagent_models` offers one. | main session reads the repo |
@@ -54,7 +70,7 @@ Runtime and orchestration state are not a harness feature; they are files shared
 | C, D critics (M/L) | `workflow` | Run architecture critic, scope critique and test design as parallel fresh agents; each returns findings only. At L one of them checks package boundaries and contract versions. | three sequential `subagent` calls |
 | E approval (M/L) | `exit_plan_mode` | Roles and protocol as a second plan. | chat |
 | H cold start + rubric | `subagent`, then `send_message` | Step 1 to a fresh child with the four cold-start files (L: plus the package `ARCHITECTURE.md`/`AGENTS.md`); step 2 to the same child via `send_message`. | second fresh `subagent` (fallback rule in `prompt/generator.md`) |
-| H lint | `bash` | `python3 <package>/tools/check.py .`, where `<package>` is `.generator` or the skill folder; at L also `tools/boundaries.py .` and `tools/contracts.py check`; for a 1.1 project `tools/audit.py .` (exit 0) and `tools/dispatch.py` (no conflicts). | none needed |
+| H lint | `pl_check` | `tools/check.py` including the factory line; at L also `tools/boundaries.py .` and `tools/contracts.py check` with `bash`; `tools/audit.py .` (exit 0) and `pl_next` (no conflicts). | `bash` |
 | I handoff | `present` | Exactly four files: `ARCHITECTURE.md`, `AGENTS.md`, `STATUS.md`, `tasks/M01.md`. The rest goes into the file tree in chat. | file tree in chat |
 
 Subagents and `workflow` only read, research and criticise. `spawn_teammate` and the team board are for executing the project, not for designing it.
@@ -65,27 +81,25 @@ Subagents and `workflow` only read, research and criticise. `spawn_teammate` and
 
 A 1.1 project moves through the same checkpoints in every profile. The lead runs the transitions; a worker session reads the state and reports.
 
-```bash
-python3 <package>/tools/dispatch.py                 # waves, blocked tasks, conflicts, pending approvals
-python3 <package>/tools/state.py show M03           # board status against run record, gates, review, approvals
-python3 <package>/tools/state.py set M03 in_progress
-# worker: implement, run gates with pl_gate/tools/gate.py
-python3 <package>/tools/state.py set M03 verifying
-python3 <package>/tools/state.py set M03 review
-python3 <package>/tools/state.py set M03 done --note "review pass, gates green"
-python3 <package>/tools/render_status.py .          # STATUS.md from board + runs + policy
-```
+| Step | Lead session | Worker session |
+|---|---|---|
+| choose | `pl_next` (waves, blocked tasks, conflicts) | — |
+| start | `pl_state` M03 → `in_progress` | `pl_task` M03 (binds and claims) |
+| build | — | code inside the scope, `pl_gate` per gate, `pl_scope_check` |
+| check | `pl_state` → `verifying`, then `review` | — |
+| review | fresh reviewer subagent (`pl_mode reviewer`) writes `reviews/M03.md` | — |
+| close | `pl_state` → `done` or `rework`; `pl_factory done` for the linked items | — |
 
-The lead records every transition (`pl_state set` and `state.py set` are lead-only; `show` works everywhere). Checkpoints, attempts, rounds, approvals, the token budget and the behaviour without `policy.json` are described once, in `prompt/orchestration.md`. DSH does not hand its token counts to plugins, so with a budget the lead records them per task with `python3 <package>/tools/usage.py record <ID> --tokens N --session <name>`.
+STATUS.md and docs/factory.md regenerate after every recorded change. Status changes are lead-only; reading works everywhere. Checkpoints, attempts, rounds, approvals, the token budget and the behaviour without `policy.json` are described once, in `prompt/orchestration.md`. DSH does not hand its token counts to plugins, so with a budget the lead records them per task with `python3 <package>/tools/usage.py record <ID> --tokens N --session <name>`.
 
 ### S — one writer, one reviewer
 
-- One session per task (new chat or `/clear`). The agent reads `ARCHITECTURE.md`, `STATUS.md`, `docs/orchestration.md`, `docs/module-map.md` and `tasks/Mxx.md`; `AGENTS.md` is already loaded. With the plugin (section 8), `pl_status` shows the running task, its scope, the handoffs and every live claim; `pl_next` returns the dispatch plan and `pl_state` reads or sets the task state through `tools/state.py`.
-- **Before the worker starts:** from a lead session (`/pl lead`), create the claim and, when the board wants a worktree, the worktree — `python3 <package>/tools/worktree.py start M03` (branch, slot and claim in one step) — then `python3 <package>/tools/state.py set M03 in_progress` and regenerate `STATUS.md`. The worker binds with `/pl task M03`, which takes or refreshes its claim; every tool call refreshes the heartbeat at most once a minute. A live claim of another session makes `/pl task` fail and names the holder.
+- One session per task (new chat or `/clear`). The agent reads `ARCHITECTURE.md`, `STATUS.md`, `docs/orchestration.md`, `docs/module-map.md` and `tasks/Mxx.md`; `AGENTS.md` is already loaded and the `<polier>` block shows the task, its scope and its gates.
+- **Before the worker starts:** the lead (`pl_mode lead`, approved by the owner) creates the worktree when the board wants one — `python3 <package>/tools/worktree.py start M03` (branch, slot and claim in one step) — and records `in_progress` with `pl_state`. The worker binds with `pl_task`, which takes or refreshes its claim; every tool call refreshes the heartbeat at most once a minute. A live claim of another session makes `pl_task` fail and names the holder.
 - **Runtime resources:** the worktree keeps its ports, test database and bucket in `.polier-slot`; `slot.py show` prints them. Never `kill`, `pkill` or `killall` a process you did not start — the plugin sends one advisory message per turn, it does not block.
 - **Stop condition as a goal:** `create_goal` with "gates green for Mxx" as `objective` and a small `max_goal_rounds` derived from the brief's stop rule. DSH counts goal rounds as continuation turns, so the cap is an upper bound, not the rework-round count itself. When the goal is blocked or paused, only the human can resume it.
 - **Gates:** `pl_gate` with the gate name from the board; it runs `tools/gate.py` through the harness shell, passes `--slot` from `.polier-slot`, locks every resource in the task's `exclusive` list automatically and returns the record path, which is the evidence. `lock_wait_s` defaults to 0, so a busy resource reports BUSY at once; raise it to wait for the holder. A record with `result: infra | busy | timeout` is not evidence — rerun the gate alone. Without the plugin, run `tools/gate.py` with `bash` (long gates with `run_in_background`, then `job_output`).
-- **Reviewer:** a fresh session (`/pl reviewer`) or `subagent` that sees only the diff, the criteria and the gate records, never the author's session. A subagent starts as a worker; it is limited to the task scope, not to `reviews/`.
+- **Reviewer:** a fresh `subagent` (or session) that sees only the diff, the criteria and the gate records, never the author's session. It switches itself to `pl_mode reviewer` (no approval needed: the role only narrows) and then writes only under `reviews/`.
 
 ### M — lead + 2–3 workers
 
@@ -189,65 +203,63 @@ Rules:
 
 ## 7. Approvals and security
 
-- Approvals: architecture + DAG, `policy.json` and the agent contract through `exit_plan_mode`; single decisions (merge conflict, budget, scope change, stage `continue`/`stop`, `contract_followups`) through `ask_user_question`.
-- High-risk actions in a running project are approval records, not chat: `tools/approve.py request|grant|deny` writes `reviews/approvals/AP-NNN.json`, the guard and `tools/state.py` read it, and a granted record does not expire. The record is cooperative evidence — whoever can write the file can forge it.
-- Plan mode does not block writes; the sandbox and approval policy do. Keep the session's permissions to the working folder and the task's scope.
+- Station decisions (closing idea, concept, design, architecture, plan …) are `pl_factory advance`: the owner answers a DSH approval prompt and the station records `approved_by`.
+- Plan reviews still fit `/plan` + `exit_plan_mode` for the C+D draft; single questions (scope, budget, stage `continue`/`stop`) fit `ask_user_question`.
+- High-risk actions in a running project are approval records, not chat: `pl_approval` writes `reviews/approvals/AP-NNN.json`, opens the prompt and records granted or denied. The guard and `tools/state.py` read the record; a granted record does not expire. The record is cooperative evidence — whoever can write the file can forge it.
+- Lead mode is a decision too: `pl_mode lead` opens a prompt; stepping back to worker or reviewer does not.
+- Plan mode does not block writes; the sandbox, the approval policy and the Polier guard do. Keep the session's permissions to the working folder and the task's scope.
 - Releases are a human/CI action: no tag, publish or deploy from an agent session.
 - All other rules: `prompt/generator.md` › rules.
 
-## 8. The generator as a DSH plugin
+## 8. Installing and configuring the plugin
 
-Install the package as a plugin: `dsh plugin --profile <name> add <path or package>`, then restart the harness. Update with `git pull` in the clone and the same `add` command; remove with `dsh plugin --profile <name> remove dsh-polier`. Plugin settings (row config) are `enforce: deny | ask | off`, `stopCheck`, `maxStopReminders`, `python` and `skill`, with defaults in `cordis.patch.yml`. The skill-only scripts take `--ref <tag>` for a tagged version and the target `claude` for Claude Code. The bundle patch inserts one row; `package.json` → `dsh.bundle.patch` points to it. The plugin:
+`dsh plugin --profile <name> add github:atshv/polier` (or a local path), then restart DSH or enable it under **Plugins**. Remove with `dsh plugin --profile <name> remove dsh-polier`. The bundle patch (`cordis.patch.yml`, referenced by `package.json` → `dsh.bundle.patch`) inserts one row; its config:
 
-| Part | DSH seam | Effect |
+| Key | Default | Meaning |
 |---|---|---|
-| Skill | `ctx.skills.register` | `polier` in every session; relative paths resolve inside the package (`resourceBase`). |
-| Write guard | `ctx.tools.guard` (monotonic; `enforce: ask` uses `tools/pre-execute` instead) | `write`, `edit`, `str_replace_editor` outside the running task's scope are denied. A task with a worktree is denied in the main checkout with "work in <worktree path>". With a `policy.json`, a protected path is refused to every session except a lead, a dependency manifest needs a granted `new_dependency` approval, and denied commands are refused for every role. Paths compare case-insensitively on macOS/Windows. No other listener can turn the denial back into an allow. |
-| Heartbeat + kill warning | `tools/pre-execute` | Every tool call refreshes the claims of the session at most once a minute; a `bash` command that stops processes (`kill`, `pkill`, `killall`, `xargs kill`) gets one advisory message per turn. Neither ever blocks a call. |
-| Stop check | `agent/turn-stopping` + `agent.steer` | `tools/scope_check.py` against the git diff; violations go back to the agent, max. `maxStopReminders` per turn. Changed files of another live claim are listed as foreign changes and do not count as violations. |
-| Tools | `ctx.tools.register` | `pl_status` (running task, scope, ready tasks, live claims), `pl_gate` (exclusive locks, slot, record path), `pl_scope_check` (violations and foreign changes), `pl_check`, `pl_next` (dispatch plan as JSON), `pl_state` (`show`/`set` through `tools/state.py`), `pl_factory` (the factory line: `status`, `next`; lead-only `done`, `na`, `defer`, `link`, `render`). Human command `/pl factory`, `/pl advance <owner>`. |
-| `/pl` | `ctx.commands.register` | Human-only role switch per session: `lead`, `worker` (default), `reviewer` (writes only under `reviews/`), `off`, `task <ID>`, `status`, `render`, `next` (dispatch plan), `policy`. `/pl task <ID>` takes the task's claim; `/pl task` releases it. |
+| `enforce` | `deny` | `deny` blocks out-of-scope writes, `ask` turns them into an approval prompt, `off` disables the guard |
+| `stopCheck`, `maxStopReminders` | `true`, `2` | compare the git diff with the scope before a worker's turn ends |
+| `python` | `python3` (`python` on Windows) | interpreter for the package tools |
+| `owner` | `owner` | name written into records the owner answers in a prompt |
+| `context` | `true` | the `<polier>` block and the guide |
+| `skill` | `true` | register the `polier` skill |
 
-Which tasks bind a session: the one pinned with `/pl task`, else the `in_progress` task whose `worktree` contains the session directory, else every `in_progress` task (a path must fit one of their scopes). No task in progress, no board, or a lead session: the guard stays out of the way. In a worktree the session finds the worktree's own copy of `board.json`, where the task may still be `pending`; bind the session with `/pl task <ID>`, which also claims it. Claims are released when the session is disposed.
+Which tasks bind a session: the one bound with `pl_task`, else the `in_progress` task whose `worktree` contains the session directory, else every `in_progress` task (a path must fit one of their scopes). No task in progress, no board, or a lead session: the guard stays out of the way. In a worktree the session finds the worktree's own copy of `board.json`, where the task may still be `pending`; bind the session with `pl_task`, which also claims it. Claims are released when the session is disposed.
 
-Limits: the guard sees only the guarded file tools; `bash` writes are caught afterwards by the stop check and the review. Roles are in memory and reset to `worker` on restart; claims live in files and expire by heartbeat (10 minutes), not on restart. The kill warning is advisory: it never denies a command. Gate commands run through `ctx.shell` with the session's sandbox policy on macOS and Linux; on Windows `gate.py` starts them directly. A reviewer session (`/pl reviewer`) may write only under `reviews/`; its `bash` is not limited, so a read-only sandbox is still the stronger option.
+Limits: the guard sees only the guarded file tools; `bash` writes are caught afterwards by the stop check and the review. Roles are in memory and reset to `worker` on restart; claims live in files and expire by heartbeat (10 minutes). The kill warning is advisory. Gate commands run through `ctx.shell` with the session's sandbox policy on macOS and Linux; on Windows `gate.py` starts them directly. A reviewer may write only under `reviews/`; its `bash` is not limited, so a read-only sandbox is still the stronger option.
 
-Without the plugin, copy the package as a plain skill (`./install.sh`) to `~/.dsh/skills/polier/` (all projects) or `<project>/.dsh/skills/polier/` (one project, add it to `.gitignore`). Use one of the two, not both. Without the plugin nothing claims, refreshes heartbeats or warns about process-killing commands — call `tools/claim.py` and `tools/slot.py` in the session instead.
+## 9. Ralph, workflows and teams
 
-## 9. Deliberately not used
-
-| Tool | Why not |
+| Tool | Use in Polier |
 |---|---|
-| `ralph` | Fresh-agent loop toward one objective; DSH allows it only when a human explicitly asks. It also bypasses the per-task review. |
-| `schedule_*` | Reminders add nothing to the process. |
-| `session_search` | Opt-in; the board and `STATUS.md` are the record. |
-| `run_code` | Gates are shell commands; no need for a second execution path. |
+| `ralph` | Only when the human asks for fresh-agent iteration on one task. Its round reports are not verified by DSH; Polier's gates (`pl_gate`), review and `pl_state` checkpoints are what count. |
+| `workflow` | Broad read-only checks (critics, audits, recon), never day-to-day tasks. |
+| Agent Teams | Workers for M/L when the profile enables it (section 3). |
+| `schedule_*`, `session_search`, `run_code` | Not needed: the board, the line and the gates are the record. |
 
 ## 10. DSH anti-patterns
 
 | Anti-pattern | Better |
 |---|---|
-| `spawn_teammate` for the generator | subagents for critique |
+| Asking the human to type a command | call the tool; the `<polier>` block says which |
+| Treating a chat "yes" as an approval | `pl_mode`, `pl_factory advance`, `pl_approval` open a real prompt |
+| Calling `pl_status` every step | read the `<polier>` block |
+| Ticking a factory item to get past a station | evidence: a file or a done task; must items are never deferred |
+| `spawn_teammate` for planning | subagents for critique |
 | Assuming Agent Teams or worktrees exist | check in phase A1, use the fallback |
-| Treating plan mode as a write lock | sandbox and approval policy |
 | Pasting `AGENTS.md` into prompts | it is already loaded; keep it short |
-| Polling teammates | `wait_agent` |
 | More teammates than parallel tasks | max. 3 workers, M/L only |
-| Planning or merging in a worker session | `/pl lead` first; the guard blocks board and brief edits |
-| Two sessions on one task | `/pl task <ID>` claims; a live claim fails |
+| Planning or merging in a worker session | `pl_mode lead`, approved by the owner |
+| Two sessions on one task | `pl_task` claims; a live claim fails |
 | Running an exclusive gate in parallel and retrying | wait for the lock or rerun alone; a BUSY record is not evidence |
 | `pkill` a dev server another session started | stop only what you started; use your slot's ports |
 | Hard-coding ports, database or bucket names | read `.polier-slot` |
 | Publishing or tagging from a worktree | releases run in CI from tags |
 | Free-text evidence ("tests passed") | the record path from `pl_gate` |
-| Editing `board.json` to set a status | `tools/state.py set` runs the checkpoints and writes the run record |
-| Retrying a task above `max_attempts_per_task` | `tools/state.py` refuses; record `blocked` and escalate |
-| Treating a chat approval as an approval | `tools/approve.py` writes the record the tools read |
-| Editing `runs/` to make the audit pass | the record is committed evidence; fix the state, not the file |
+| Editing `board.json`, `factory.json`, `runs/` or `reviews/approvals/` | the tools write them and run the checks |
+| Retrying a task above `max_attempts_per_task` | `pl_state` refuses; record `blocked` and escalate |
 
-Plugin seams verified on 2026-10-28 against the installed packages and this package's code (`adapters/dsh/test/`, `core/tests/`).
-
-## Sources (checked 2026-10-18)
+## Sources (checked 2026-11-09)
 
 - [Tool catalog](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/tool-catalog.md)
 - [Workflow](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/subsystems/workflow.md)
@@ -257,3 +269,4 @@ Plugin seams verified on 2026-10-28 against the installed packages and this pack
 - [Worktrees](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/subsystems/worktrees.md)
 - [Agent Teams](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/subsystems/agent-team.md)
 - [Model selection in Agent Teams (discussion)](https://github.com/deepseek-ai/deepseek-harness/discussions/6985)
+- npm: `@deepseek-ai/dsh-system-prompt`, `dsh-user-approval`, `dsh-goal`, `dsh-tool-goal`, `dsh-tool-subagent`, `dsh-tool-ralph` 0.2.2-rc.1 (package READMEs and `lib/types`)

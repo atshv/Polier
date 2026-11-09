@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from helpers import git, task
+from helpers import task
 
 import check  # noqa: E402  (tools/ is on sys.path via helpers)
 

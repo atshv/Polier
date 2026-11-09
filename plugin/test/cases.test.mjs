@@ -7,7 +7,7 @@ import path from 'node:path'
 
 import { checkPath, normalized } from '../lib/project.mjs'
 
-const table = JSON.parse(readFileSync(path.resolve(import.meta.dirname, '../../../core/tests/write_cases.json'), 'utf8'))
+const table = JSON.parse(readFileSync(path.resolve(import.meta.dirname, '../../core/tests/write_cases.json'), 'utf8'))
 
 for (const c of table.cases) {
   test(`write case: ${c.name}`, () => {

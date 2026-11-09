@@ -284,15 +284,5 @@ class Tooling(unittest.TestCase):
 
 
 
-class Example(unittest.TestCase):
-    def test_the_factory_example_holds(self):
-        root = PACKAGE / "examples" / "factory-app"
-        report = factory.evaluate(root)
-        self.assertEqual(report["errors"], [])
-        self.assertEqual(report["current"], "design")
-        self.assertEqual((root / "docs" / "factory.md").read_text(encoding="utf-8"),
-                         factory.render_markdown(root), "run: tools/factory.py --root examples/factory-app render")
-
-
 if __name__ == "__main__":
     unittest.main()

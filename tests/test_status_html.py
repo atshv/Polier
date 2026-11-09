@@ -15,7 +15,7 @@ import render_status  # noqa: E402
 class StatusPage(unittest.TestCase):
     def setUp(self):
         self.root = Path(tempfile.mkdtemp(prefix="pl-html-")) / "proj"
-        shutil.copytree(PACKAGE / "examples" / "monorepo-mini", self.root)
+        shutil.copytree(PACKAGE / "tests" / "fixtures" / "monorepo-mini", self.root)
         self.addCleanup(shutil.rmtree, self.root.parent)
 
     def test_cli_writes_the_page_next_to_status(self):

@@ -1,8 +1,8 @@
 # Polier — The AI Software Factory
 
-**Version: see `VERSION` · Harnesses: Claude Code, DeepSeek Harness, any MCP client · Meta-prompt**
+**Version: see `VERSION` · Harness: DeepSeek Harness (`prompt/dsh.md`) · Meta-prompt**
 
-Paths starting with `prompt/`, `templates/`, `tools/`, `factory/` or `examples/` refer to this package; all other paths refer to the generated project.
+Paths starting with `prompt/`, `templates/`, `tools/`, `factory/` or `plugin/` refer to this package; all other paths refer to the generated project.
 
 Polier runs software through a line of nine stations — **idea → concept → design → architecture → plan → build → verify → release → operate** — for any platform: web, iOS, Android, desktop, CLI or a backend service. The catalog `factory/catalog.json` (readable as `factory/CATALOG.md`) lists every item a product can need and when it applies. The project's `factory.json` holds the line: which items apply, their status and their evidence. `tools/factory.py` is its only writer, and a station closes only with every item resolved, valid evidence and the owner's name.
 
@@ -56,7 +56,7 @@ A station closes with `python3 <package>/tools/factory.py advance --by <owner>` 
 15. **One live claim per task.** A claim names the session working on a task; the board is plan state, the claim is runtime state. Task work happens in the task's worktree when the board requires it.
 16. **Release from a clean tag.** Agents never publish; releases run in CI from tags. Every environment has a configuration list and a smoke check.
 17. **Interfaces are versioned.** At L, cross-package interfaces are schemas on the board with fixtures and a SemVer version; a change updates every dependant in the same task.
-18. **State changes go through the tool.** A task's status changes only with `tools/state.py set`; it opens and closes attempts, increments review rounds, appends run-record events and refuses a transition whose precondition is missing. Hand-edited status is a finding.
+18. **State changes go through the tool.** A task's status changes only with `pl_state` (`tools/state.py set` underneath); it opens and closes attempts, increments review rounds, appends run-record events and refuses a transition whose precondition is missing. Hand-edited status is a finding.
 19. **Rules are code.** `policy.json` holds the limits, approvals, protected paths and denied commands. Validate it, never edit a project's policy to get around a refusal, and keep its manifest list in line with the project's real manifests.
 20. **Approvals are records.** A high-risk action needs a granted `reviews/approvals/AP-NNN.json` from the approver; a chat approval is not one. The record is evidence, not proof of identity.
 21. **The line is the progress.** `factory.json` says where the project is. Change it only with `tools/factory.py` (`done`, `na`, `defer`, `link`, `advance`); a hand-edited line is a finding. Run `tools/factory.py next` at the start of every station and `tools/factory.py render` after every change (writes `docs/factory.md`).
@@ -91,7 +91,7 @@ A station closes with `python3 <package>/tools/factory.py advance --by <owner>` 
 
 ### A1 Tool check
 
-Check for `tools/factory.py` (3.0): without it, the project runs without the line and stations 2, 3, 8 and 9 are checklists in chat only. Establish what the session can do: write files, run commands and tests, fresh-context subagents, parallel sessions or teams, task board, worktrees, plan mode, structured questions, web search, background jobs, and which gate commands the sandbox allows. Use the best available tool per phase; in the DeepSeek Harness, follow `prompt/dsh.md`. If the tools `pl_status`, `pl_gate`, `pl_scope_check` and `pl_check` exist, the polier plugin is installed (1.1 adds `pl_next` and `pl_state`): it blocks writes outside the running task's scope and claims the task of a `/pl task <ID>` session, so the session writing the scaffold must be a lead session (`/pl lead`) once any task is `in_progress`. Check for the runtime tools `tools/slot.py`, `tools/claim.py` and `tools/worktree.py`; without them, slots, claims and worktrees are not available and the project stays on the worktrees-off path. Check for the 1.1 tools `tools/state.py`, `tools/approve.py`, `tools/dispatch.py` and `tools/audit.py`; without them the project has no checkpoints and stays on the 1.0 path (board, gates, claims).
+Check for `tools/factory.py` (3.0): without it, the project runs without the line and stations 2, 3, 8 and 9 are checklists in chat only. Establish what the session can do: write files, run commands and tests, fresh-context subagents, parallel sessions or teams, task board, worktrees, plan mode, structured questions, web search, background jobs, and which gate commands the sandbox allows. Use the best available tool per phase and follow `prompt/dsh.md`. If the `pl_*` tools exist and a `<polier>` block is in your context, the plugin is installed: it shows the live state each step, blocks writes outside the running task's scope, claims the task of a session bound with `pl_task`, and turns every human decision into an approval prompt. Planning needs no lead mode while no task runs; once any task is `in_progress`, the session writing plan files switches with `pl_mode lead`, which the owner approves. Never ask the human to type a command: call the tool yourself. Check for the runtime tools `tools/slot.py`, `tools/claim.py` and `tools/worktree.py`; without them, slots, claims and worktrees are not available and the project stays on the worktrees-off path. Check for the 1.1 tools `tools/state.py`, `tools/approve.py`, `tools/dispatch.py` and `tools/audit.py`; without them the project has no checkpoints and stays on the 1.0 path (board, gates, claims).
 
 ### A2 Interview
 
@@ -287,7 +287,7 @@ The rules below apply to every profile and go into `AGENTS.md` (roles, permissio
 - **Attempts and rounds:** an attempt is one run of a task (opens on `in_progress`, capped by `max_attempts_per_task`); a review round is one review (`rework` increments `task.round`, capped by `max_review_rounds`). At a cap the task is blocked and escalated; no counter is reset by hand.
 - **Approvals:** `policy.json` lists the actions that need one (`new_dependency`, `scope_change`, `merge_to_base`, `release`, `reopen_done`, `protected_path`, `state_override`). The task requests it with `tools/approve.py request`, the approver grants or denies, and a granted record is the approval. Never act first and ask afterwards.
 - **Run records:** `runs/<ID>.json` per task: attempt counter and an append-only event list. The lead commits it with the task; nobody edits `runs/` by hand.
-- **STATUS:** `STATUS.md` is generated, never hand-edited. After every state change run `python3 <package>/tools/render_status.py .`; it renders `board.json`, `runs/` and `policy.json` (limits, next wave, running attempts, blocked tasks, pending approvals).
+- **STATUS:** `STATUS.md` is generated, never hand-edited. The plugin regenerates it after every recorded change (headless: `python3 <package>/tools/render_status.py .`); it renders `board.json`, `runs/` and `policy.json` (limits, next wave, running attempts, blocked tasks, pending approvals).
 - **Escalation:** an exhausted attempt or round count, a blocked stage, a scope conflict, a missing or denied approval, a budget overrun, a gate regression or an architecture change. Record it with `tools/state.py set <ID> blocked --note "..."`, then ask with two options and their consequences.
 - **Worktrees:** one branch `task/<id>` and one checkout per task; only lead/merger merges. Create it with `tools/worktree.py start <ID>` (branch, slot and claim in one step) or `git worktree add` plus `slot.py acquire` and `claim.py take`.
 - **Runtime:** the worktree's slot owns its ports, test database and bucket; read them from `.polier-slot`. Exclusive resources are locked per gate; a busy resource means rerun alone. Never stop a process you did not start.
@@ -354,7 +354,7 @@ Briefs for the next 3–5 tasks only, from `templates/task-brief.md`, 400–900 
 - `reviews/<ID>.md`: per `templates/review-feedback.md`; later rounds are appended.
 - **Git:** new repo → `git init`, branch `main`, initial commit `chore: scaffold`. Existing repo → no re-init, use `base_branch`, commit nothing unrelated. M01 does not repeat this. Commit `reviews/evidence/` with the task; `.polier-slot` stays untracked.
 - **Commits:** one per task, message `<ID>: <title>`. No push, remote or PR without approval.
-- If the generator package sits inside the project (e.g. `.generator/`), add it to `.gitignore`. Reinstall or update once so the copy ships `tools/manifest.json`; `tools/drift.py` then reports local edits or an outdated copy, and `tools/check.py` warns.
+- The Polier package is never copied into the project; the plugin and its tools run from their installation.
 
 **Runtime setup snippet** — `tools/dev/setup`, copied into the project and adapted to its commands:
 
@@ -390,7 +390,7 @@ Deliver:
 
 1. File tree with one line of purpose per file. If the tool can present deliverables: `ARCHITECTURE.md`, `AGENTS.md`, `STATUS.md`, `tasks/M01.md`.
 2. The prompts below, filled in for M01: worker, orchestrate (lead), review, fix, escalation, next stage.
-3. Human checklist: before every task, run `tools/dispatch.py`, claim the task, take a slot, create the worktree when the board requires one and set the task to `in_progress` with `tools/state.py` from a lead session; regenerate `STATUS.md`. After every task, set the state (and record the review, rework or block), run `tools/render_status.py`, then the checks in `guide/cheatsheet.md`.
+3. Human checklist: what the owner answers (lead mode, station closes, approvals — all as approval prompts) and what to check after every task (`guide/cheatsheet.md`). The agent does the rest with the tools: `pl_next`, `pl_task`, `pl_state`, `pl_gate`.
 4. Git status: repo, `.gitignore` (incl. `.polier-slot`), first commit, base branch.
 5. Runtime and delivery setup: `resources` and slot formula, `worktrees` mode, stages and owner decisions, policy limits and approval actions, environments/release path, and who tags releases.
 6. Lint and critic result, with what was fixed.
@@ -402,36 +402,33 @@ Deliver:
 
 ```text
 You are the lead of <project>. Rules: policy.json. Plan: board.json.
-Run python3 <package>/tools/factory.py next to see the station and its open items.
-Run python3 <package>/tools/dispatch.py: take the first wave and respect the limits
-(max_in_progress, max_attempts_per_task).
-If the next task has no live claim: claim it, create its worktree when the board requires
-one, then record the start with python3 <package>/tools/state.py set Mxx in_progress.
-Hand the worker prompt below to a fresh session, then review the result.
-A task the plan lists as blocked is not retried: escalate it with the reason and the
-command that records the block.
-Never edit board.json, runs/ or reviews/approvals/ by hand; approvals only with
-tools/approve.py. After every state change run python3 <package>/tools/render_status.py .:
-STATUS.md is generated from board.json, runs/ and policy.json, never hand-edited.
+The <polier> block shows the station, its open items and the next wave; switch with
+pl_mode lead (the owner approves it). Read pl_next and take the first wave within the
+limits (max_in_progress, max_attempts_per_task).
+If the next task has no live claim: create its worktree when the board requires one,
+then record the start with pl_state (in_progress).
+Hand the worker prompt below to a fresh subagent or session, then review the result.
+A task the plan lists as blocked is not retried: escalate it with pl_state (blocked, note).
+Never edit board.json, factory.json, runs/ or reviews/approvals/ by hand; approvals only
+with pl_approval. STATUS.md and docs/factory.md regenerate after every recorded change.
 ```
 
 **Start (new session):**
 
 ```text
 You are working on <project>. Task: Mxx. This is attempt <N> of <max_attempts_per_task>
-(python3 <package>/tools/state.py show Mxx).
-Read ARCHITECTURE.md, AGENTS.md, STATUS.md, docs/module-map.md, docs/orchestration.md
-and tasks/Mxx.md (with the plugin, call pl_status first, then /pl task Mxx).
+(pl_state for Mxx). Bind this session with pl_task Mxx.
+Read ARCHITECTURE.md, STATUS.md, docs/module-map.md, docs/orchestration.md and
+tasks/Mxx.md; AGENTS.md is already loaded, the <polier> block shows scope and gates.
 Work in the task's worktree: <path> (board worktrees: required/recommended/off).
 Read ports, database and bucket names only from .polier-slot (tools/slot.py show).
 Show a plan (files, tests, open questions) and wait for approval.
-Then implement and run every gate with pl_gate (or tools/gate.py --task <ID> --name <gate>
---shell "<command>"). A gate with an exclusive resource prints BUSY when another session
+Then implement and run every gate with pl_gate. A gate with an exclusive resource prints BUSY when another session
 holds it: wait, or rerun alone; never kill another session's process.
 Run pl_scope_check and return the result as YAML with the gate record paths as evidence.
 Do not set the task's status: the lead records verifying, review and done.
-No files outside the scope. No new dependencies: if one is needed, stop and ask for an
-approval (tools/approve.py request --action new_dependency --task Mxx --note "...") first.
+No files outside the scope. No new dependencies: if one is needed, call pl_approval
+(new_dependency, Mxx, what and why) and wait for the owner's answer first.
 ```
 
 **Review (new session):**
@@ -439,12 +436,12 @@ approval (tools/approve.py request --action new_dependency --task Mxx --note "..
 ```text
 You are reviewing Mxx. You did not write it.
 Read ARCHITECTURE.md, tasks/Mxx.md, the diff since the last commit and the gate records
-in reviews/evidence/ (with the plugin, the human starts this session with /pl reviewer).
+in reviews/evidence/. Switch this session with pl_mode reviewer first.
 Check every acceptance criterion, the gates, the scope and side effects.
 A record with result infra, busy or timeout is not evidence: the gate must be rerun alone.
 Write the result to reviews/Mxx.md in the format of templates/review-feedback.md.
-The lead records the round with tools/state.py set Mxx review, then done or
-rework --note "<finding>". A rework is a new round, capped by max_review_rounds.
+The lead records the round with pl_state (review, then done or rework with
+the finding as note). A rework is a new round, capped by max_review_rounds.
 No style remarks. Do not edit code.
 ```
 
@@ -465,9 +462,9 @@ Never adjust a test to make it pass. This is the same attempt: the attempt count
 ```text
 Status: blocked. Task: Mxx. Reason: <reason>. Tried: <attempts> of <max_attempts_per_task>,
 rounds: <round> of <max_review_rounds>.
-Record it first: python3 <package>/tools/state.py set Mxx blocked --note "<reason; what is needed>".
+Record it first with pl_state: Mxx blocked, note "<reason; what is needed>".
 Needed: <decision | approval | information>. A missing approval is requested, never assumed:
-python3 <package>/tools/approve.py request --action <action> --task Mxx --note "<why>".
+pl_approval with the action, Mxx and why; the owner answers the prompt.
 Propose two options with consequences. Change nothing until I decide.
 ```
 

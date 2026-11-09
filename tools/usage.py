@@ -8,9 +8,9 @@ Usage:
 
 `record` stores the tokens a session spent on a task in ``runs/<ID>.json``.
 With ``--session`` the number is that session's running total and replaces its
-earlier report; without it the number is added as a separate manual entry. The
-Claude Code Stop hook records its session automatically; other harnesses, or a
-human reading the cost page of a provider, use this command.
+earlier report; without it the number is added as a separate manual entry.
+DeepSeek Harness does not hand token counts to plugins, so the lead (or a human
+reading the provider's cost page) records them with this command.
 
 `show` lists every task with recorded tokens (or one task) against
 ``budget.max_tokens_per_task``. A task at or over the budget is marked

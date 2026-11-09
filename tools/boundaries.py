@@ -2,7 +2,7 @@
 """Import-boundary gate between the packages of a Polier monorepo (PL-07).
 
 Usage:
-    python3 tools/boundaries.py examples/monorepo-mini
+    python3 tools/boundaries.py tests/fixtures/monorepo-mini
     python3 tools/boundaries.py /path/to/project --json
 
 Reads the package map from <root>/board.json. Exit 0 = no cross-package

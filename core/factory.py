@@ -43,7 +43,6 @@ VERSION = "3.0"
 ITEM_STATUSES = ("open", "done", "deferred", "na")
 STATION_STATUSES = ("pending", "active", "done")
 RESOLVED = ("done", "deferred", "na")
-TASK_ID = re.compile(r"^(?:[A-Z]{1,6}-\d{2,}|M\d{2,})$")
 
 
 # -- catalog ----------------------------------------------------------------

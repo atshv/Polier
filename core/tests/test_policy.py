@@ -238,7 +238,6 @@ class Commands(unittest.TestCase):
         self.assertEqual(command_segments('echo "open'), ['echo "open'])
 
     def test_no_command_rule_fires_when_the_policy_is_off(self):
-        disabled = {"enabled": False}
         for case in CASES["command_cases"]:
             self.assertIsNone(policy.command_denial(one_rule(case) | {"enabled": False},
                                                     case["command"], case["role"]))

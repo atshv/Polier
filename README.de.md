@@ -6,29 +6,35 @@
   <a href="https://github.com/atshv/Polier/releases"><img alt="release" src="https://img.shields.io/github/v/release/atshv/Polier?style=flat-square&color=6366f1"></a>
   <a href="https://github.com/atshv/Polier/actions/workflows/test.yml"><img alt="tests" src="https://img.shields.io/github/actions/workflow/status/atshv/Polier/test.yml?branch=main&style=flat-square&label=tests"></a>
   <img alt="license" src="https://img.shields.io/badge/license-MIT-34d399?style=flat-square">
-  <img alt="python" src="https://img.shields.io/badge/python-3.9%2B-1f5f8b?style=flat-square">
-  <img alt="dependencies" src="https://img.shields.io/badge/dependencies-none-34d399?style=flat-square">
+  <img alt="DeepSeek Harness" src="https://img.shields.io/badge/DeepSeek%20Harness-0.2.2-1f5f8b?style=flat-square">
+  <img alt="dependencies" src="https://img.shields.io/badge/runtime%20deps-none-34d399?style=flat-square">
 </p>
 
 <p align="center"><a href="README.md">English</a> · <b>Deutsch</b></p>
 
-**Polier ist eine KI-Softwarefabrik.** Du beschreibst das Produkt, Polier führt es durch neun Stationen – Idee, Konzept, Design, Architektur, Plan, Bau, Prüfung, Release, Betrieb. Egal ob Website, iOS- oder Android-App, Desktop-App, CLI oder Backend-Service. An jeder Station weiss Polier, was dein Produkt braucht (Registrierung, Zahlungen, Offline-Modus, Datenschutzerklärung, App-Store-Datenschutzangaben, geschlossener Play-Test, Signierung, Monitoring …), verlangt Nachweise und schliesst die Station erst mit deiner Freigabe.
+**Polier ist eine KI-Softwarefabrik für DeepSeek Harness.** Du beschreibst das Produkt, Polier führt es durch neun Stationen – Idee, Konzept, Design, Architektur, Plan, Bau, Prüfung, Release, Betrieb. Egal ob Website, iOS- oder Android-App, Desktop-App, CLI oder Backend-Service. An jeder Station weiss Polier, was dein Produkt braucht (Registrierung, Zahlungen, Offline-Modus, Datenschutzerklärung, App-Store-Datenschutzangaben, geschlossener Play-Test, Signierung, Monitoring …), verlangt Nachweise und schliesst die Station erst mit deiner Freigabe.
 
-Danach bauen Agenten Aufgabe für Aufgabe innerhalb des Plans. Schreibzugriffe ausserhalb der Aufgabe werden blockiert, nur aufgezeichnete Testläufe zählen als Nachweis, jeder Versuch, jedes Review und jede Freigabe wird protokolliert. Funktioniert mit **Claude Code**, jedem **MCP**-Client und **DeepSeek Harness**. Nur Python-Standardbibliothek, alles bleibt als Dateien in deinem Repository.
-
-## Schnellstart
+## Installieren
 
 ```bash
-git clone https://github.com/atshv/Polier.git && cd Polier
-./install.sh claude          # Claude Code; für DeepSeek Harness: dsh plugin --profile <name> add .
+dsh plugin --profile web add github:atshv/polier
 ```
 
-In einem leeren Ordner eine Session öffnen und schreiben: *„Baue mit Polier eine neue App: …“*. Polier stellt seine Fragen, startet die Linie und führt dich durch die Stationen.
+DSH neu starten (oder *dsh-polier* unter **Plugins** einschalten). Python 3.9+ muss vorhanden sein, sonst wird nichts installiert.
 
-```bash
-python3 tools/factory.py --root <projekt> status    # wo das Projekt steht
-python3 tools/factory.py --root <projekt> next      # was die aktuelle Station noch braucht
-```
+## Keine Befehle
+
+In einem leeren Ordner eine Session öffnen und sagen, was du willst, z. B. *„Baue mit Polier eine App, die …“*. Ab dann redest du einfach.
+
+| Du sagst | Was passiert |
+|---|---|
+| „Was fehlt noch?“ | Der Agent sieht den Live-Block `<polier>` schon – Station, offene Punkte, laufende Aufgabe, nächster Schritt |
+| „Schliess die Station.“ | Du bekommst eine DSH-Freigabeabfrage, nur deine Antwort schliesst sie |
+| „Übernimm Aufgabe M03.“ | Die Session bindet die Aufgabe, reserviert sie und darf nur noch in ihrem Bereich schreiben |
+| „Wir brauchen die Bibliothek httpx.“ | Eine Freigabeabfrage, die Antwort landet in `reviews/approvals/` |
+| „Plane die nächste Etappe.“ | Die Session fragt nach dem Lead-Modus – wieder eine Abfrage, die du beantwortest |
+
+Ein „ja“ im Chat ändert nichts. Entscheidungen sind Freigabeabfragen, Einträge schreiben die Tools, `STATUS.md` und `docs/factory.md` erneuern sich selbst.
 
 ## Die Linie
 
@@ -48,26 +54,24 @@ Die vollständige Checkliste – 175 Punkte, jeweils mit den Plattformen und Eig
 
 ## Nachweise statt Versprechen
 
-- Ein Punkt ist erst erledigt mit Nachweis, also einer Datei im Projekt (`docs/concept.md#user-stories`) oder verknüpften Aufgaben, die fertig sind.
-- `must`-Punkte sind erledigt oder *nicht zutreffend* mit Begründung, nur `should`-Punkte dürfen verschoben werden.
-- Eine Aufgabe ist erst fertig mit bestandenem Review, aufgezeichneten Gate-Läufen und einer Übergabe.
-- Eine Station schliesst erst, wenn alle Punkte erledigt sind, alle früheren Stationen geschlossen sind und du freigibst (`factory.py advance --by <du>`).
+- Ein Punkt ist erst erledigt mit Nachweis, also einer Datei im Projekt (`docs/concept.md#user-stories`) oder verknüpften Aufgaben, die fertig sind. `must`-Punkte werden nie verschoben.
+- Eine Aufgabe ist erst fertig mit aufgezeichneten Gate-Läufen, bestandenem unabhängigem Review und einer Übergabe.
+- Ein Worker schreibt nur in seinem Aufgabenbereich, geschützte Pfade, Abhängigkeiten und verbotene Befehle folgen `policy.json`.
+- DSH-Goals, Subagents und Ralph-Schleifen passen dazu, ihre Berichte sind aber Behauptungen – entscheiden tun Gates und Prüfpunkte.
 
 ## Was drin ist
 
 | | |
 |---|---|
-| **Fabrik** | `factory/catalog.json`, `tools/factory.py`, Vorlagen für Konzept, Abläufe, Rechtstexte, Store-Einträge und Runbook |
-| **Leitplanken** | Write Guard, Prüfpunkte, Übernahmen, Freigaben, Token-Budgets – in `core/`, für alle Zugänge gleich |
-| **Gates** | Kataloge für Node/TS, Python, Swift/iOS, Kotlin/Android, Expo, Flutter, C++, WASM, Postgres, Playwright, Last, Visual Diff |
-| **Anbindungen** | Claude-Code-Hooks, DeepSeek-Harness-Plugin (`pl_factory`, `/pl factory`), MCP-Server (`tools/mcp.py`) |
-| **Beispiele** | [`factory-app`](examples/factory-app) (Linie in Arbeit), [`minimal-cli`](examples/minimal-cli), [`monorepo-mini`](examples/monorepo-mini) |
+| [`plugin/`](plugin) | das DSH-Plugin – Live-Kontext, Leitfaden, Write Guard, Stop-Check, die `pl_*`-Tools |
+| [`factory/`](factory) | der Katalog der Stationen und Punkte |
+| [`core/`](core), [`tools/`](tools) | die Regeln und die Python-Tools darunter (auch ohne Oberfläche nutzbar) |
+| [`prompt/`](prompt), [`templates/`](templates) | der Ablauf, die Bewertung und alle Dokumentvorlagen |
 
 ## Mehr erfahren
 
-- **Ablauf** – [`prompt/generator.md`](prompt/generator.md) · **Dein Teil** – [`guide/cheatsheet.md`](guide/cheatsheet.md) (Englisch)
-- **KI-Client verbinden** – `claude mcp add polier -- python3 tools/mcp.py --root <projekt>`
-- **Grenzen** – Polier ist keine Sandbox, siehe [was der Write Guard nicht abdeckt](docs/guard-limits.md) (Englisch)
-- **Änderungen** – [`CHANGELOG.md`](CHANGELOG.md) · [Releases](https://github.com/atshv/Polier/releases)
+- **Ablauf** – [`prompt/generator.md`](prompt/generator.md) · **In DSH** – [`prompt/dsh.md`](prompt/dsh.md) · **Dein Teil** – [`guide/cheatsheet.md`](guide/cheatsheet.md) (Englisch)
+- **Grenzen** – Polier ist keine Sandbox, siehe [was der Guard nicht abdeckt](docs/guard-limits.md) (Englisch)
+- **Mitmachen** – [`AGENTS.md`](AGENTS.md) · **Änderungen** – [`CHANGELOG.md`](CHANGELOG.md)
 
 Tests: `npm install && npm test`. Lizenz: [MIT](LICENSE).

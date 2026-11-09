@@ -6,29 +6,35 @@
   <a href="https://github.com/atshv/Polier/releases"><img alt="release" src="https://img.shields.io/github/v/release/atshv/Polier?style=flat-square&color=6366f1"></a>
   <a href="https://github.com/atshv/Polier/actions/workflows/test.yml"><img alt="tests" src="https://img.shields.io/github/actions/workflow/status/atshv/Polier/test.yml?branch=main&style=flat-square&label=tests"></a>
   <img alt="license" src="https://img.shields.io/badge/license-MIT-34d399?style=flat-square">
-  <img alt="python" src="https://img.shields.io/badge/python-3.9%2B-1f5f8b?style=flat-square">
-  <img alt="dependencies" src="https://img.shields.io/badge/dependencies-none-34d399?style=flat-square">
+  <img alt="DeepSeek Harness" src="https://img.shields.io/badge/DeepSeek%20Harness-0.2.2-1f5f8b?style=flat-square">
+  <img alt="dependencies" src="https://img.shields.io/badge/runtime%20deps-none-34d399?style=flat-square">
 </p>
 
 <p align="center"><b>English</b> · <a href="README.de.md">Deutsch</a></p>
 
-**Polier is an AI software factory.** You describe the product; Polier runs it through nine stations — idea, concept, design, architecture, plan, build, verify, release, operate — for a website, an iOS or Android app, a desktop app, a CLI or a backend service. At every station it knows what your kind of product needs (sign-up, payments, offline mode, privacy policy, App Store privacy label, Play closed test, signing, monitoring …), asks for proof and lets the station close only when you approve it.
+**Polier is an AI software factory for DeepSeek Harness.** You describe the product; Polier runs it through nine stations — idea, concept, design, architecture, plan, build, verify, release, operate — for a website, an iOS or Android app, a desktop app, a CLI or a backend service. At every station it knows what your kind of product needs (sign-up, payments, offline mode, privacy policy, App Store privacy label, Play closed test, signing, monitoring …), asks for proof and closes the station only when you approve it.
 
-Builder agents then work task by task inside the plan: writes outside the task are blocked, only recorded test runs count as evidence, and every attempt, review and approval is logged. Works with **Claude Code**, any **MCP** client and **DeepSeek Harness**. Python standard library only; everything stays as files in your repository.
-
-## Quick start
+## Install
 
 ```bash
-git clone https://github.com/atshv/Polier.git && cd Polier
-./install.sh claude          # Claude Code; DeepSeek Harness: dsh plugin --profile <name> add .
+dsh plugin --profile web add github:atshv/polier
 ```
 
-Open a session in an empty folder and write *"Build a new app with Polier: …"*. Polier interviews you, starts the line and walks you through the stations.
+Restart DSH (or enable *dsh-polier* under **Plugins**). Python 3.9+ must be on the PATH; nothing else is installed.
 
-```bash
-python3 tools/factory.py --root <project> status    # where the project is
-python3 tools/factory.py --root <project> next      # what the current station still needs
-```
+## No commands
+
+Open a session in an empty folder and say what you want: *"Build an app with Polier that …"*. From then on you just talk.
+
+| You say | What happens |
+|---|---|
+| "What is still missing?" | The agent already sees the live `<polier>` block: station, open items, running task, next move |
+| "Close the station." | You get a DSH approval prompt; only your answer closes it |
+| "Take task M03." | The session binds the task, claims it and may write only inside its scope |
+| "We need the httpx library." | An approval prompt; the answer is recorded in `reviews/approvals/` |
+| "Plan the next stage." | The session asks for lead mode — again a prompt you answer |
+
+A "yes" in the chat changes nothing. Decisions are approval prompts, records are written by tools, and `STATUS.md` and `docs/factory.md` regenerate on their own.
 
 ## The line
 
@@ -48,26 +54,24 @@ The full checklist — 175 items, each with the platforms and traits it applies 
 
 ## Proof, not promises
 
-- An item is done only with evidence: a file in the project (`docs/concept.md#user-stories`) or linked tasks that are done.
-- `must` items are done or *not applicable* with a reason; only `should` items can be deferred.
-- A task is done only with a passing review, recorded gate runs and a handoff.
-- A station closes only with every item resolved, every earlier station closed and the owner's name: `factory.py advance --by <you>`.
+- An item is done only with evidence: a file in the project (`docs/concept.md#user-stories`) or linked tasks that are done. `must` items are never deferred.
+- A task is done only with recorded gate runs, a passing independent review and a handoff.
+- A worker writes only inside its task's scope; protected paths, dependency manifests and denied commands follow `policy.json`.
+- DSH goals, subagents and Ralph loops fit in, but their reports are claims: gates and checkpoints decide.
 
-## What's inside
+## Inside
 
 | | |
 |---|---|
-| **Factory** | `factory/catalog.json`, `tools/factory.py`, templates for concept, flows, legal texts, store listings and runbook |
-| **Guard rails** | write guard, checkpoints, claims, approvals, token budgets — in `core/`, the same for every harness |
-| **Gates** | catalogues for Node/TS, Python, Swift/iOS, Kotlin/Android, Expo, Flutter, C++, WASM, Postgres, Playwright, load, visual diff |
-| **Integrations** | Claude Code hooks, DeepSeek Harness plugin (`pl_factory`, `/pl factory`), MCP server (`tools/mcp.py`) |
-| **Examples** | [`factory-app`](examples/factory-app) (a line in progress), [`minimal-cli`](examples/minimal-cli), [`monorepo-mini`](examples/monorepo-mini) |
+| [`plugin/`](plugin) | the DSH plugin: live context, guide, guard, stop check, the `pl_*` tools |
+| [`factory/`](factory) | the catalog of stations and items |
+| [`core/`](core), [`tools/`](tools) | the rules and the Python tools underneath (also usable headless) |
+| [`prompt/`](prompt), [`templates/`](templates) | the process, the rubric and every document template |
 
 ## Learn more
 
-- **Process** — [`prompt/generator.md`](prompt/generator.md) · **Your part** — [`guide/cheatsheet.md`](guide/cheatsheet.md)
-- **Connect an AI client** — `claude mcp add polier -- python3 tools/mcp.py --root <project>`
-- **Limits** — Polier is not a sandbox: [what the write guard does not cover](docs/guard-limits.md)
-- **Changes** — [`CHANGELOG.md`](CHANGELOG.md) · [Releases](https://github.com/atshv/Polier/releases)
+- **Process** — [`prompt/generator.md`](prompt/generator.md) · **In DSH** — [`prompt/dsh.md`](prompt/dsh.md) · **Your part** — [`guide/cheatsheet.md`](guide/cheatsheet.md)
+- **Limits** — Polier is not a sandbox: [what the guard does not cover](docs/guard-limits.md)
+- **Contributing** — [`AGENTS.md`](AGENTS.md) · **Changes** — [`CHANGELOG.md`](CHANGELOG.md)
 
 Tests: `npm install && npm test`. Licence: [MIT](LICENSE).
