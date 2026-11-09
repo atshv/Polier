@@ -62,7 +62,8 @@ class Release(unittest.TestCase):
         out, notes = root / "out.txt", root / "notes.md"
         result = run(root, "--write", "--notes", str(notes), "--github-output", str(out))
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(outputs(out), {"release": "true", "version": "1.3.0", "tag": "v1.3.0", "changed": "true"})
+        self.assertEqual(outputs(out), {"release": "true", "version": "1.3.0", "tag": "v1.3.0",
+                                        "prerelease": "false", "changed": "true"})
         self.assertEqual((root / "VERSION").read_text().strip(), "1.3.0")
         self.assertEqual(json.loads((root / "package.json").read_text())["version"], "1.3.0")
         text = (root / "CHANGELOG.md").read_text()
@@ -81,10 +82,26 @@ class Release(unittest.TestCase):
         run(root, "--write")
         self.assertIn("- drop the old command — /pl is gone", (root / "CHANGELOG.md").read_text())
 
-    def test_breaking_before_1_0_bumps_minor(self):
+    def test_before_1_0_features_bump_the_patch_and_breaking_the_minor(self):
         root = repo("0.4.2")
+        commit(root, "feat: new tool")
+        out = root / "out.txt"
+        result = run(root, "--github-output", str(out))
+        self.assertIn("v0.4.3", result.stdout)
+        self.assertIn("pre-release", result.stdout)
+        self.assertEqual(outputs(out)["prerelease"], "true")
         commit(root, "feat!: new shape")
         self.assertIn("v0.5.0", run(root).stdout)
+
+    def test_version_can_go_back_when_reset_by_hand(self):
+        root = repo("4.3.0")
+        (root / "VERSION").write_text("0.4.3\n")
+        (root / "CHANGELOG.md").write_text("# Changelog\n\n## 0.4.3\n\nReset.\n\n## 4.3.0\n\nOld.\n")
+        commit(root, "chore: reset the version")
+        self.assertIn("v0.4.3 (hand-made, pre-release", run(root).stdout)
+        git(root, "tag", "v0.4.3")
+        commit(root, "feat: next")
+        self.assertIn("v0.4.4", run(root).stdout)
 
     def test_hand_made_release_keeps_its_section(self):
         root = repo()

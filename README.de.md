@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/atshv/Polier/releases"><img alt="release" src="https://img.shields.io/github/v/release/atshv/Polier?style=flat-square&color=6366f1"></a>
+  <a href="https://github.com/atshv/Polier/releases"><img alt="release" src="https://img.shields.io/github/v/release/atshv/Polier?include_prereleases&sort=date&style=flat-square&color=6366f1"></a>
   <a href="https://github.com/atshv/Polier/actions/workflows/test.yml"><img alt="tests" src="https://img.shields.io/github/actions/workflow/status/atshv/Polier/test.yml?branch=main&style=flat-square&label=tests"></a>
   <img alt="license" src="https://img.shields.io/badge/license-MIT-34d399?style=flat-square">
   <img alt="DeepSeek Harness" src="https://img.shields.io/badge/DeepSeek%20Harness-0.2.2-1f5f8b?style=flat-square">

@@ -4,21 +4,23 @@
 Usage:
     python3 scripts/release.py [--root .] [--write] [--notes FILE] [--github-output FILE]
 
-The last release is the highest ``vX.Y.Z`` tag reachable from HEAD.
+``VERSION`` is the source of truth. Its tag ``vX.Y.Z`` marks the last release.
 
-- When ``VERSION`` is already ahead of that tag, it is a hand-made release:
-  ``CHANGELOG.md`` must have a ``## X.Y.Z`` section; without one the section
-  is generated from the commits.
-- Otherwise the commits since the tag decide: a breaking change (``feat!:``,
-  ``fix(scope)!:`` or a ``BREAKING CHANGE:`` footer) bumps major (minor before
-  1.0), ``feat`` bumps minor, ``fix`` and ``perf`` bump patch. Other types
-  (``docs``, ``test``, ``ci``, ``chore``, ``refactor``, ``style``, ``build``)
-  and non-conventional subjects release nothing.
+- When that tag does not exist yet, it is a hand-made release: ``CHANGELOG.md``
+  should have a ``## X.Y.Z`` section; without one the section is generated
+  from the commits since the newest older tag.
+- Otherwise the commits since the tag decide. Before 1.0 every version is a
+  pre-release: a breaking change (``feat!:``, ``fix(scope)!:`` or a ``BREAKING
+  CHANGE:`` footer) bumps the minor number, ``feat``, ``fix`` and ``perf`` bump
+  the patch number. From 1.0 on: breaking → major, ``feat`` → minor, ``fix`` and
+  ``perf`` → patch. Other types (``docs``, ``test``, ``ci``, ``chore``,
+  ``refactor``, ``style``, ``build``) and non-conventional subjects release
+  nothing.
 
 ``--write`` updates ``VERSION``, ``package.json`` and ``CHANGELOG.md``;
 ``--notes`` writes the release notes (the changelog section); and
-``--github-output`` appends ``release``, ``version``, ``tag`` and ``changed``
-for a GitHub Actions step. Standard library only.
+``--github-output`` appends ``release``, ``version``, ``tag``, ``prerelease``
+and ``changed`` for a GitHub Actions step. Standard library only.
 
 Exit codes: 0 ok (with or without a release), 2 usage or repository error.
 """
@@ -56,9 +58,18 @@ def parse_version(text: str) -> Tuple[int, int, int]:
     return tuple(int(part) for part in match.groups())  # type: ignore[return-value]
 
 
-def last_tag(root: Path) -> Optional[str]:
-    tags = [t for t in git(root, "tag", "--merged", "HEAD", "--list", "v*").split() if SEMVER.match(t[1:])]
-    return max(tags, key=parse_version) if tags else None
+def tags(root: Path) -> List[str]:
+    return [t for t in git(root, "tag", "--merged", "HEAD", "--list", "v*").split() if SEMVER.match(t[1:])]
+
+
+def newest_tag(root: Path) -> Optional[str]:
+    """The most recently created release tag reachable from HEAD (for the commit range)."""
+    found = tags(root)
+    if not found:
+        return None
+    order = git(root, "for-each-ref", "--sort=-creatordate", "--format=%(refname:short)", "refs/tags").split()
+    ranked = [t for t in order if t in found]
+    return ranked[0] if ranked else max(found, key=parse_version)
 
 
 def commits_since(root: Path, tag: Optional[str]) -> List[Dict[str, str]]:
@@ -97,11 +108,18 @@ def classify(commit: Dict[str, str]) -> Optional[Dict[str, object]]:
 
 def bump(current: Tuple[int, int, int], changes: List[Dict[str, object]]) -> Optional[Tuple[int, int, int]]:
     major, minor, patch = current
-    if any(c["breaking"] for c in changes):
-        return (major, minor + 1, 0) if major == 0 else (major + 1, 0, 0)
-    if any(c["type"] == "feat" for c in changes):
+    breaking = any(c["breaking"] for c in changes)
+    feature = any(c["type"] == "feat" for c in changes)
+    fix = any(c["type"] in ("fix", "perf") for c in changes)
+    if major == 0:
+        if breaking:
+            return (0, minor + 1, 0)
+        return (0, minor, patch + 1) if feature or fix else None
+    if breaking:
+        return (major + 1, 0, 0)
+    if feature:
         return (major, minor + 1, 0)
-    if any(c["type"] in ("fix", "perf") for c in changes):
+    if fix:
         return (major, minor, patch + 1)
     return None
 
@@ -143,21 +161,22 @@ def insert_section(text: str, block: str) -> str:
 def plan(root: Path) -> Dict[str, object]:
     version_file = root / "VERSION"
     current = version_file.read_text(encoding="utf-8").strip() if version_file.is_file() else "0.0.0"
-    tag = last_tag(root)
-    released = parse_version(tag) if tag else (0, 0, 0)
-    changes = [c for c in (classify(commit) for commit in commits_since(root, tag)) if c]
+    parse_version(current)
     changelog = root / "CHANGELOG.md"
     text = changelog.read_text(encoding="utf-8") if changelog.is_file() else "# Changelog\n"
-    if parse_version(current) > released:
-        version = current
-        existing = changelog_section(text, version)
-        return {"release": True, "version": version, "manual": True, "changes": changes,
-                "notes": existing or section(version, changes), "needs_section": existing is None}
-    nxt = bump(released, changes)
+    if f"v{current}" not in tags(root):
+        changes = [c for c in (classify(commit) for commit in commits_since(root, newest_tag(root))) if c]
+        existing = changelog_section(text, current)
+        return {"release": True, "version": current, "manual": True, "changes": changes,
+                "prerelease": parse_version(current)[0] == 0,
+                "notes": existing or section(current, changes), "needs_section": existing is None}
+    changes = [c for c in (classify(commit) for commit in commits_since(root, f"v{current}")) if c]
+    nxt = bump(parse_version(current), changes)
     if nxt is None:
-        return {"release": False, "version": current, "manual": False, "changes": changes, "notes": "", "needs_section": False}
+        return {"release": False, "version": current, "manual": False, "changes": changes, "prerelease": False,
+                "notes": "", "needs_section": False}
     version = ".".join(str(part) for part in nxt)
-    return {"release": True, "version": version, "manual": False, "changes": changes,
+    return {"release": True, "version": version, "manual": False, "changes": changes, "prerelease": nxt[0] == 0,
             "notes": section(version, changes), "needs_section": True}
 
 
@@ -202,7 +221,8 @@ def main(argv=None) -> int:
         return 2
     if result["release"]:
         kind = "hand-made" if result["manual"] else "from commits"
-        print(f"release v{result['version']} ({kind}, {len(result['changes'])} conventional commit(s))")
+        pre = ", pre-release" if result.get("prerelease") else ""
+        print(f"release v{result['version']} ({kind}{pre}, {len(result['changes'])} conventional commit(s))")
     else:
         print("no release: no feat, fix, perf or breaking commit since the last tag")
     if args.notes and result["release"]:
@@ -212,6 +232,7 @@ def main(argv=None) -> int:
             handle.write(f"release={'true' if result['release'] else 'false'}\n")
             handle.write(f"version={result['version']}\n")
             handle.write(f"tag=v{result['version']}\n")
+            handle.write(f"prerelease={'true' if result.get('prerelease') else 'false'}\n")
             handle.write(f"changed={'true' if changed else 'false'}\n")
     return 0
 

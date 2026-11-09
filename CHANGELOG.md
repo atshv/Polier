@@ -2,6 +2,12 @@
 
 Each release lists what a running project must do to adopt it. Update between stages, never during a task (see `guide/cheatsheet.md`). The current version is in `VERSION`; projects record theirs in `board.json` → `generator_version`. A release is published automatically when `VERSION` changes on `main` (`.github/workflows/release.yml`).
 
+## 0.4.3
+
+**Version numbers reset: Polier is not released yet.** Everything up to here is pre-release work; 1.0 will be the first release. This version equals the former 4.3.0 and changes nothing in the code. The sections below keep their old numbers: 4.3.0 → 0.4.3, 4.2.0 → 0.4.2, 4.1.0 → 0.4.1, 4.0.0 → 0.4.0, 3.0.0 → 0.3.0; earlier ones are history.
+
+**How versions move from now on.** Before 1.0, `feat`, `fix` and `perf` commits bump the third number (0.4.3 → 0.4.4) and a breaking change the second (0.4.x → 0.5.0); every GitHub release is marked as a pre-release. From 1.0 on the usual rules apply. `scripts/release.py` now takes `VERSION` as the source of truth, so a version can also be set back by hand.
+
 ## 4.3.0
 
 **Features**
