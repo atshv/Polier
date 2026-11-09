@@ -1,5 +1,5 @@
-"""Rules of tools/check.py: stage gates (PL-08), budgets (PL-09), packages (PL-06), versions (PL-13)
-and the 1.1 orchestration checks (policy, audit, approvals, run records, scopes, dispatch, docs)."""
+"""Rules of tools/check.py: stage gates, budgets, packages, versions
+and the orchestration checks (policy, audit, approvals, run records, scopes, dispatch, docs)."""
 from __future__ import annotations
 
 import json
@@ -201,7 +201,7 @@ class Versions(unittest.TestCase):
 
 
 class OrchestrationChecks(unittest.TestCase):
-    """1.1: policy, audit, approvals, run records, scopes, dispatch and docs."""
+    """Orchestration: policy, audit, approvals, run records, scopes, dispatch and docs."""
 
     def project(self, policy=None, *, agents=True, readme=True, orchestration=True,
                 agents_text=None, readme_text=None) -> Path:
@@ -242,7 +242,7 @@ class OrchestrationChecks(unittest.TestCase):
     def test_a_project_without_a_policy_only_warns(self):
         errors, warnings = self.run_checks(temp_root(), self.board(task()))
         self.assertEqual(errors, [])
-        self.assertTrue(any("1.1 features" in warning or "orchestration checks are off" in warning
+        self.assertTrue(any("orchestration checks are off" in warning
                             for warning in warnings), warnings)
 
     def test_a_corrupt_policy_is_an_error(self):

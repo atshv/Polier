@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Create and finish a task worktree: branch, runtime slot and claim in one step (PL-05).
+"""Create and finish a task worktree: branch, runtime slot and claim in one step.
 
 Usage:
     python3 tools/worktree.py start M03 [--root .] [--base main] [--session S] [--harness cli]
@@ -68,16 +68,16 @@ def _slot_number(folder) -> Optional[int]:
 def _slot_module():
     try:
         from core import slots
-    except ImportError:  # PL-02 not installed yet
+    except ImportError:  # not installed yet
         return None
     return slots
 
 
 def _acquire_slot(worktree: Path) -> Optional[int]:
-    """Take the worktree's runtime slot with core.slots.acquire; None without PL-02."""
+    """Take the worktree's runtime slot with core.slots.acquire."""
     slots = _slot_module()
     if slots is None:
-        print("WORKTREE: slot module not found (PL-02 is not installed); continuing without a slot",
+        print("WORKTREE: slot module not found (is not installed); continuing without a slot",
               file=sys.stderr)
         return None
     try:

@@ -1,5 +1,5 @@
 {
-  "about": "Shared decision table for core/policy.py and adapters/dsh/lib/policy.mjs. Both implementations must satisfy every case.",
+  "about": "Decision table for core/policy.py.",
   "policy": {
     "version": 1,
     "limits": {"max_attempts_per_task": 3, "max_in_progress": 2, "max_review_rounds": 3},

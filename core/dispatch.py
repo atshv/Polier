@@ -319,7 +319,7 @@ def plan(root, board=None, policy=None, limit=None) -> dict:
 
     ``board`` and ``policy`` may be passed in (``tools/check.py`` has them
     already); by default both are loaded from ``root``. A project without
-    ``policy.json`` keeps the 1.0 behaviour: the attempt limit is not enforced
+    ``policy.json`` does not enforce the attempt limit
     (the plan lists no attempt-exhausted block) and the defaults only inform the
     wave size. ``limit`` caps the tasks per wave on top of ``max_in_progress``.
     """

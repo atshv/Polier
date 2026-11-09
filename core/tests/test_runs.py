@@ -1,4 +1,4 @@
-"""core.runs: runs/<ID>.json, attempts and events (PL-19)."""
+"""core.runs: runs/<ID>.json, attempts and events."""
 from __future__ import annotations
 
 import json

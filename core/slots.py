@@ -1,4 +1,4 @@
-"""Runtime slots: one port set, test database and bucket per worktree (PL-02).
+"""Runtime slots: one port set, test database and bucket per worktree.
 
 Slot 0 belongs to the owner's main checkout. Worktrees get the lowest free
 slot ``1 ... resources.slots - 1``. The slot is written to ``.polier-slot`` in

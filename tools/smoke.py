@@ -4,7 +4,7 @@
 Usage:
     python3 tools/smoke.py --url http://127.0.0.1:4100 --path /login --path /
     python3 tools/smoke.py --url https://preview.example.com --expect-status 200 \
-        --path / --header "Authorization: env:PREVIEW_TOKEN" --task PL-11 --name smoke
+        --path / --header "Authorization: env:PREVIEW_TOKEN" --task M11 --name smoke
 
 Each `--path` is requested against `--url` (joined like a URL). The first
 failing path prints the status code and the first 300 bytes of the body and

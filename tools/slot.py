@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Runtime slots: ports, test database names and buckets per worktree (PL-02).
+"""Runtime slots: ports, test database names and buckets per worktree.
 
 Usage:
     python3 tools/slot.py acquire [--root PATH] [--reclaim-stale] [--json]

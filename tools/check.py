@@ -40,7 +40,7 @@ PLACEHOLDER = re.compile(r"<\.\.\.>|<Name>|<Project name>|\bTODO\b|\bTBD\b")
 QUESTION_STATUS = {"open", "answered", "dropped"}
 
 
-# Word budgets per profile (PL-09). A board may override one with a reason.
+# Word budgets per profile. A board may override one with a reason.
 BUDGETS = {
     "S": {"architecture": 600, "agents": 300, "status": 300, "brief": 800,
           "package_architecture": 400, "package_agents": 200},
@@ -103,7 +103,7 @@ def budget_limits(board: dict) -> tuple[dict, list[str]]:
 
 
 def check_packages(root: Path, board: dict, errors: list[str], warnings: list[str]) -> None:
-    """Per-package layout (PL-06): folders exist, task scopes stay inside their package."""
+    """Per-package layout: folders exist, task scopes stay inside their package."""
     packages = board.get("packages") if isinstance(board.get("packages"), list) else []
     profile = board.get("profile")
     if profile == "L" and not packages:
@@ -164,7 +164,7 @@ def check_packages(root: Path, board: dict, errors: list[str], warnings: list[st
 
 
 def check_environments(root: Path, warnings: list[str]) -> None:
-    """docs/environments.md: every environment needs a smoke URL (PL-11)."""
+    """docs/environments.md: every environment needs a smoke URL."""
     path = root / "docs/environments.md"
     if not path.exists():
         return
@@ -184,7 +184,7 @@ def check_environments(root: Path, warnings: list[str]) -> None:
 
 
 def check_versions(root: Path, board: dict, warnings: list[str]) -> None:
-    """Profile L: every manifest dependency must be pinned in docs/versions.md (PL-13)."""
+    """Profile L: every manifest dependency must be pinned in docs/versions.md."""
     if board.get("profile") != "L":
         return
     versions = root / "docs/versions.md"
@@ -199,7 +199,7 @@ def check_versions(root: Path, board: dict, warnings: list[str]) -> None:
 
 
 def check_stages(root: Path, board: dict, errors: list[str], warnings: list[str]) -> None:
-    """Stage exit gates and stop points (PL-08)."""
+    """Stage exit gates and stop points."""
     if not isinstance(board.get("stages"), list) or not board.get("stages"):
         return
     report = {entry["id"]: entry for entry in stage_report(board, root)}
@@ -613,7 +613,7 @@ def _check_dispatch(root: Path, board: dict, policy: dict,
 
 
 def _check_orchestration_docs(root: Path, warnings: list[str]) -> None:
-    """Name the 1.1 files in the project docs; missing references are warnings only."""
+    """Name the orchestration files in the project docs; missing references are warnings only."""
     agents = root / "AGENTS.md"
     readme = root / "README.md"
     try:
@@ -622,7 +622,7 @@ def _check_orchestration_docs(root: Path, warnings: list[str]) -> None:
     except OSError:
         return
     if agents.is_file() and "tools/state.py" not in agents_text:
-        warnings.append("AGENTS.md: tools/state.py is not mentioned — 1.1 state changes go through it")
+        warnings.append("AGENTS.md: tools/state.py is not mentioned — state changes go through it")
     orchestration = root / "docs/orchestration.md"
     if not orchestration.is_file():
         warnings.append("docs/orchestration.md is missing — the one-page orchestration model belongs there")
@@ -636,14 +636,12 @@ def _check_orchestration_docs(root: Path, warnings: list[str]) -> None:
 
 
 def check_orchestration(root: Path, board: dict, errors: list[str], warnings: list[str]) -> None:
-    """1.1 checks: policy, audit, approvals, run records, scopes, dispatch and docs.
+    """Orchestration checks: policy, audit, approvals, run records, scopes, dispatch and docs.
 
-    Everything past the policy warning runs only when ``policy.json`` exists, so
-    a 0.9/1.0 project keeps its 1.0 result (warnings only, exit 0).
+    Everything past the policy warning runs only when ``policy.json`` exists.
     """
     if not (root / POLICY).is_file():
-        warnings.append("policy.json is missing — the 1.1 orchestration checks are off "
-                        "(a 1.0 project keeps working)")
+        warnings.append("policy.json is missing — the orchestration checks are off")
         return
     try:
         policy = load_policy(root)
@@ -672,7 +670,7 @@ def check_orchestration(root: Path, board: dict, errors: list[str], warnings: li
 
 
 def check_factory(root: Path, errors: list[str], warnings: list[str]) -> None:
-    """3.0: the factory line (factory.json) against the catalog, the board and the files."""
+    """The factory line (factory.json) against the catalog, the board and the files."""
     found_errors, found_warnings = factory.check(root)
     errors.extend(found_errors)
     warnings.extend(found_warnings)

@@ -192,10 +192,8 @@ test('registers the tools, the live context and the skill with the real services
 })
 
 // ---------------------------------------------------------------------------
-// PL-04 claims, PL-05 worktrees + foreign changes, PL-16 guard extras
+// claims, worktrees + foreign changes, guard extras
 // ---------------------------------------------------------------------------
-
-import { checkPath, inside } from '../lib/project.mjs'
 
 const CLAIM_TOOL = path.resolve(import.meta.dirname, '../../tools/claim.py')
 
@@ -347,27 +345,6 @@ test('a bash kill command steers once per turn and is never a denial', async () 
   assert.equal(a.steered.length, 1)
 })
 
-test('the JS guard mirrors the case rule and the worktree rule', () => {
-  const caseInsensitive = process.platform === 'darwin' || process.platform === 'win32'
-  assert.equal(inside('Board.json', 'board.json'), caseInsensitive)
-  assert.equal(inside('SRC/a.py', 'src'), caseInsensitive)
-  assert.equal(inside('src/a.py', 'src'), true)
-
-  const root = project([task()])
-  const tasks = [{ id: 'M01', status: 'in_progress', scope_write: ['src/app.py'], worktree: '/tmp/repo-M01' }]
-  const denied = checkPath('src/app.py', tasks, 'worker', { board: { profile: 'M', schema_version: '1.0', tasks }, root, cwd: root })
-  assert.equal(denied.ok, false)
-  assert.equal(denied.code, 'worktree')
-  assert.match(denied.reason, /work in \/tmp\/repo-M01/)
-  assert.equal(checkPath('src/app.py', tasks).ok, true, 'three arguments keep the old behaviour')
-  assert.equal(checkPath('reviews/evidence/a.log', tasks, 'worker', { board: { profile: 'M' }, root }).ok, true)
-  assert.equal(checkPath('src/app.py', tasks, 'worker', { board: { profile: 'S' }, root }).ok, true)
-  // PL-05 migration: a 0.9 M/L board defaults to recommended, a 1.0 board to required.
-  assert.equal(checkPath('src/app.py', tasks, 'worker', { board: { profile: 'M' }, root }).ok, true)
-  const legacy = checkPath('src/app.py', tasks, 'worker', { board: { profile: 'M', schema_version: '1.0' }, root })
-  assert.equal(legacy.code, 'worktree')
-})
-
 test('pl_gate passes the slot and the exclusive resources of the task', { skip: gateSupportsExclusive() }, async () => {
   const root = project([task('M01', 'in_progress', { exclusive: ['e2e'] })])
   setBoard(root, { schema_version: '1.0' })
@@ -401,8 +378,8 @@ function gateSupportsExclusive() {
   try {
     const help = execFileSync(PY, [path.resolve(import.meta.dirname, '../../tools/gate.py'), '--help'], { encoding: 'utf8' })
     gateSupportsExclusive.cache = !help.includes('--exclusive')
-      ? 'tools/gate.py has no --exclusive yet (PL-03)'
-      : !help.includes('--lock-wait') ? 'tools/gate.py has no --lock-wait yet (PL-03)' : false
+      ? 'tools/gate.py has no --exclusive yet'
+      : !help.includes('--lock-wait') ? 'tools/gate.py has no --lock-wait yet' : false
   } catch {
     gateSupportsExclusive.cache = 'tools/gate.py not runnable'
   }
@@ -417,7 +394,7 @@ function osHostname() {
   }
 }
 
-// PL-08: the JS mirror of core.board.ready_tasks excludes tasks behind an
+// The ready list of the live context excludes tasks behind an
 // incomplete stage (owner decision pending) and lets them through once the
 // stage's exit gates are evidenced and the owner continues.
 test('ready tasks respect stage exit gates and the owner decision', () => {
@@ -446,7 +423,7 @@ test('ready tasks respect stage exit gates and the owner decision', () => {
 })
 
 // ---------------------------------------------------------------------------
-// 3.0 factory line
+// factory line
 // ---------------------------------------------------------------------------
 
 const FACTORY_TOOL = path.resolve(import.meta.dirname, '../../tools/factory.py')

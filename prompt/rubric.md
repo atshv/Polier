@@ -29,15 +29,15 @@ Score each criterion **0 or 1**. **B** marks a blocker: it prevents approval reg
 
 ## 2. Lint
 
-*(check.py)* marks what `tools/check.py` verifies; *(contracts.py)*, *(boundaries.py)*, *(audit.py)* and *(dispatch.py)* mark the L and 1.1 tools; the rest needs a reviewer. A 0.9 project that runs 1.0 prints migration warnings only — they are findings here. A project without `policy.json` keeps 1.0 behaviour and is not broken by 1.1: the transition table, note rules and `reopen_done`/`state_override` approvals still apply, the rest of the 1.1 items warn at most.
+*(check.py)* marks what `tools/check.py` verifies; *(contracts.py)*, *(boundaries.py)*, *(audit.py)* and *(dispatch.py)* mark the other tools; the rest needs a reviewer.
 
 - [ ] Mandatory files present, including `.gitignore` *(check.py)*; `.polier-slot` and a project-local generator copy are ignored (reviewer).
-- [ ] `board.json` has the right schema for its version: 1.0 fields only with `"schema_version": "1.0"`, 0.9 boards unchanged *(check.py)*.
+- [ ] `board.json` matches `templates/board.schema.json`, no unknown fields *(check.py)*.
 - [ ] `ARCHITECTURE.md` within the profile budget (S/M/L: 600/700/800) *(check.py)*; sections 1–8 present. At L: system shape only, package detail in the package files.
 - [ ] `AGENTS.md` within the profile budget (300/350/400, warning) *(check.py)*; commands, scope, commit rule *(check.py)* and the runtime rules (ports from `.polier-slot`, no `kill`/`pkill`, release rule at L); no architecture or progress.
 - [ ] `docs/module-map.md` defines layers *(check.py requires the words UI, logic and data for every profile)*; at L also the package map (path, kind, `may_import`), with every `packages[].path` listed *(check.py, warning)*; folders and import direction.
 - [ ] `board.json`: valid, mandatory task fields, `base_branch`, complexity ≤ 6, no unknown dependencies, no cycles, no overlapping write scopes in a parallel group *(check.py)*.
-- [ ] Task IDs use a form allowed by the schema version (`M03` at 0.9; also `P3-02`, `ENG-14` at 1.0) *(check.py)*.
+- [ ] Task IDs are `M03` or a prefixed form such as `P3-02`, `ENG-14` *(check.py)*.
 - [ ] Stages: every stage has `exit_gates` *(check.py, warning)*, no task works in a stopped or not-yet-unblocked stage *(check.py)*, owner decisions are on the board, not in chat.
 - [ ] Packages (L): `packages[]` present *(check.py)*, every folder exists or is created by a task *(check.py)*, each has `ARCHITECTURE.md` ≤ 400 *(check.py)* and optional `AGENTS.md` ≤ 200 *(check.py, warning)*, every task's `scope_write` stays inside its package or a contract path *(check.py)*, imports respect `may_import` *(boundaries.py)*.
 - [ ] Budgets: board overrides carry a `reason` *(check.py)*.
@@ -47,7 +47,7 @@ Score each criterion **0 or 1**. **B** marks a blocker: it prevents approval reg
 - [ ] Every definition-of-done item `D1..Dn` is covered by a task *(check.py)*.
 - [ ] `STATUS.md` matches a fresh render of `board.json`, `runs/` and `policy.json` and is not hand-edited *(check.py)*; per stage it shows state, exit gates and the owner decision, and the Orchestration section shows limits, the next wave, running attempts and pending approvals.
 - [ ] Every `done` task has a passing `tools/gate.py` record for each of its gates, with an unchanged log; `infra`, `busy` and `timeout` records are rejected *(check.py; free-text evidence only warns)*.
-- [ ] `policy.json` exists when the project is on 1.1, parses, has `version: 1`, known keys only, limits in range (attempts 1–10, in progress 1–64, rounds 1–20) and the limits of the profile *(check.py)*; without the file: warnings only, no 1.1 errors.
+- [ ] `policy.json` exists, parses, has `version: 1`, known keys only, limits in range (attempts 1–10, in progress 1–64, rounds 1–20) and the limits of the profile *(check.py)*.
 - [ ] Every status change was made with `tools/state.py`: the board status agrees with `runs/<ID>.json` and no transition skipped a checkpoint *(audit.py, check.py)*.
 - [ ] `runs/<ID>.json` exists for every started task, parses, names its own task, has integer attempts and a known state, and stays within `max_attempts_per_task` *(check.py)*.
 - [ ] No task is above `max_review_rounds` (`task.round`); an exhausted task is `blocked` with a reason, not retried *(check.py, audit.py)*.
@@ -95,7 +95,7 @@ Score the 16 criteria of prompt/rubric.md. Look especially for:
 12. stages without exit gates, no owner decision, or later-stage work already running
 13. exclusive resources not declared on tasks whose gates share ports or a database
 14. status changes without a run record, attempts above the limit, or a `done` task without a review round
-15. a missing `policy.json` or `docs/orchestration.md` when the project uses the 1.1 loop, approvals missing for a dependency or protected path
+15. a missing `policy.json` or `docs/orchestration.md`, approvals missing for a dependency or protected path
 16. scope conflicts in the dispatch plan, or a policy that denies a command a gate needs
 17. factory items marked done without real evidence, `must` items deferred, build or verify items without a task, platform items (store, signing, privacy manifest, permissions) missing for a shipped platform
 

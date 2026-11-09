@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import List, Tuple
 
 # A record with one of these results is not proof that the gate passed: it
-# describes the infrastructure around the gate (PL-03), so the task must be
+# describes the infrastructure around the gate, so the task must be
 # rerun alone instead of being marked failed.
 INFRA_RESULTS = frozenset({"infra", "busy", "timeout"})
 

@@ -1,18 +1,15 @@
 // The guard: what a session may write and run, and the stop check at the end of
-// a turn. Scope rules come from board.json, policy rules from policy.json; a
-// project without policy.json keeps the plain scope guard.
+// a turn. The rules live in core/guard.py; this file forwards each guarded call
+// to tools/guard.py and shows the answer. A write the guard cannot decide is
+// blocked, a command is let through (the stop check still sees its writes).
 
 import path from 'node:path'
 
-import {
-  approver, commandDenial, dependencyApproval, enabled as policyEnabled, hasGrant, loadPolicy,
-  manifestMatch, protectedMatch,
-} from './policy.mjs'
-import { checkPath, inside, processKills, relative } from './project.mjs'
 import { run } from './run.mjs'
 import { beatClaims, context, stateOf } from './session.mjs'
 
 const COMMAND_TOOLS = new Set(['bash'])
+const MAX_VERDICTS = 256
 
 export function message(text) {
   return {
@@ -33,82 +30,68 @@ function targetOf(exec, guarded) {
   return typeof value === 'string' && value ? value : undefined
 }
 
-function boundTask(info) {
-  return info.tasks.length === 1 ? info.tasks[0].id : undefined
+function commandOf(exec) {
+  const args = exec.arguments && typeof exec.arguments === 'object' ? exec.arguments : {}
+  return COMMAND_TOOLS.has(exec.name) && typeof args.command === 'string' ? args.command : ''
 }
 
-function approvalHint(action, task, who) {
-  return `If it is needed, call pl_approval with action ${action}${task ? ` and task ${task}` : ''}: the ${who} answers the prompt, then retry. Do not write it another way.`
-}
-
-function hasAnyGrant(info, action) {
-  const ids = info.tasks.map((task) => task.id).filter(Boolean)
-  if (ids.length === 0) return Boolean(hasGrant(info.root, action, null))
-  return ids.some((id) => Boolean(hasGrant(info.root, action, id)))
-}
-
-/** The policy denial of writing `rel`; a lead session bypasses the path and dependency rules. */
-function policyPathDenial(info, rel, shown) {
-  const policy = loadPolicy(info.root)
-  if (!policyEnabled(policy)) return undefined
-  if (info.state.role === 'lead' || info.state.role === 'off') return undefined
-  const protectedPattern = protectedMatch(policy, rel)
-  if (protectedPattern) {
-    return `Polier: write to ${shown} blocked, ${protectedPattern} is a protected path in policy.json. Only a lead session may write it: stop and report the change under open_questions instead of writing it another way.`
+/** Ask tools/guard.py; returns { deny, kills } or { error }. */
+async function ask(ctx, config, agent, info, fields) {
+  const specialist = info.state.specialist
+  const request = {
+    root: info.root,
+    cwd: info.cwd,
+    role: info.state.role,
+    tasks: info.tasks.map((t) => t.id).filter(Boolean),
+    ...(specialist ? { specialist: { id: specialist.id, title: specialist.title, writes: specialist.writes ?? [] } } : {}),
+    ...fields,
   }
-  if (!dependencyApproval(policy)) return undefined
-  const manifest = manifestMatch(policy, rel)
-  if (manifest && !hasAnyGrant(info, 'new_dependency')) {
-    return `Polier: write to ${shown} blocked, ${manifest} is a dependency manifest and policy.json requires a granted new_dependency approval. ${approvalHint('new_dependency', boundTask(info), approver(policy))}`
+  const argv = [config.python, path.join(config.tools, 'guard.py'), JSON.stringify(request)]
+  try {
+    const result = await run(ctx, agent, argv, { cwd: info.root, timeoutMs: 20_000, preferShell: false })
+    const answer = JSON.parse(result.stdout.trim().split('\n').pop() || '{}')
+    if (result.code !== 0 || answer.error) return { error: answer.error || (result.stderr || `exit ${result.code}`).trim() }
+    return { deny: answer.deny || undefined, kills: answer.kills === true }
+  } catch (error) {
+    return { error: String(error?.message ?? error) }
   }
-  return undefined
-}
-
-/** Deny-list commands are blocked for every role; lead-only commands for workers and reviewers. */
-function policyCommandDenial(config, info, command) {
-  if (config.enforce === 'off' || info.state.role === 'off') return undefined
-  const policy = loadPolicy(info.root)
-  if (!policyEnabled(policy)) return undefined
-  const denial = commandDenial(policy, command, info.state.role)
-  if (!denial) return undefined
-  if (denial.rule === 'deny') {
-    return `Polier: command blocked, ${denial.reason}. This rule applies to every role, a lead included: do not run it another way. If the action is part of the task, stop and ask for it with pl_approval (action release${boundTask(info) ? `, task ${boundTask(info)}` : ''}) and report it under open_questions.`
-  }
-  return `Polier: command blocked, ${denial.reason}. A worker or reviewer reports the needed change instead of running it; the lead runs it (pl_mode lead, approved by the owner).`
-}
-
-/** A role with its own write list narrows the task scope further; evidence stays writable. */
-function roleDenial(info, rel, shown) {
-  const role = info.state.specialist
-  const writes = Array.isArray(role?.writes) ? role.writes : []
-  if (!writes.length || info.state.role !== 'worker' || info.tasks.length === 0) return undefined
-  if (inside(rel, 'reviews/evidence') || writes.some((entry) => inside(rel, entry))) return undefined
-  return `Polier: write to ${shown} blocked, the role ${role.title} writes only ${writes.join(', ')}. If the change is needed, report it under open_questions for the right role.`
 }
 
 /**
- * The guard decision for one tool call.
- * @returns {string|undefined} a denial reason, or undefined to allow
+ * The guard decision for one write.
+ * @returns {Promise<string|undefined>} a denial reason, or undefined to allow
  */
-export function checkWrite(ctx, config, exec) {
+export async function checkWrite(ctx, config, exec) {
   if (config.enforce === 'off' || !exec.agent) return undefined
   const target = targetOf(exec, config.guardedTools)
   if (!target) return undefined
   const info = context(ctx, exec.agent)
-  if (!info) return undefined
-  const rel = relative(info.root, path.resolve(info.cwd, target))
-  const shown = rel || target
-  const verdict = checkPath(rel, info.tasks, info.state.role, { board: info.board, root: info.root, cwd: info.cwd })
-  if (verdict.ok) return roleDenial(info, rel, shown) ?? policyPathDenial(info, rel, shown)
-  if (info.state.role === 'reviewer') {
-    return `Polier: write to ${shown} blocked, a reviewer session writes only under reviews/. Report the problem in the review instead of fixing it.`
+  if (!info || info.state.role === 'off') return undefined
+  const answer = await ask(ctx, config, exec.agent, info, { path: target })
+  if (answer.error) {
+    return `Polier: write to ${target} blocked, the guard could not decide (${answer.error.slice(0, 300)}). Check that ${config.python} runs, then retry.`
   }
-  const ids = info.tasks.map((t) => t.id).join(', ')
-  if (verdict.code === 'worktree') {
-    return `Polier: write to ${shown} blocked, ${verdict.reason} (${ids}). Do the work in the task's worktree, not in the main checkout. If the change is needed elsewhere, stop and report it under open_questions.`
+  return answer.deny
+}
+
+/**
+ * Verdicts of the async check, read by the synchronous harness guard so a later
+ * listener cannot turn a denial into permission.
+ */
+export function verdicts() {
+  const map = new Map()
+  return {
+    put(exec, reason) {
+      if (!exec?.callId || !reason) return
+      map.set(exec.callId, reason)
+      if (map.size > MAX_VERDICTS) map.delete(map.keys().next().value)
+    },
+    take(exec) {
+      const reason = map.get(exec?.callId)
+      map.delete(exec?.callId)
+      return reason
+    },
   }
-  const allowed = [...new Set(info.tasks.flatMap((t) => t.scope_write ?? []))].join(', ') || 'nothing'
-  return `Polier: write to ${shown} blocked, the path ${verdict.reason} of ${ids}. Allowed: ${allowed}. Do not try another way to write it. If the change is needed, stop and report it under open_questions.`
 }
 
 export async function scopeCheck(ctx, config, agent, info, taskId, signal) {
@@ -158,22 +141,37 @@ export async function onTurnStopping(ctx, config, payload) {
 }
 
 /**
- * Before every tool call: deny a policy-denied command, refresh the claim
- * heartbeat and warn once per turn when a bash command stops processes.
+ * Before every tool call: check a write against scope and policy, deny a
+ * policy-denied command, refresh the claim heartbeat and warn once per turn
+ * when a bash command stops processes.
  */
-export async function onToolPreExecute(ctx, config, exec, next) {
+export async function onToolPreExecute(ctx, config, exec, next, store) {
+  const agent = exec.agent
+  if (agent && config.enforce !== 'off') {
+    const reason = await checkWrite(ctx, config, exec)
+    if (reason) {
+      if (config.enforce === 'ask') return { kind: 'ask', reason }
+      store?.put(exec, reason)
+      return { kind: 'deny', reason }
+    }
+  }
   try {
-    const agent = exec.agent
     if (agent) {
-      const args = exec.arguments && typeof exec.arguments === 'object' ? exec.arguments : {}
-      const command = COMMAND_TOOLS.has(exec.name) && typeof args.command === 'string' ? args.command : ''
-      if (command.trim()) {
+      const command = commandOf(exec)
+      let kills = false
+      if (command.trim() && config.enforce !== 'off') {
         const info = context(ctx, agent)
-        const reason = info && policyCommandDenial(config, info, command)
-        if (reason) return { kind: 'deny', reason }
+        if (info && info.state.role !== 'off') {
+          const answer = await ask(ctx, config, agent, info, { command })
+          if (answer.deny) {
+            store?.put(exec, answer.deny)
+            return { kind: 'deny', reason: answer.deny }
+          }
+          kills = answer.kills === true
+        }
       }
       await beatClaims(ctx, config, agent)
-      if (command && processKills(command).length > 0) {
+      if (kills) {
         const state = stateOf(agent)
         const turn = Number.isInteger(state.turn) ? state.turn : 0
         if (state.killTurn !== turn) {
@@ -185,6 +183,6 @@ export async function onToolPreExecute(ctx, config, exec, next) {
         }
       }
     }
-  } catch { /* never block a tool call on our own error */ }
+  } catch { /* never block a command on our own error */ }
   return next()
 }

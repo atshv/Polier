@@ -409,7 +409,7 @@ def create_note(root: Path, topic: str, question: str = "", task: str = "",
     if question:
         text = text.replace("<the question, one sentence>", question)
     if task:
-        text = text.replace("<task ID or phase>", task)
+        text = text.replace("<task ID or station>", task)
     if sources:
         lines = "\n".join(f"- {url} (checked {today}) — <what it confirms>" for url in sources)
         text = re.sub(r"^- <URL> \(checked [^)]*\) — <what it confirms>$", lambda _m: lines, text, count=1, flags=re.M)

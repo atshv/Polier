@@ -1,4 +1,4 @@
-"""Board schemas: 0.9 stays valid, 1.0 and 1.1 fields are opt-in and validated."""
+"""The board schema: one version, unknown fields are errors."""
 from __future__ import annotations
 
 import importlib.util
@@ -8,8 +8,8 @@ import unittest
 from pathlib import Path
 
 from core.board import (
-    ID_10,
-    board_errors, package_paths, ready_tasks, resources, schema_version, stage_ids,
+    TASK_ID,
+    board_errors, package_paths, ready_tasks, resources, stage_ids,
     stage_report,
 )
 
@@ -26,7 +26,7 @@ def _task(tid: str = "M01", **extra) -> dict:
     return data
 
 
-def board_09(tasks: list | None = None) -> dict:
+def board_min(tasks: list | None = None) -> dict:
     return {
         "project": "t", "profile": "S", "base_branch": "main",
         "generator_version": "0.9.0", "stage": 1,
@@ -64,22 +64,6 @@ def board_10() -> dict:
     }
 
 
-def board_12() -> dict:
-    board = board_11()
-    board["schema_version"] = "1.2"
-    board["tasks"][0]["planned_start"] = "2026-11-02"
-    board["tasks"][0]["target"] = "2026-11-06"
-    return board
-
-
-def board_11() -> dict:
-    board = board_10()
-    board["schema_version"] = "1.1"
-    board["tasks"][0]["labels"] = ["feature", "risk-high"]
-    board["tasks"][0]["estimate_hours"] = 6.5
-    return board
-
-
 def check_module():
     spec = importlib.util.spec_from_file_location("pl_check", TOOLS / "check.py")
     module = importlib.util.module_from_spec(spec)
@@ -88,48 +72,31 @@ def check_module():
     return module
 
 
-class Schema09(unittest.TestCase):
-    def test_classic_board_is_valid(self):
-        self.assertEqual(board_errors(board_09()), [])
-        self.assertEqual(schema_version(board_09()), "0.9")
-
-    def test_1_0_field_needs_schema_version(self):
-        board = board_09([_task(package="packages/core")])
-        errors = board_errors(board)
-        self.assertEqual(len(errors), 1, errors)
-        self.assertIn("set schema_version to 1.0", errors[0])
-        # Same answer from tools/check.py, so the CLI exits 1 with that message.
-        self.assertIn("set schema_version to 1.0", "\n".join(errors))
-
-    def test_new_id_pattern_needs_schema_version(self):
-        errors = board_errors(board_09([_task("P3-02")]))
-        self.assertTrue(any("id must match" in error for error in errors), errors)
-
-    def test_named_stage_needs_schema_version(self):
-        errors = board_errors(board_09([_task(stage="foundation")]))
-        self.assertTrue(any("schema_version to 1.0" in error for error in errors), errors)
+class MinimalBoard(unittest.TestCase):
+    def test_minimal_board_is_valid(self):
+        self.assertEqual(board_errors(board_min()), [])
 
     def test_unknown_fields_are_errors(self):
-        board = board_09()
+        board = board_min()
         board["mystery"] = 1
         self.assertIn("unknown field 'mystery'", "\n".join(board_errors(board)))
-        board = board_09([_task(mystery=1)])
+        board = board_min([_task(mystery=1)])
         self.assertIn("unknown field 'mystery'", "\n".join(board_errors(board)))
+        board = board_min([_task(labels=["bug"])])
+        self.assertIn("unknown field 'labels'", "\n".join(board_errors(board)))
 
     def test_declared_schema_version_must_be_known(self):
-        board = board_09()
-        board["schema_version"] = "2.0"
+        board = board_min()
+        board["schema_version"] = "1.0"
+        self.assertEqual(board_errors(board), [])
+        board["schema_version"] = "1.2"
         self.assertIn("unknown schema_version", "\n".join(board_errors(board)))
-        board["schema_version"] = "0.9"
-        self.assertIn("schema_version 0.9 is written by omitting the field",
-                      "\n".join(board_errors(board)))
 
 
-class Schema10(unittest.TestCase):
+class FullBoard(unittest.TestCase):
     def test_rich_board_is_valid(self):
         errors = board_errors(board_10())
         self.assertEqual(errors, [])
-        self.assertEqual(schema_version(board_10()), "1.0")
         self.assertEqual(stage_ids(board_10()), ["foundation", "engine"])
         self.assertEqual(package_paths(board_10()), ["packages/core", "apps/web"])
         self.assertEqual(resources(board_10())["services"], {"web": 0, "api": 1})
@@ -190,7 +157,7 @@ class Schema10(unittest.TestCase):
         self.assertIn("claim has unknown field 'bogus'", "\n".join(board_errors(board)))
 
     def test_id_pattern_widened(self):
-        pattern = ID_10
+        pattern = TASK_ID
         for good in ("M01", "M123", "P3-02", "ENG-14", "A-01", "ABCDEF-99"):
             self.assertTrue(pattern.match(good), good)
         for bad in ("m01", "P3_02", "TOOLONG-01", "P3-2", "3-02", ""):
@@ -213,7 +180,7 @@ def stage_board(status_a: str = "done", status_b: str = "pending") -> dict:
 
 
 class StageTasksOpen(unittest.TestCase):
-    """1.1: a stage is complete only when none of its tasks is still open."""
+    """A stage is complete only when none of its tasks is still open."""
 
     def test_tasks_open_lists_the_ids_that_are_not_done(self):
         report = {entry["id"]: entry for entry in stage_report(stage_board())}
@@ -262,61 +229,6 @@ class CheckCli(unittest.TestCase):
         errors: list[str] = []
         module.check_board(root, errors, [])
         self.assertTrue(any("services/ghost" in error for error in errors), errors)
-
-
-class Schema11(unittest.TestCase):
-    def test_board_1_1_accepts_labels_and_estimate(self):
-        errors = board_errors(board_11())
-        self.assertEqual(errors, [])
-        self.assertEqual(schema_version(board_11()), "1.1")
-
-    def test_1_1_fields_need_schema_1_1(self):
-        board = board_10()
-        board["tasks"][0]["labels"] = ["feature"]
-        errors = board_errors(board)
-        self.assertTrue(any("needs schema version 1.1" in error for error in errors), errors)
-        board = board_10()
-        board["tasks"][0]["estimate_hours"] = 2
-        self.assertTrue(any("needs schema version 1.1" in error
-                            for error in board_errors(board)))
-
-    def test_label_and_estimate_shape(self):
-        board = board_11()
-        board["tasks"][0]["labels"] = ["Feature", "risk-high"]
-        self.assertTrue(any("lowercase label ids" in error for error in board_errors(board)))
-        board = board_11()
-        board["tasks"][0]["labels"] = ["bug", "bug"]
-        self.assertTrue(any("must not repeat" in error for error in board_errors(board)))
-        board = board_11()
-        board["tasks"][0]["estimate_hours"] = -1
-        self.assertTrue(any("estimate_hours" in error for error in board_errors(board)))
-        board = board_11()
-        board["tasks"][0]["estimate_hours"] = "6"
-        self.assertTrue(any("estimate_hours" in error for error in board_errors(board)))
-
-
-
-class Schema12(unittest.TestCase):
-    def test_board_1_2_accepts_planning_dates(self):
-        self.assertEqual(board_errors(board_12()), [])
-        self.assertEqual(schema_version(board_12()), "1.2")
-
-    def test_1_2_fields_need_schema_1_2(self):
-        board = board_11()
-        board["tasks"][0]["planned_start"] = "2026-11-02"
-        self.assertTrue(any("needs schema version 1.2" in error for error in board_errors(board)))
-        board = board_11()
-        board["tasks"][0]["target"] = "2026-11-02"
-        self.assertTrue(any("needs schema version 1.2" in error for error in board_errors(board)))
-
-    def test_date_shape_and_order(self):
-        board = board_12()
-        board["tasks"][0]["planned_start"] = "02.11.2026"
-        self.assertTrue(any("YYYY-MM-DD" in error for error in board_errors(board)))
-        board = board_12()
-        board["tasks"][0]["planned_start"] = "2026-11-06"
-        board["tasks"][0]["target"] = "2026-11-02"
-        self.assertTrue(any("target must not be before" in error for error in board_errors(board)))
 
 
 class Render(unittest.TestCase):
@@ -410,8 +322,8 @@ class Render(unittest.TestCase):
         self.assertEqual(module.strip_claims(text).strip(),
                          module.render(board, root, with_claims=False).strip())
 
-    def test_classic_board_rendering_is_unchanged(self):
-        text = self._render(board_09())
+    def test_minimal_board_rendering(self):
+        text = self._render(board_min())
         self.assertIn("**Stage:** 1 of 1", text)
         self.assertNotIn("## Stages", text)
         self.assertNotIn("## Packages", text)

@@ -8,7 +8,7 @@ const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000
 const MAX_OUTPUT = 4 * 1024 * 1024
 
 /** POSIX single-quote one argument. */
-export function quote(arg) {
+function quote(arg) {
   return `'${String(arg).replace(/'/g, `'\\''`)}'`
 }
 

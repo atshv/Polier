@@ -1,4 +1,4 @@
-"""Machine-readable contracts with version rules (PL-12).
+"""Machine-readable contracts with version rules.
 
 Temporary git repositories with a contract on the board: fixtures, schema
 version rules and the dependant coverage of the running task.

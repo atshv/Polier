@@ -1,4 +1,4 @@
-"""Exclusive locks (PL-03): holder files, waiting, stale takeover."""
+"""Exclusive locks: holder files, waiting, stale takeover."""
 from __future__ import annotations
 
 import datetime as dt

@@ -106,7 +106,7 @@ from core import paths as paths_module  # noqa: E402
 
 
 class CaseRule(unittest.TestCase):
-    """PL-16: guarded paths compare case-insensitively on macOS and Windows only."""
+    """guarded paths compare case-insensitively on macOS and Windows only."""
 
     def test_default_follows_the_platform(self):
         self.assertEqual(paths_module.CASE_INSENSITIVE,

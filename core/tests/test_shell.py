@@ -98,7 +98,7 @@ from core.shell import process_kills  # noqa: E402
 
 
 class ProcessKills(unittest.TestCase):
-    """PL-16: a command line that would stop processes."""
+    """a command line that would stop processes."""
 
     def test_killers_in_command_position(self):
         cases = {

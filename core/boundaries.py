@@ -1,4 +1,4 @@
-"""Import boundaries between the packages of a monorepo (PL-07).
+"""Import boundaries between the packages of a monorepo.
 
 ``find_violations`` is the pure check behind ``tools/boundaries.py`` and the
 ``boundaries`` gate of ``tools/check.py``. It reads the package map from

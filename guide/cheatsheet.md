@@ -1,26 +1,6 @@
 # Cheatsheet
 
-The human's operating manual. Polier runs the factory line, drafts and writes; you approve stations, start tasks and check results. Prompts live only in `prompt/generator.md` › phase I.
-
-## Your role per phase
-
-| Phase | Generator | You |
-|---|---|---|
-| A Interview | tool check, ≤ 10 questions per round, profile proposal | confirm the profile, the runtime resources and the release path |
-| B Recon | repo facts (brownfield) | confirm or correct |
-| C + D | architecture, artifact map, task DAG, package map (L), stages, `policy.json` | approve (S: together; M/L: separately) |
-| E | roles and protocol, worktrees, claims, runtime rules (M/L) | approve |
-| F + G | 3–5 briefs, scaffold, git repo, `.polier-slot` rule, `policy.json`, `docs/orchestration.md`, `AGENTS.md` rules | check file tree, git, structure, policy limits |
-| H | `check.py`, cold start, rubric; `audit.py`, `dispatch.py`; L: `boundaries.py`, `contracts.py` | decide on findings |
-| I | prompts, checklist | start M01 |
-
-## After the scaffold
-
-- **Git:** `git status --short` is clean; `.gitignore` (incl. `.polier-slot`) and the commit `chore: scaffold` exist; base branch is `main` or as in `board.json`.
-- **Structure:** `docs/module-map.md` exists; imports only point downwards; no UI file touches the database. At L: the package map lists every `packages[].path`.
-- **AGENTS.md:** commands, git and commit rule, scope and layer rule, runtime rule (ports/DB only from `.polier-slot`, no `kill`/`pkill`); no architecture, no progress.
-- **Board:** `schema_version: "1.0"` only if 1.0 fields are used; stages have `exit_gates` and an `owner_decision`; tasks that share e2e, load or a database list the resource in `exclusive`.
-- **Policy:** `policy.json` exists, `version: 1`, limits match the profile (S 3/1/3, M 3/2/3, L 3/3/3 for attempts/in progress/rounds), the manifest list matches the project; `docs/orchestration.md` exists and `AGENTS.md` names `policy.json`, `runs/` and the state commands.
+The owner's operating manual. Polier runs the factory line, drafts and writes; you approve stations, start tasks and check results. The prompts for lead, worker and reviewer are in `prompt/generator.md` › Station 5 › Handoff.
 
 ## The factory line
 
@@ -43,6 +23,14 @@ The human's operating manual. Polier runs the factory line, drafts and writes; y
 - New platform or feature area later: the agent rescopes the line (`tools/factory.py scope`), new items appear as open.
 - The full catalog: `factory/CATALOG.md`.
 - Slow parts first: Apple Developer Program, Google Play Console (identity check, closed test), signing certificates, legal texts — start them during the build station.
+
+## After the scaffold
+
+- **Git:** `git status --short` is clean; `.gitignore` (incl. `.polier-slot`) and the commit `chore: scaffold` exist; base branch is `main` or as in `board.json`.
+- **Structure:** `docs/module-map.md` exists; imports only point downwards; no UI file touches the database. At L: the package map lists every `packages[].path`.
+- **AGENTS.md:** commands, git and commit rule, scope and layer rule, runtime rule (ports/DB only from `.polier-slot`, no `kill`/`pkill`); no architecture, no progress.
+- **Board:** stages have `exit_gates` and an `owner_decision`; tasks that share e2e, load or a database list the resource in `exclusive`.
+- **Policy:** `policy.json` exists, `version: 1`, limits match the profile (S 3/1/3, M 3/2/3, L 3/3/3 for attempts/in progress/rounds), the manifest list matches the project; `docs/orchestration.md` exists and `AGENTS.md` names `policy.json`, `runs/` and the state commands.
 
 ## The task loop
 
@@ -134,12 +122,10 @@ Update only between stages, when the current stage is `done` and committed — n
 
 1. Read `CHANGELOG.md` from your `generator_version` up to the new `VERSION`.
 2. Update the plugin: `dsh plugin --profile <name> add github:atshv/polier#v<version>` and restart (or enable it under **Plugins**).
-3. Run `check.py` on the project and apply the migration steps until it is green. A 0.9 project under 1.0 prints migration warnings only; a 1.0 field without `schema_version` is an error.
-4. At M/L set `worktrees` (default `required` on a 1.0 board; a 0.9 board stays `recommended`), at L add `schema_version`, `packages`, `stages`, `resources` and `contracts`; budgets only with a `reason`.
-5. Optional 1.1 adoption: copy `policy.json` and `docs/orchestration.md` from the templates, add the state/gate/approval rules to `AGENTS.md`, and commit `runs/` from the next task on. Without `policy.json` the project is not broken: the transition table, note rules and `reopen_done`/`state_override` approvals still hold, the rest of the 1.1 checks warn. Once the file exists, every state change goes through `tools/state.py`.
-6. Set `generator_version` in `board.json`, run `render_status.py`, commit `chore: update generator to <version>`.
+3. Run `pl_check` on the project and apply the steps the changelog names until it is green.
+4. Set `generator_version` in `board.json`, run `render_status.py`, commit `chore: update generator to <version>`.
 
-If migration fails, restore the old package; the project is untouched outside that commit.
+If the update fails, restore the old package; the project is untouched outside that commit.
 
 ## Changing the generator
 

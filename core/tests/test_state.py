@@ -1,4 +1,4 @@
-"""core.state: the task state machine and its checkpoints (PL-20)."""
+"""core.state: the task state machine and its checkpoints."""
 from __future__ import annotations
 
 import json

@@ -8,7 +8,7 @@ Saves links locally in SQLite, lists and searches them, exports and imports JSON
 
 ## Setup
 
-The git repo with `main` and an initial commit is created by the generator in phase G; M01 does not create it again.
+The git repo with `main` and an initial commit is created by the generator when scaffolding (station 5); M01 does not create it again.
 
 ```bash
 uv sync

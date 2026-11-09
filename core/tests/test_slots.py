@@ -1,4 +1,4 @@
-"""Runtime slots (PL-02): temporary git repos with two linked worktrees."""
+"""Runtime slots: temporary git repos with two linked worktrees."""
 from __future__ import annotations
 
 import json

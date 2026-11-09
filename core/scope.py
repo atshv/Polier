@@ -4,8 +4,7 @@ Two entry points with deliberately different rules, kept as they shipped:
 
 - check_write() decides one write before it happens. Evidence and lead-owned
   files are checked before scope_write_forbidden, and with several running
-  tasks a path must fit one of them. The DSH plugin mirrors it in
-  adapters/dsh/lib/project.mjs; core/tests/write_cases.json keeps the two in step.
+  tasks a path must fit one of them.
 - check_stop() looks at every changed file of one task after the fact.
   scope_write_forbidden wins over everything, board files pass with allow_board.
 """
@@ -15,7 +14,7 @@ import subprocess
 from pathlib import Path
 from typing import Iterable, List, NamedTuple, Optional, Tuple, Union
 
-from .board import load_board, pick_task, schema_version, tasks_of
+from .board import load_board, pick_task, tasks_of
 from .claims import live_claims
 from .errors import PolierError
 from .paths import inside, is_main_checkout, normalized, outside, relative, resolve
@@ -45,11 +44,9 @@ def _strings(task: dict, key: str) -> List[str]:
 
 
 def worktree_mode(board) -> str:
-    """`worktrees` mode of the board: required, recommended or off (PL-05).
+    """`worktrees` mode of the board: required, recommended or off.
 
-    Without a valid board setting the profile decides: off for S, and for M/L
-    "required" on a 1.0 board but only "recommended" on a 0.9 board — an
-    existing project keeps working until its owner sets the mode (migration).
+    Without a valid board setting the profile decides: off for S, required for M/L.
     """
     if not isinstance(board, dict):
         return "off"
@@ -58,7 +55,7 @@ def worktree_mode(board) -> str:
         return mode
     if board.get("profile") not in ("M", "L"):
         return "off"
-    return "required" if schema_version(board) == "1.0" else "recommended"
+    return "required"
 
 
 def worktree_denial(tasks: Iterable[dict], board=None, root=None) -> Optional[str]:
@@ -86,7 +83,7 @@ def worktree_denial(tasks: Iterable[dict], board=None, root=None) -> Optional[st
 def decide(rel: str, tasks: Iterable[dict], board=None, root=None, cwd=None) -> Decision:
     """May a worker write `rel` (relative to the project root)? With several tasks it must fit one.
 
-    With `board` and `root` the worktree rule of PL-05 applies as well: a worker
+    With `board` and `root` the worktree rule of applies as well: a worker
     write in the main checkout while a bound task has a worktree is denied.
     """
     if outside(rel):
@@ -118,7 +115,7 @@ def check_write(path: str, tasks: Union[dict, Iterable[dict], None], role: str =
     task is running and a worker may write anything. With `root`, `path` may be
     absolute or relative to `cwd` (default: `root`); without it, `path` must
     already be relative to the project root. With `board` and `root` the
-    worktree rule of PL-05 is enforced; without them the decision is the old one.
+    worktree rule is enforced as well.
     """
     if isinstance(tasks, dict):
         tasks = [tasks]
@@ -205,7 +202,7 @@ def violations(paths: Iterable[str], task: dict, allow_board: bool = False) -> L
 
 
 def _foreign_changes(found: List[Tuple[str, str]], task: dict, root=None) -> List[dict]:
-    """Changed paths that belong to another live claim's scope (PL-05).
+    """Changed paths that belong to another live claim's scope.
 
     A path that is outside the current task's scope but inside the
     `scope_write` of a task claimed by another live session is foreign: another

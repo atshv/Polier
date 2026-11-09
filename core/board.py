@@ -1,17 +1,7 @@
 """Reading board.json, validating it and choosing the tasks whose scope applies.
 
-Board schema versions:
-
-- 0.9: no ``schema_version`` field. Only the classic fields are allowed.
-- 1.0: ``"schema_version": "1.0"``. Adds stages, packages, runtime resources,
-  budgets, worktree mode, contracts and the matching task fields.
-- 1.1: ``"schema_version": "1.1"``. Adds the optional task fields ``labels``
-  (dashboard label ids, defined in ``dashboard.json``) and ``estimate_hours``
-  (a planning estimate; the worklog compares it with the actual run/session
-  time). Additive: every 1.0 board stays valid.
-- 1.2: ``"schema_version": "1.2"``. Adds the optional planning dates
-  ``planned_start`` and ``target`` (``YYYY-MM-DD``) used by the dashboard
-  timeline. Additive: every 1.0/1.1 board stays valid.
+There is one board schema. ``schema_version`` is optional and, when set,
+must be ``"1.0"``; unknown fields are errors.
 
 ``board_errors`` is the single schema check used by tools/check.py; the
 semantic project checks (cycles, briefs, evidence, budgets, ...) stay in the
@@ -19,7 +9,6 @@ tools that need them.
 """
 from __future__ import annotations
 
-import datetime as dt
 import json
 import os
 import re
@@ -30,14 +19,9 @@ from .errors import PolierError
 
 BOARD = "board.json"
 
-SCHEMA_09 = "0.9"
-SCHEMA_10 = "1.0"
-SCHEMA_11 = "1.1"
-SCHEMA_12 = "1.2"
-SCHEMAS = (SCHEMA_09, SCHEMA_10, SCHEMA_11, SCHEMA_12)
+SCHEMA = "1.0"
 
-ID_09 = re.compile(r"^M[0-9]{2,3}$")
-ID_10 = re.compile(r"^(M[0-9]{2,3}|[A-Z][A-Z0-9]{0,5}-[0-9]{2,3})$")
+TASK_ID = re.compile(r"^(M[0-9]{2,3}|[A-Z][A-Z0-9]{0,5}-[0-9]{2,3})$")
 SEMVER = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
 
 STATUSES = {
@@ -54,26 +38,18 @@ TASK_REQUIRED = (
     "id", "title", "goal", "status", "depends_on", "complexity",
     "stage", "scope_write", "acceptance", "gates",
 )
-TASK_FIELDS_09 = frozenset(TASK_REQUIRED + (
+TASK_FIELDS = frozenset(TASK_REQUIRED + (
     "why", "satisfies", "parallel_group", "scope_read", "owner", "branch",
     "worktree", "round", "evidence", "scope_write_forbidden", "handoff",
-))
-TASK_FIELDS_10 = frozenset(TASK_FIELDS_09 | {
     "package", "exclusive", "resources", "claim", "contract_followups", "role",
-})
-TASK_FIELDS_11 = frozenset(TASK_FIELDS_10 | {"labels", "estimate_hours"})
-TASK_FIELDS_12 = frozenset(TASK_FIELDS_11 | {"planned_start", "target"})
+))
 
 BOARD_REQUIRED = ("project", "profile", "base_branch", "tasks")
-BOARD_FIELDS_09 = frozenset(BOARD_REQUIRED + (
+BOARD_FIELDS = frozenset(BOARD_REQUIRED + (
     "generator_version", "stage", "decisions", "open_questions",
-))
-BOARD_FIELDS_10 = frozenset(BOARD_FIELDS_09 | {
     "schema_version", "stages", "packages", "resources", "budgets",
     "worktrees", "contracts",
-})
-BOARD_FIELDS_11 = BOARD_FIELDS_10
-BOARD_FIELDS_12 = BOARD_FIELDS_11
+))
 
 STAGE_FIELDS = frozenset({
     "id", "title", "goal", "exit_criteria", "exit_gates", "owner_decision", "depends_on",
@@ -173,14 +149,8 @@ def active_tasks(board: Optional[dict], root=None, cwd=None, pinned: Optional[st
 
 
 # ---------------------------------------------------------------------------
-# schema 1.0 helpers
+# board helpers
 # ---------------------------------------------------------------------------
-
-def schema_version(board: Optional[dict]) -> str:
-    """The declared schema (``1.1``/``1.0``) or ``"0.9"`` when the field is absent."""
-    value = (board or {}).get("schema_version")
-    return value if value in SCHEMAS else SCHEMA_09
-
 
 def stage_ids(board: Optional[dict]) -> List[str]:
     """Ids of the declared stages, in board order."""
@@ -205,7 +175,7 @@ def package_paths(board: Optional[dict]) -> List[str]:
 
 
 def resources(board: Optional[dict]) -> dict:
-    """Runtime resources of the board with the defaults of PL-02."""
+    """Runtime resources of the board with their defaults."""
     raw = (board or {}).get("resources")
     raw = raw if isinstance(raw, dict) else {}
     services = raw.get("services")
@@ -235,50 +205,22 @@ def _is_int(value) -> bool:
     return isinstance(value, int) and not isinstance(value, bool)
 
 
-def _needs_100(label: str, field: str) -> str:
-    return f"{label}: field {field!r} needs schema version 1.0 — set schema_version to 1.0"
-
-
-def _needs_11(label: str, field: str) -> str:
-    return f"{label}: field {field!r} needs schema version 1.1 — set schema_version to 1.1"
-
-
-def _needs_12(label: str, field: str) -> str:
-    return f"{label}: field {field!r} needs schema version 1.2 — set schema_version to 1.2"
-
-
-def _check_task(task, version: str, known_ids: set, errors: List[str], stage_id_set: set,
+def _check_task(task, known_ids: set, errors: List[str], stage_id_set: set,
                 package_set: set) -> None:
     if not isinstance(task, dict):
         errors.append(f"board.json: task entry is not an object: {task!r}")
         return
     tid = task.get("id", "?")
     label = f"board.json: task {tid}"
-    if version == SCHEMA_12:
-        allowed = TASK_FIELDS_12
-    elif version == SCHEMA_11:
-        allowed = TASK_FIELDS_11
-    elif version == SCHEMA_10:
-        allowed = TASK_FIELDS_10
-    else:
-        allowed = TASK_FIELDS_09
-    for field in sorted(set(task) - allowed):
-        if version == SCHEMA_09 and field in TASK_FIELDS_10:
-            errors.append(_needs_100(label, field))
-        elif version in (SCHEMA_09, SCHEMA_10) and field in TASK_FIELDS_11:
-            errors.append(_needs_11(label, field))
-        elif version in (SCHEMA_09, SCHEMA_10, SCHEMA_11) and field in TASK_FIELDS_12:
-            errors.append(_needs_12(label, field))
-        else:
-            errors.append(f"{label}: unknown field {field!r}")
+    for field in sorted(set(task) - TASK_FIELDS):
+        errors.append(f"{label}: unknown field {field!r}")
     for field in TASK_REQUIRED:
         if field not in task:
             errors.append(f"{label}: mandatory field missing: {field}")
 
-    pattern = ID_09 if version == SCHEMA_09 else ID_10
-    if "id" not in task or not _is_str(task.get("id")) or not pattern.match(task["id"]):
-        hint = "e.g. M03, P3-02, ENG-14" if version == SCHEMA_10 else "e.g. M03"
-        errors.append(f"{label}: id must match {pattern.pattern} ({hint}), is {task.get('id')!r}")
+    if "id" not in task or not _is_str(task.get("id")) or not TASK_ID.match(task["id"]):
+        errors.append(f"{label}: id must match {TASK_ID.pattern} (e.g. M03, P3-02, ENG-14), "
+                      f"is {task.get('id')!r}")
 
     title = task.get("title")
     if title is not None and (not isinstance(title, str) or not 3 <= len(title) <= 120):
@@ -310,9 +252,7 @@ def _check_task(task, version: str, known_ids: set, errors: List[str], stage_id_
             if stage < 1:
                 errors.append(f"{label}: stage must be >= 1")
         elif isinstance(stage, str) and stage:
-            if version == SCHEMA_09:
-                errors.append(_needs_100(label, "stage") + " (a named stage needs schema 1.0)")
-            elif stage not in stage_id_set:
+            if stage not in stage_id_set:
                 errors.append(f"{label}: unknown stage {stage!r} (not in stages[].id)")
         else:
             errors.append(f"{label}: stage must be an integer or a stages[].id")
@@ -358,34 +298,6 @@ def _check_task(task, version: str, known_ids: set, errors: List[str], stage_id_
             errors.append(f"{label}: package must be a non-empty string")
         elif package_set and package.rstrip("/") not in package_set:
             errors.append(f"{label}: unknown package {package!r} (not in packages[].path)")
-
-    def _date(value):
-        if not isinstance(value, str) or not re.match(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$", value):
-            return None
-        try:
-            return dt.date.fromisoformat(value)
-        except ValueError:
-            return None
-
-    for field in ("planned_start", "target"):
-        if field in task:
-            if _date(task.get(field)) is None:
-                errors.append(f"{label}: {field} must be a date string (YYYY-MM-DD)")
-    if "planned_start" in task and "target" in task:
-        start, end = _date(task.get("planned_start")), _date(task.get("target"))
-        if start and end and end < start:
-            errors.append(f"{label}: target must not be before planned_start")
-    if "labels" in task:
-        labels = task.get("labels")
-        if not (_is_str_list(labels) and all(re.match(r"^[a-z][a-z0-9-]{0,40}$", entry) for entry in labels)):
-            errors.append(f"{label}: labels must be a list of lowercase label ids (e.g. 'bug', 'risk-high')")
-        elif len(set(labels)) != len(labels):
-            errors.append(f"{label}: labels must not repeat")
-    if "estimate_hours" in task:
-        estimate = task.get("estimate_hours")
-        if isinstance(estimate, bool) or not isinstance(estimate, (int, float)) \
-                or estimate < 0 or estimate > 10_000:
-            errors.append(f"{label}: estimate_hours must be a number between 0 and 10000")
 
     if "claim" in task:
         claim = task.get("claim")
@@ -507,37 +419,19 @@ def _check_contract(contract, index: int, errors: List[str]) -> None:
 
 
 def board_errors(board) -> List[str]:
-    """Schema errors of a parsed board.json, [] when it is valid for its version.
+    """Schema errors of a parsed board.json, [] when it is valid.
 
-    Strict per version: a field of schema 1.0 on a board without
-    ``"schema_version": "1.0"`` is an error, and unknown fields are errors.
+    Unknown fields are errors.
     """
     errors: List[str] = []
     if not isinstance(board, dict):
         return ["board.json: the board must be a JSON object"]
 
-    version = schema_version(board)
-    if board.get("schema_version") == SCHEMA_09:
+    if "schema_version" in board and board["schema_version"] != SCHEMA:
         errors.append(
-            "board.json: schema_version 0.9 is written by omitting the field; "
-            "set schema_version to 1.0 to use the new fields")
-    elif "schema_version" in board and board["schema_version"] not in SCHEMAS:
-        errors.append(
-            f"board.json: unknown schema_version {board['schema_version']!r} "
-            f"(known: {', '.join(SCHEMAS)}; omit the field for 0.9)")
-    if version == SCHEMA_12:
-        allowed = BOARD_FIELDS_12
-    elif version == SCHEMA_11:
-        allowed = BOARD_FIELDS_11
-    elif version == SCHEMA_10:
-        allowed = BOARD_FIELDS_10
-    else:
-        allowed = BOARD_FIELDS_09
-    for field in sorted(set(board) - allowed):
-        if version == SCHEMA_09 and field in BOARD_FIELDS_10:
-            errors.append(_needs_100("board.json", field))
-        else:
-            errors.append(f"board.json: unknown field {field!r}")
+            f"board.json: unknown schema_version {board['schema_version']!r} (use {SCHEMA!r} or omit it)")
+    for field in sorted(set(board) - BOARD_FIELDS):
+        errors.append(f"board.json: unknown field {field!r}")
 
     for field in BOARD_REQUIRED:
         if field not in board:
@@ -551,7 +445,7 @@ def board_errors(board) -> List[str]:
     if "generator_version" in board:
         value = board["generator_version"]
         if value is not None and (not isinstance(value, str) or not SEMVER.match(value)):
-            errors.append("board.json: generator_version must be SemVer (e.g. 0.9.0)")
+            errors.append("board.json: generator_version must be SemVer (e.g. 0.4.3)")
     if "stage" in board and (not _is_int(board["stage"]) or board["stage"] < 1):
         errors.append("board.json: stage must be a positive integer")
     if "worktrees" in board and board["worktrees"] not in WORKTREE_MODES:
@@ -607,12 +501,12 @@ def board_errors(board) -> List[str]:
                 _check_contract(contract, index, errors)
 
     for task in tasks:
-        _check_task(task, version, known_ids, errors, set(stage_id_list), set(package_list))
+        _check_task(task, known_ids, errors, set(stage_id_list), set(package_list))
     return errors
 
 
 # ---------------------------------------------------------------------------
-# stages (PL-08): a task is ready only when the stages it depends on are done
+# stages: a task is ready only when the stages it depends on are done
 # ---------------------------------------------------------------------------
 
 BAD_GATE_RESULTS = {"infra", "busy", "timeout"}
@@ -669,8 +563,7 @@ def stage_report(board: Optional[dict], root=None) -> List[dict]:
     `owner_decision` is not "pending", every `exit_gates` name has a passing
     gate record, and no task of the stage is still open (`tasks_open` empty).
     With `root` the records in reviews/evidence/ are verified; without it, a
-    done task of the stage listing evidence for the gate is accepted (the guard
-    and the JS mirror work without a file scan).
+    done task of the stage listing evidence for the gate is accepted.
     """
     board = board or {}
     stages = [s for s in board.get("stages") or [] if isinstance(s, dict)]

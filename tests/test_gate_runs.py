@@ -1,4 +1,4 @@
-"""tools/gate.py appends a ``gate`` event to runs/<ID>.json (1.1), for every written record.
+"""tools/gate.py appends a ``gate`` event to runs/<ID>.json for every written record.
 
 The run record is the execution trail: a pass, a failure, a timeout, an
 infrastructure result and a busy resource all leave a gate event, and a broken

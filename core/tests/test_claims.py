@@ -1,4 +1,4 @@
-"""core.claims and tools/claim.py: cross-harness task claims with a heartbeat (PL-04)."""
+"""core.claims and tools/claim.py: cross-harness task claims with a heartbeat."""
 from __future__ import annotations
 
 import json

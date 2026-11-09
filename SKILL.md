@@ -39,6 +39,6 @@ description: AI software factory for DeepSeek Harness. Runs a software project t
 
 5. Python tools without a plugin tool, run with `bash` against the project: `tools/research.py`, `tools/worktree.py`, `tools/slot.py`, `tools/audit.py`, `tools/boundaries.py`, `tools/contracts.py`, `tools/release_check.py`, `tools/smoke.py`, `tools/usage.py`. Headless (no approval prompt), the owner uses the matching `tools/*.py` command instead of the prompt.
 
-In phase G write the gate, state, approval and factory rules into `AGENTS.md` as tool names (`pl_gate`, `pl_state`, `pl_approval`, `pl_factory`) and the runtime rules (ports, database and bucket names only from `.polier-slot`; never hard-code ports; never touch slot 0's data; no `kill`/`pkill`). Never hand-edit `board.json`, `factory.json`, `runs/` or `reviews/approvals/`.
+When scaffolding (station 5) write the gate, state, approval and factory rules into `AGENTS.md` as tool names (`pl_gate`, `pl_state`, `pl_approval`, `pl_factory`) and the runtime rules (ports, database and bucket names only from `.polier-slot`; never hard-code ports; never touch slot 0's data; no `kill`/`pkill`). Never hand-edit `board.json`, `factory.json`, `runs/` or `reviews/approvals/`.
 
 This package is not part of the project: never copy or commit it there.

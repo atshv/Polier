@@ -31,7 +31,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from core.board import ready_tasks, stage_report  # noqa: E402
 
-# Live task claims (PL-04) are shown inside these markers. They change every
+# Live task claims are shown inside these markers. They change every
 # few minutes, so tools/check.py ignores the block when it compares STATUS.md
 # with a fresh render.
 CLAIMS_BEGIN = "<!-- polier:claims -->"
@@ -88,7 +88,7 @@ def _render_stages(board: dict, tasks: list, root=None) -> list:
 
 
 def _render_claims(root) -> list:
-    """Live claims of every harness: "in progress by <harness> since <time>" (PL-04)."""
+    """Live claims of every harness: "in progress by <harness> since <time>"."""
     if root is None:
         return []
     try:
@@ -242,7 +242,7 @@ def strip_claims(text: str) -> str:
 
 
 def _render_factory(root) -> list:
-    """3.0: one line with the factory stations, when the project has factory.json."""
+    """One line with the factory stations, when the project has factory.json."""
     if root is None:
         return []
     try:

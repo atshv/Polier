@@ -1,4 +1,4 @@
-"""tools/smoke.py (PL-11): post-deploy check, record and environment checklist."""
+"""tools/smoke.py: post-deploy check, record and environment checklist."""
 from __future__ import annotations
 
 import http.server

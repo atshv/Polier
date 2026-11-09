@@ -80,7 +80,7 @@ if __name__ == "__main__":
 
 
 # ---------------------------------------------------------------------------
-# PL-03: exclusive gates, busy results and infrastructure classification.
+# exclusive gates, busy results and infrastructure classification.
 # These classes are new; the tests above stay unchanged.
 # ---------------------------------------------------------------------------
 

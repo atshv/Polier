@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Machine-readable contracts with version rules (PL-12).
+"""Machine-readable contracts with version rules.
 
 A contract on ``board.json`` looks like::
 

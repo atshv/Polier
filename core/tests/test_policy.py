@@ -1,4 +1,4 @@
-"""core.policy: policy.json rules and the shared decision table (PL-18)."""
+"""core.policy: policy.json rules and the shared decision table."""
 from __future__ import annotations
 
 import json
@@ -22,7 +22,7 @@ def one_rule(case: dict) -> dict:
 
 
 class SharedTable(unittest.TestCase):
-    """Every case of core/tests/policy_cases.json, the Python/JS contract."""
+    """Every case of core/tests/policy_cases.json."""
 
     def test_path_cases(self):
         for case in CASES["path_cases"]:

@@ -21,7 +21,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { GUIDE, guideText, liveContext, roleText } from './lib/context.mjs'
-import { checkWrite, onToolPreExecute, onTurnStopping } from './lib/guard.mjs'
+import { checkWrite, onToolPreExecute, onTurnStopping, verdicts } from './lib/guard.mjs'
 import { findProject } from './lib/project.mjs'
 import { agentCwd } from './lib/run.mjs'
 import { clearSessions, forget, releaseClaim, stateOf } from './lib/session.mjs'
@@ -116,14 +116,9 @@ export function apply(ctx, rawConfig) {
   // Each optional service gets its own sub-plugin: it mounts when the service
   // exists and unwinds with it, so a missing service never blocks the rest.
   ctx.inject(['tools'], (c) => {
-    if (config.enforce === 'deny') c.tools.guard((exec) => checkWrite(c, config, exec))
-    else if (config.enforce === 'ask') {
-      c.on('tools/pre-execute', async (exec, next) => {
-        const reason = checkWrite(c, config, exec)
-        return reason ? { kind: 'ask', reason } : next()
-      })
-    }
-    c.on('tools/pre-execute', (exec, next) => onToolPreExecute(c, config, exec, next))
+    const store = verdicts()
+    if (config.enforce === 'deny') c.tools.guard((exec) => store.take(exec))
+    c.on('tools/pre-execute', (exec, next) => onToolPreExecute(c, config, exec, next, store))
     for (const def of tools(c, config)) c.tools.register(def)
   })
 

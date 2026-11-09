@@ -1,4 +1,4 @@
-"""Release gate (PL-10): clean tagged HEAD on the base branch, released stages done."""
+"""Release gate: clean tagged HEAD on the base branch, released stages done."""
 from __future__ import annotations
 
 import importlib.util

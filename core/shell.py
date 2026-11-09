@@ -23,7 +23,7 @@ WRITE_REDIRECTS = {">", ">>", ">|", "&>", "&>>", "<>"}
 READ_REDIRECTS = {"<", "<<", "<<<"}
 WRAPPERS = {"sudo", "env", "nohup", "time", "command", "exec", "nice", "ionice", "stdbuf", "doas"}
 SHELLS = {"sh", "bash", "zsh", "dash", "ksh"}
-# Programs that stop processes (PL-16): warned about, never denied.
+# Programs that stop processes: warned about, never denied.
 KILLERS = ("kill", "killall", "pkill")
 # xargs options that consume the following word, so the program stays the first positional.
 XARGS_VALUE_OPTIONS = ("-n", "--max-args", "-I", "--replace", "-P", "--max-procs",
@@ -290,7 +290,7 @@ def write_targets(command: str, cwd: Optional[str], _depth: int = 0) -> Tuple[Li
 
 
 # ---------------------------------------------------------------------------
-# processes a command would stop (PL-16)
+# processes a command would stop
 # ---------------------------------------------------------------------------
 
 def _command_position(args: List[str]) -> List[str]:
@@ -345,7 +345,7 @@ def process_kills(command: str, _depth: int = 0) -> List[str]:
 
 
 # ---------------------------------------------------------------------------
-# command segments a policy rule is matched against (1.1)
+# command segments a policy rule is matched against
 # ---------------------------------------------------------------------------
 
 # Wrapper programs whose options consume the next word: `sudo -u root git push`

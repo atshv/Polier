@@ -1,4 +1,4 @@
-"""core.approvals: reviews/approvals/AP-NNN.json, the human decisions (PL-21)."""
+"""core.approvals: reviews/approvals/AP-NNN.json, the human decisions."""
 from __future__ import annotations
 
 import json

@@ -10,7 +10,7 @@ Severity follows the status: for a ``done`` task an enabled check is an
 **error** (it claims a finished task without the proof); for every other status
 a finding is a **warning**. Without ``policy.json`` the policy-driven checks are
 not enforced, so a missing gate/review/handoff/run record is a warning, never an
-error — a 1.0 project stays green.
+error.
 """
 from __future__ import annotations
 

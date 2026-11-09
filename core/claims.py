@@ -1,4 +1,4 @@
-"""Task claims with a heartbeat (PL-04).
+"""Task claims with a heartbeat.
 
 A claim says "this session works on this task right now". It lives in
 ``<git-common-dir>/polier/claims/<task>.json``, shared by every worktree of the

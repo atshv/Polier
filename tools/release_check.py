@@ -20,7 +20,7 @@ A stage (schema 1.0 `stages`) is *released* when both hold:
 
 - `owner_decision` is `"continue"` (a stage without a decision is not released),
 - every gate named in `exit_gates` has at least one passing record in
-  `reviews/evidence/*.json`. Passing means `exit_code` 0 and, when the PL-03
+  `reviews/evidence/*.json`. Passing means `exit_code` 0 and, when the
   `result` field is present, not `fail`, `infra`, `busy` or `timeout`.
   A stage without `exit_gates` counts as released.
 

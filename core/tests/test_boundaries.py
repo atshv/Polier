@@ -1,4 +1,4 @@
-"""Import boundaries between packages (PL-07).
+"""Import boundaries between packages.
 
 Fixture trees with TS/JS, Python and C/C++ sources; the package map comes from
 ``packages[].may_import`` on the board.

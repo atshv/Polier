@@ -15,7 +15,7 @@ CASES = json.loads((Path(__file__).with_name("write_cases.json")).read_text(enco
 
 
 class WriteCases(unittest.TestCase):
-    """The table the DSH adapter's JS mirror is tested against as well."""
+    """Every case of core/tests/write_cases.json."""
 
     def test_shared_cases(self):
         for case in CASES["cases"]:
@@ -125,7 +125,7 @@ def repo_board(root: Path, **changes) -> dict:
 
 
 class WorktreeRule(unittest.TestCase):
-    """PL-05: a worker bound to a task worktree writes only in that worktree."""
+    """a worker bound to a task worktree writes only in that worktree."""
 
     def setUp(self):
         self.root = project([task(worktree=str(Path(tempfile.mkdtemp()) / "repo-M01"))])
@@ -199,7 +199,7 @@ class WorktreeRule(unittest.TestCase):
 
 
 class ForeignChanges(unittest.TestCase):
-    """PL-05: changes made under another live claim's scope are not this task's violations."""
+    """changes made under another live claim's scope are not this task's violations."""
 
     def setUp(self):
         self.root = project([
@@ -250,7 +250,7 @@ class ForeignChanges(unittest.TestCase):
 
 
 class Worktrees(unittest.TestCase):
-    """PL-05: tools/worktree.py start and finish."""
+    """tools/worktree.py start and finish."""
 
     def test_start_creates_worktree_branch_slot_and_claim_then_finish_removes_them(self):
         root = project([task()])
@@ -322,13 +322,11 @@ class Worktrees(unittest.TestCase):
 
 
 class WorktreeModeDefault(unittest.TestCase):
-    """PL-05 migration: a 0.9 M/L board defaults to recommended, a 1.0 board to required."""
+    """Without a worktrees setting S is off and M/L are required."""
 
     def test_defaults(self):
         from core.scope import worktree_mode
         self.assertEqual(worktree_mode({"profile": "S"}), "off")
-        self.assertEqual(worktree_mode({"profile": "M"}), "recommended")
-        self.assertEqual(worktree_mode({"profile": "L"}), "recommended")
-        self.assertEqual(worktree_mode({"profile": "M", "schema_version": "1.0"}), "required")
-        self.assertEqual(worktree_mode({"profile": "L", "schema_version": "1.0"}), "required")
+        self.assertEqual(worktree_mode({"profile": "M"}), "required")
+        self.assertEqual(worktree_mode({"profile": "L"}), "required")
         self.assertEqual(worktree_mode({"profile": "M", "worktrees": "off"}), "off")

@@ -1,4 +1,4 @@
-"""Exclusive resource locks shared by every worktree of a repo (PL-03).
+"""Exclusive resource locks shared by every worktree of a repo.
 
 A lock is a JSON file in ``<git-common-dir>/polier/locks/<resource>.lock`` that
 names the current holder (task, slot, harness, pid, host, started). Creation is

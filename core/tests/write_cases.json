@@ -1,5 +1,5 @@
 {
-  "comment": "Guard decisions shared by core.scope.check_write and adapters/dsh/lib/project.mjs. Paths are relative to the project root.",
+  "comment": "Guard decisions of core.scope.check_write. Paths are relative to the project root.",
   "tasks": {
     "app": {"id": "M01", "status": "in_progress", "scope_write": ["src/app.py", "tests/"]},
     "src_but_app": {"id": "M02", "status": "in_progress", "scope_write": ["src/"], "scope_write_forbidden": ["src/app.py"]},

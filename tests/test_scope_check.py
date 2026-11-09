@@ -112,7 +112,7 @@ if __name__ == "__main__":
 
 
 class OneOneScopeCodes(unittest.TestCase):
-    """1.1 codes shared with the DSH guard (core/tests/write_cases.json): runs/ is
+    """Codes of core/tests/write_cases.json: runs/ is
     lead-owned and a reviewer may not write the approval ledger."""
 
     def run_check(self, root, *args):

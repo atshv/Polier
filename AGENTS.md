@@ -27,7 +27,7 @@ Polier is a DeepSeek Harness plugin plus the Python rules and tools it calls. Th
 ## Rules
 
 - No runtime dependency: Python stdlib, Node built-ins, harness services looked up at call time. A missing optional service degrades, it never breaks the boot.
-- One implementation per rule. The write and policy rules exist in Python and JS; `core/tests/write_cases.json` and `policy_cases.json` are the shared tables both test suites run. Change both sides together.
+- One implementation per rule, in `core/`. The plugin forwards writes and commands to `tools/guard.py` and never re-implements a rule; `plugin/lib/` only reads files for the live context.
 - Human decisions go through `ctx.approval` (an approval prompt), never through chat text or a new slash command. Records are written by `tools/*.py` only.
 - The live context must stay short and must be empty outside a Polier project.
 - Store and legal facts in the catalog or templates carry `[VERIFY: …]` unless a dated source backs them.

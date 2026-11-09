@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Import-boundary gate between the packages of a Polier monorepo (PL-07).
+"""Import-boundary gate between the packages of a Polier monorepo.
 
 Usage:
     python3 tools/boundaries.py tests/fixtures/monorepo-mini

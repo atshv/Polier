@@ -5,33 +5,35 @@ these functions. Standard library only, Python 3.9+.
 
 The modules group the rules:
 
-- ``board``: reading and validating board.json (schema 0.9 and 1.0), task
+- ``board``: reading and validating board.json, task
   selection, stage reporting and the ready list.
-- ``scope``: the write guard and the stop check (write scopes, lead-owned
+- ``scope``: the write rules and the stop check (write scopes, lead-owned
   files, worktree enforcement, foreign changes).
+- ``guard``: the answer for one harness tool call (write or command), with
+  the messages the session sees.
 - ``gate`` / ``evidence``: gate records (pass, fail, timeout, busy, infra) and
   the verification of the records a done task lists.
-- ``slots``: runtime slots per worktree (ports, database, bucket) - PL-02.
-- ``locks``: exclusive gates - PL-03.
-- ``claims``: cross-harness task claims with a heartbeat - PL-04.
-- ``shell``: the files a shell command visibly writes - PL-16, and the
+- ``slots``: runtime slots per worktree (ports, database, bucket).
+- ``locks``: exclusive gates.
+- ``claims``: cross-harness task claims with a heartbeat.
+- ``shell``: the files a shell command visibly writes, and the
   command segments a policy rule is matched against.
-- ``boundaries``: package import rules - PL-07.
+- ``boundaries``: package import rules.
 - ``policy``: policy.json as code (limits, protected paths, dependency
-  manifests, approval actions, command rules) - 1.1.
-- ``runs``: runs/<ID>.json, the attempts and events of one task - 1.1.
-- ``approvals``: reviews/approvals/AP-NNN.json, the human decisions - 1.1.
+  manifests, approval actions, command rules).
+- ``runs``: runs/<ID>.json, the attempts and events of one task.
+- ``approvals``: reviews/approvals/AP-NNN.json, the human decisions.
 - ``state``: the task state machine, its checkpoints and the atomic write of
-  board.json - 1.1.
+  board.json.
 - ``factory``: the software factory line - nine stations from idea to
-  operate, the checklist catalog and the evidence per item (factory.json) - 3.0.
+  operate, the checklist catalog and the evidence per item (factory.json).
 """
 from __future__ import annotations
 
 from . import approvals, boundaries, claims, factory, locks, policy, runs, slots, state
 from .approvals import has_grant, request as request_approval
 from .board import (active_tasks, board_errors, find_root, load_board, pick_task,
-                    ready_tasks, schema_version, stage_report, task_stage_id)
+                    ready_tasks, stage_report, task_stage_id)
 from .claims import live_claims
 from .errors import PolierError
 from .evidence import gate_records, passing_gates, verify_evidence
@@ -48,7 +50,7 @@ from .state import TRANSITIONS as STATE_TRANSITIONS
 __all__ = [
     "PolierError", "TransitionBlocked",
     "active_tasks", "board_errors", "find_root", "load_board", "pick_task", "ready_tasks",
-    "schema_version", "stage_report", "task_stage_id",
+    "stage_report", "task_stage_id",
     "changed_files", "check_stop", "check_write", "scope_check",
     "run_gate", "write_record", "verify_evidence", "gate_records", "passing_gates",
     "acquire_lock", "release_lock", "live_claims",

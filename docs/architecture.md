@@ -18,4 +18,4 @@ flowchart LR
 - **`core/`** holds the rules in Python's standard library: board validation, the state machine, gates and evidence, approvals, claims, slots, policy, the factory line.
 - **Project files** are the only state. Nothing lives in a database or a service; every record is committed with the work.
 
-Dependencies point one way: plugin → tools → core → files. The write rules exist twice (JS for the guard's speed, Python for the tools); `core/tests/write_cases.json` and `policy_cases.json` keep both in step.
+Dependencies point one way: plugin → tools → core → files. Every rule exists once, in `core/`: the plugin asks `tools/guard.py` before a write or a command and shows its answer.

@@ -14,7 +14,7 @@ from .errors import PolierError
 _DRIVE = re.compile(r"^[A-Za-z]:/")
 
 # macOS and Windows file systems are case-insensitive by default: `Board.json`
-# is the same file as `board.json` (PL-16). Elsewhere the comparison stays exact.
+# is the same file as `board.json`. Elsewhere the comparison stays exact.
 CASE_INSENSITIVE = platform.system() in ("Darwin", "Windows")
 
 
@@ -65,7 +65,7 @@ def relative(root, target) -> str:
 
 
 # ---------------------------------------------------------------------------
-# git locations shared by all worktrees of a project (PL-02, PL-03, PL-04)
+# git locations shared by all worktrees of a project
 # ---------------------------------------------------------------------------
 
 def _git(root, *args: str) -> Optional[str]:
