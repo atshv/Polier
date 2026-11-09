@@ -1,16 +1,16 @@
 name: release
 
-# Publishes a release whenever VERSION changes on main.
-# Steps: read VERSION, require a matching "## X.Y.Z" section in CHANGELOG.md,
-# sync package.json, run the tests, tag vX.Y.Z and
-# create a GitHub Release with that changelog section as notes.
-# An existing tag or release is never moved or overwritten.
-# "Run workflow" (manual) also publishes a missing release for the current VERSION.
+# Publishes a release from Conventional Commits on every push to main.
+# scripts/release.py reads the commits since the last vX.Y.Z tag: feat → minor,
+# fix/perf → patch, `!` or a BREAKING CHANGE footer → major. A hand-made bump of
+# VERSION with its own CHANGELOG section is released as written. The workflow
+# commits VERSION, package.json and CHANGELOG.md as "chore(release): vX.Y.Z",
+# runs the tests, tags and creates the GitHub Release. Tags and releases are
+# never moved or overwritten. "Run workflow" (manual) does the same on demand.
 
 on:
   push:
     branches: [main]
-    paths: [VERSION, .github/workflows/release.yml]
   workflow_dispatch:
 
 permissions:
@@ -22,6 +22,7 @@ concurrency:
 
 jobs:
   release:
+    if: ${{ !startsWith(github.event.head_commit.message, 'chore(release)') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -36,65 +37,35 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Read version and changelog section
-        id: meta
-        run: |
-          set -euo pipefail
-          VERSION="$(tr -d '[:space:]' < VERSION)"
-          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "::error file=VERSION::VERSION must look like 1.2.0, found '$VERSION'"
-            exit 1
-          fi
-          awk -v v="$VERSION" '
-            $0 == "## " v { found = 1; next }
-            found && /^## / { exit }
-            found { print }
-          ' CHANGELOG.md > release-notes.md
-          if ! grep -q '[^[:space:]]' release-notes.md; then
-            echo "::error file=CHANGELOG.md::No section '## $VERSION' with content in CHANGELOG.md. Add it at the top and push again."
-            exit 1
-          fi
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
-
-      - name: Sync package.json
-        run: |
-          set -euo pipefail
-          V="${{ steps.meta.outputs.version }}"
-          node -e '
-            const fs = require("fs");
-            const p = JSON.parse(fs.readFileSync("package.json", "utf8"));
-            if (p.version !== process.argv[1]) {
-              p.version = process.argv[1];
-              fs.writeFileSync("package.json", JSON.stringify(p, null, 2) + "\n");
-            }
-          ' "$V"
+      - name: Plan the release
+        id: plan
+        run: python3 scripts/release.py --write --notes release-notes.md --github-output "$GITHUB_OUTPUT"
 
       - name: Run tests
+        if: steps.plan.outputs.release == 'true'
         run: |
           npm install --no-audit --no-fund
+          python3 -m pip install --quiet pyflakes
           npm test
-          python3 tools/check.py tests/fixtures/minimal-cli
-          python3 tools/check.py tests/fixtures/monorepo-mini
-          python3 tools/audit.py --root tests/fixtures/monorepo-mini
+          npm run check
 
-      - name: Commit synced files
+      - name: Commit the release files
+        if: steps.plan.outputs.release == 'true' && steps.plan.outputs.changed == 'true'
         run: |
           set -euo pipefail
-          if [ -n "$(git status --porcelain -- package.json)" ]; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add package.json
-            git commit -m "release: sync package.json for ${{ steps.meta.outputs.tag }}"
-            git push origin HEAD:main
-          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add VERSION package.json CHANGELOG.md
+          git commit -m "chore(release): ${{ steps.plan.outputs.tag }}"
+          git push origin HEAD:main
 
-      - name: Tag and publish release
+      - name: Tag and publish
+        if: steps.plan.outputs.release == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          TAG="${{ steps.meta.outputs.tag }}"
+          TAG="${{ steps.plan.outputs.tag }}"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then

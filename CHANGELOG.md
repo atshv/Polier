@@ -2,6 +2,24 @@
 
 Each release lists what a running project must do to adopt it. Update between stages, never during a task (see `guide/cheatsheet.md`). The current version is in `VERSION`; projects record theirs in `board.json` → `generator_version`. A release is published automatically when `VERSION` changes on `main` (`.github/workflows/release.yml`).
 
+## 4.1.0
+
+**What REA does well, applied to Polier.** Studied how [morluto/rea](https://github.com/morluto/rea) runs its repository — not its code — and took over what fits a DeepSeek Harness plugin.
+
+**Automatic versions.** Commits follow Conventional Commits. On every push to `main`, `scripts/release.py` reads the commits since the last tag (`feat` → minor, `fix`/`perf` → patch, `!` or `BREAKING CHANGE` → major), writes `VERSION`, `package.json` and a `CHANGELOG.md` section, and the release workflow tags and publishes. A hand-written section still wins when `VERSION` is bumped by hand.
+
+**Plan, then approval, for the start too.** `pl_factory` `init` shows the owner the planned line — platforms, traits and the item count per station — in an approval prompt and writes `factory.json` only on yes. The last command-line step of a new project is gone. `tools/factory.py init --dry-run` gives the same plan headless.
+
+**Results with the next step.** `pl_factory` writes return the station, the remaining open items and what to do next; `pl_gate` says how to use a passing record and what a failure or a busy resource means.
+
+**A generated tool reference.** `docs/tools.md` is generated from the plugin's tool definitions and the guide (`npm run docs`), so it cannot drift from what the model sees.
+
+**Checks beyond the tests.** `npm run check` (`scripts/check.py`) fails on stale generated pages, pyflakes findings, unused exports in `plugin/lib` and modules that do not parse; CI and the release run it. Internal helpers that were exported without a user are module-private now.
+
+**Repository files.** `CONTRIBUTING.md`, `SECURITY.md`, `docs/architecture.md`; `AGENTS.md` gains the commit rules, the check command and the reporting rule (observed, inferred, not checked).
+
+**Compatibility.** No project file changes. Update the plugin and restart DSH.
+
 ## 4.0.0
 
 **Built for DeepSeek Harness, without commands.** 3.0 made Polier a software factory; 4.0 makes it live inside the DSH agent loop. Nobody types `/pl` or a Python line any more: the model sees the state on every step, the human talks plainly, and every human decision is a real DSH approval prompt.

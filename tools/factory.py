@@ -2,7 +2,7 @@
 """The software factory line: from idea to operation, station by station.
 
 Usage:
-    python3 tools/factory.py init --platforms web,ios [--traits accounts,payments] [--by NAME]
+    python3 tools/factory.py init --platforms web,ios [--traits accounts,payments] [--by NAME] [--dry-run --json]
     python3 tools/factory.py scope [--platforms …] [--traits …] [--by NAME]
     python3 tools/factory.py status [--json]
     python3 tools/factory.py next [--json] [--limit N]
@@ -106,6 +106,8 @@ def main(argv=None) -> int:
     p.add_argument("--traits", action="append", default=[], help="comma list, e.g. accounts,payments")
     p.add_argument("--by", help="who starts it")
     p.add_argument("--force", action="store_true", help="overwrite an existing factory.json")
+    p.add_argument("--dry-run", action="store_true", help="show what would be written, write nothing")
+    p.add_argument("--json", action="store_true")
 
     p = add("scope", "change platforms or traits")
     p.add_argument("--platforms", action="append")
@@ -169,6 +171,16 @@ def main(argv=None) -> int:
     root = Path(args.root).resolve()
 
     try:
+        if args.command == "init" and args.dry_run:
+            value = factory.preview(_list(args.platforms), _list(args.traits))
+            value["exists"] = factory.path_of(root).exists()
+            if args.json:
+                _json(value)
+            else:
+                print(f"would write factory.json: {value['items']} items for {', '.join(value['platforms'])}")
+                for station, count in value["stations"].items():
+                    print(f"  {station:<13} {count}")
+            return 0
         if args.command == "init":
             data = factory.init(root, _list(args.platforms), _list(args.traits), by=args.by, force=args.force)
             print(f"factory.json written: {len(data['items'])} items for {', '.join(data['platforms'])}")

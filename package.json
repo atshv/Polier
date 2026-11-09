@@ -1,6 +1,6 @@
 {
   "name": "dsh-polier",
-  "version": "4.0.0",
+  "version": "4.1.0",
   "description": "AI software factory for DeepSeek Harness: runs a project through nine stations from idea to operation (web, iOS, Android, desktop, CLI, services), shows the live state in every model step, turns every owner decision into an approval prompt and keeps builder agents to the plan with a write guard, recorded test evidence and reviews.",
   "license": "MIT",
   "repository": {
@@ -58,6 +58,8 @@
     "@deepseek-ai/dsh-tools": "0.2.2-rc.1"
   },
   "scripts": {
-    "test": "node --test plugin/test/*.test.mjs && python3 -m unittest discover -s tests && python3 -m unittest discover -s core/tests -t ."
+    "test": "node --test plugin/test/*.test.mjs && python3 -m unittest discover -s tests && python3 -m unittest discover -s core/tests -t .",
+    "check": "python3 scripts/check.py",
+    "docs": "node scripts/tools-doc.mjs && python3 tools/factory.py catalog --write"
   }
 }

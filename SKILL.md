@@ -11,7 +11,7 @@ description: AI software factory for DeepSeek Harness. Runs a software project t
 
 | Intent of the human | Tool |
 |---|---|
-| start the line | `bash`: `python3 <skill-folder>/tools/factory.py init --platforms … --traits …` (once) |
+| start the line | `pl_factory` init with platforms and traits — the owner sees the plan and approves it |
 | what is open, what next | read `<polier>`; details with `pl_factory` (next) or `pl_next` |
 | record an item | `pl_factory` done (evidence), na or defer (reason), link (tasks) |
 | close a station | `pl_factory` advance — the owner answers the approval prompt |

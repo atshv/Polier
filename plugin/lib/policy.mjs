@@ -29,7 +29,7 @@ import path from 'node:path'
 
 import { CASE_INSENSITIVE, normalized } from './project.mjs'
 
-export const POLICY = 'policy.json'
+const POLICY = 'policy.json'
 /** Approvals live next to the run records, one file per approval (JSON). */
 export const APPROVALS = 'reviews/approvals'
 
@@ -571,7 +571,7 @@ export function commandDenial(policy, command, role = 'worker') {
 // ---------------------------------------------------------------------------
 
 /** Every readable approval record; a broken file is ignored, like the Python reader. */
-export function loadApprovals(root) {
+function loadApprovals(root) {
   const folder = path.join(String(root ?? ''), APPROVALS)
   let names
   try {

@@ -151,7 +151,7 @@ Close the interview with a 5–10 line summary: profile, topology, platforms and
 ### A4 Start the line
 
 1. Write `project-input.md` from `templates/project-input.md` with the owner's answers.
-2. `python3 <package>/tools/factory.py init --platforms <list> --traits <list> --by <owner>` writes `factory.json` with the items that apply. Show the item count per station (`factory.py status`).
+2. `pl_factory` init with the platforms and traits: the owner sees the planned item count per station in an approval prompt, and `factory.json` is written only on yes (headless: `tools/factory.py init --platforms … --traits … --by <owner>`).
 3. Resolve the idea items: `factory.py done IDEA-01 --evidence project-input.md` …; `IDEA-05` points to `factory.json`; `na`/`defer` with a reason where it fits.
 4. `factory.py render`, then ask the owner to close the station; on yes: `factory.py advance --by <owner>`.
 

@@ -72,6 +72,7 @@ Die vollständige Checkliste – 175 Punkte, jeweils mit den Plattformen und Eig
 
 - **Ablauf** – [`prompt/generator.md`](prompt/generator.md) · **In DSH** – [`prompt/dsh.md`](prompt/dsh.md) · **Dein Teil** – [`guide/cheatsheet.md`](guide/cheatsheet.md) (Englisch)
 - **Grenzen** – Polier ist keine Sandbox, siehe [was der Guard nicht abdeckt](docs/guard-limits.md) (Englisch)
-- **Mitmachen** – [`AGENTS.md`](AGENTS.md) · **Änderungen** – [`CHANGELOG.md`](CHANGELOG.md)
+- **Tools** – [`docs/tools.md`](docs/tools.md) · **Aufbau** – [`docs/architecture.md`](docs/architecture.md) (Englisch)
+- **Mitmachen** – [`CONTRIBUTING.md`](CONTRIBUTING.md), [`AGENTS.md`](AGENTS.md) · **Sicherheit** – [`SECURITY.md`](SECURITY.md) · **Änderungen** – [`CHANGELOG.md`](CHANGELOG.md)
 
 Tests: `npm install && npm test`. Lizenz: [MIT](LICENSE).

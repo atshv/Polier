@@ -26,11 +26,7 @@ jobs:
         run: python3 tools/check.py tests/fixtures/monorepo-mini
       - name: Reference L evidence chain passes audit.py
         run: python3 tools/audit.py --root tests/fixtures/monorepo-mini
-      - name: Factory catalog page is current
-        run: |
-          python3 tools/factory.py catalog > /tmp/CATALOG.md
-          diff -u factory/CATALOG.md /tmp/CATALOG.md
-      - name: No dead imports or names
+      - name: Generated pages, dead code, syntax
         run: |
           python3 -m pip install --quiet pyflakes
-          python3 -m pyflakes core tools tests/*.py
+          npm run check

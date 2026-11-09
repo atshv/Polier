@@ -17,11 +17,11 @@ const XARGS_VALUE_OPTIONS = new Set(['-n', '--max-args', '-I', '--replace', '-P'
   '-d', '--delimiter', '-L', '--max-lines', '-s', '--max-chars', '-E', '--eof'])
 
 /** Always writable: gate logs and records belong to the task that produced them. */
-export const ALWAYS_ALLOWED = ['reviews/evidence']
+const ALWAYS_ALLOWED = ['reviews/evidence']
 /** Lead-owned (1.1): the board, the generated status, the briefs and the run records. */
-export const BOARD_FILES = ['board.json', 'STATUS.md', 'tasks', 'runs']
+const BOARD_FILES = ['board.json', 'STATUS.md', 'tasks', 'runs']
 /** The only folder a reviewer session writes to. */
-export const REVIEWS = 'reviews'
+const REVIEWS = 'reviews'
 /** Approval records are the approver's: a reviewer writes review material, never approvals. */
 export const APPROVALS = 'reviews/approvals'
 
@@ -62,7 +62,7 @@ function gitValue(root, args) {
 }
 
 /** True when `root` is the main working tree; false in a linked worktree or outside git. */
-export function isMainCheckout(root) {
+function isMainCheckout(root) {
   if (!root) return false
   const key = String(root)
   if (mainCheckoutCache.has(key)) return mainCheckoutCache.get(key)
@@ -86,7 +86,7 @@ export function isMainCheckout(root) {
  * M/L default to required on a 1.0 board and to recommended on a 0.9 board
  * (migration: an existing project keeps working until its owner opts in).
  */
-export function worktreeMode(board) {
+function worktreeMode(board) {
   if (!board || typeof board !== 'object') return 'off'
   if (['required', 'recommended', 'off'].includes(board.worktrees)) return board.worktrees
   if (board.profile !== 'M' && board.profile !== 'L') return 'off'
@@ -94,7 +94,7 @@ export function worktreeMode(board) {
 }
 
 /** The worktree a worker must use instead of the main checkout, or undefined (PL-05). */
-export function worktreeDenial(tasks, { board, root } = {}) {
+function worktreeDenial(tasks, { board, root } = {}) {
   if (!root || worktreeMode(board) !== 'required') return undefined
   const tree = (tasks ?? []).find((t) => typeof t?.worktree === 'string' && t.worktree.trim())?.worktree
   if (!tree) return undefined
@@ -161,7 +161,7 @@ export function activeTasks(board, { root, cwd, pinned }) {
  * two arguments the decision is the one the shared write_cases.json table pins.
  * @returns {{ ok: true } | { ok: false, reason: string, code: string }}
  */
-export function decide(rel, tasks, context = {}) {
+function decide(rel, tasks, context = {}) {
   if (rel === '..' || rel.startsWith('../') || path.isAbsolute(rel)) {
     return { ok: false, code: 'outside-project', reason: 'is outside the project folder' }
   }
@@ -208,14 +208,14 @@ export function checkPath(rel, tasks, role = 'worker', context = {}) {
 
 /** Ready tasks: pending, every dependency done. Same rule as tools/render_status.py. */
 /** Ids of the declared stages, in board order (PL-08). */
-export function stageIds(board) {
+function stageIds(board) {
   return (Array.isArray(board?.stages) ? board.stages : [])
     .filter((s) => s && typeof s === 'object' && typeof s.id === 'string')
     .map((s) => s.id)
 }
 
 /** The stages[].id a task belongs to; an integer stage counts from 1. */
-export function taskStageId(board, task) {
+function taskStageId(board, task) {
   const ids = stageIds(board)
   if (ids.length === 0) return undefined
   const value = task?.stage
@@ -231,7 +231,7 @@ function stageGateSatisfied(members, gate) {
 }
 
 /** One entry per declared stage: stop state, owner decision, missing exit gates, completeness. */
-export function stageReport(board) {
+function stageReport(board) {
   const tasks = (board?.tasks ?? []).filter((t) => t && typeof t === 'object')
   const stages = (Array.isArray(board?.stages) ? board.stages : []).filter((s) => s && typeof s === 'object')
   const report = new Map()

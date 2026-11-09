@@ -236,6 +236,22 @@ def _event(data: Dict[str, Any], kind: str, by: Optional[str] = None, **fields: 
     data.setdefault("history", []).append(entry)
 
 
+def preview(platforms: List[str], traits: List[str]) -> Dict[str, Any]:
+    """What init would write: the scope and the item count per station, without writing."""
+    catalog = load_catalog()
+    platforms = sorted(dict.fromkeys(p.strip().lower() for p in platforms if p.strip()))
+    declared = sorted(dict.fromkeys(t.strip().lower() for t in traits if t.strip()))
+    validate_scope(platforms, declared, catalog)
+    resolved = resolve_traits(platforms, declared, catalog)
+    items = applicable_items(platforms, resolved, catalog)
+    return {
+        "platforms": platforms,
+        "traits": resolved,
+        "items": len(items),
+        "stations": {sid: sum(1 for item in items if item["station"] == sid) for sid in station_ids(catalog)},
+    }
+
+
 def init(root, platforms: List[str], traits: List[str], by: Optional[str] = None,
          force: bool = False) -> Dict[str, Any]:
     """Create factory.json: scope, applicable items (all open), first station active."""

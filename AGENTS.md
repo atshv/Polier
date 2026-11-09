@@ -12,14 +12,16 @@ Polier is a DeepSeek Harness plugin plus the Python rules and tools it calls. Th
 | `factory/` | `catalog.json` (source) and `CATALOG.md` (generated) |
 | `prompt/`, `templates/`, `guide/` | the process, the rubric, document templates, the owner's cheatsheet |
 | `tests/` | tool tests; `tests/fixtures/` holds the S and L reference projects |
+| `scripts/` | repository scripts: `check.py`, `tools-doc.mjs`, `release.py` |
+| `docs/` | `architecture.md`, `tools.md` (generated), `guard-limits.md` |
 
 ## Commands
 
 - All tests: `npm install && npm test`
 - Plugin only: `node --test plugin/test/*.test.mjs`
 - Python only: `python3 -m unittest discover -s tests && python3 -m unittest discover -s core/tests -t .`
-- Catalog page: `python3 tools/factory.py catalog --write` after every change to `factory/catalog.json`
-- Lint: `python3 -m pyflakes core tools tests` must be silent (outside `tests/fixtures/`)
+- Checks: `npm run check` — generated pages current, pyflakes silent, no unused export in `plugin/lib`, every module parses (needs `pip install pyflakes`)
+- Generated pages: `npm run docs` after changing a tool definition, the guide or `factory/catalog.json`
 
 ## Rules
 
@@ -29,8 +31,10 @@ Polier is a DeepSeek Harness plugin plus the Python rules and tools it calls. Th
 - The live context must stay short and must be empty outside a Polier project.
 - Store and legal facts in the catalog or templates carry `[VERIFY: …]` unless a dated source backs them.
 - No dead code: a function only a test uses, a helper of a removed feature or an unused export goes.
-- Nothing private or project-specific in examples, templates or tests.
+- Nothing private or project-specific in templates, fixtures or tests.
+- Tool results say what happened and what comes next (`next`, `remaining`); reports to the human separate what was observed, what was inferred and what was not checked.
+- Tests use the real harness packages and the fixtures in `tests/fixtures/`, not module mocks. Do not freeze arbitrary caps or call orders in tests.
 
-## Releasing
+## Commits and releases
 
-Bump `VERSION`, add a `## X.Y.Z` section at the top of `CHANGELOG.md` with what a running project must do, push to `main`. The release workflow syncs `package.json`, runs the tests, tags `vX.Y.Z` and publishes the notes.
+Commit subjects follow Conventional Commits: `feat:`, `fix:`, `perf:`, `docs:`, `test:`, `ci:`, `chore:`, `refactor:`, with an optional scope (`feat(plugin): …`). A breaking change gets `!` (`feat!: …`) or a `BREAKING CHANGE:` footer. On every push to `main`, `scripts/release.py` reads the commits since the last tag — `feat` → minor, `fix`/`perf` → patch, breaking → major — writes `VERSION`, `package.json` and a `CHANGELOG.md` section, and the release workflow tags `vX.Y.Z` and publishes the notes. For a release with hand-written notes, bump `VERSION` and add the `## X.Y.Z` section yourself in the same push. Never move or reuse a tag.

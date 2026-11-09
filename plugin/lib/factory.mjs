@@ -6,13 +6,13 @@
 import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 
-export const FACTORY = 'factory.json'
+const FACTORY = 'factory.json'
 const RESOLVED = new Set(['done', 'deferred', 'na'])
 
 let catalogCache
 
 /** The package catalog (factory/catalog.json), read once. */
-export function loadCatalog(packageDir) {
+function loadCatalog(packageDir) {
   if (catalogCache?.dir === packageDir) return catalogCache.value
   const value = JSON.parse(readFileSync(path.join(packageDir, 'factory', 'catalog.json'), 'utf8'))
   catalogCache = { dir: packageDir, value }
@@ -20,7 +20,7 @@ export function loadCatalog(packageDir) {
 }
 
 /** factory.json of a project, or undefined when it has none or it does not parse. */
-export function loadFactory(root) {
+function loadFactory(root) {
   const file = path.join(String(root), FACTORY)
   if (!existsSync(file)) return undefined
   try {

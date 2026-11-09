@@ -284,5 +284,16 @@ class Tooling(unittest.TestCase):
 
 
 
+class Preview(unittest.TestCase):
+    def test_dry_run_writes_nothing(self):
+        root = make_project([])
+        result = run(root, "init", "--platforms", "ios", "--dry-run", "--json")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        value = json.loads(result.stdout)
+        self.assertGreater(value["stations"]["release"], 0)
+        self.assertFalse(value["exists"])
+        self.assertFalse((root / "factory.json").exists())
+
+
 if __name__ == "__main__":
     unittest.main()

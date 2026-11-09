@@ -55,7 +55,7 @@ function py(config, file, ...args) {
 }
 
 /** Ask the human through the harness approval service; fails closed without one. */
-export async function askOwner(ctx, exec, reason) {
+async function askOwner(ctx, exec, reason) {
   const service = ctx.get?.('approval')
   if (!service || typeof service.request !== 'function') {
     return { ok: false, outcome: 'unavailable', note: 'no approval prompt in this harness profile; the owner runs the matching tools/*.py command instead' }
@@ -155,10 +155,16 @@ export function tools(ctx, config) {
       const record = last.startsWith('record: ') ? last.slice(8).trim() : null
       const busy = result.code === 75
       const summary = (record ? lines.slice(0, -1) : lines).join('\n').slice(-4000)
+      const passed = result.code === 0 && record !== null
       return {
         task: args.task,
         gate: args.gate,
-        passed: result.code === 0 && record !== null,
+        passed,
+        next: busy
+          ? 'The gate did not run: wait for the resource or rerun alone; a BUSY record is not evidence.'
+          : passed
+            ? `Put ${record} into your result as evidence for ${args.gate}.`
+            : 'Find the cause in the failing lines and fix it; this is the same attempt. Never change a test to make it pass.',
         busy,
         exit_code: result.code,
         record,
@@ -252,11 +258,13 @@ export function tools(ctx, config) {
 
   const factory = jsonTool({
     name: 'pl_factory',
-    description: 'The factory line (factory.json). Read: status, next (open items of the current station with the evidence they need). Write (lead, or any session while no task runs): done (with evidence paths, optionally #heading), na or defer (with a reason), reopen, link (board tasks that deliver an item). advance asks the owner in an approval prompt and closes the current station. docs/factory.md is regenerated after every change.',
+    description: 'The factory line (factory.json). init shows the owner the planned line (platforms, traits, items per station) in an approval prompt and writes it only on yes. Read: status, next (open items of the current station with the evidence they need). Write (lead, or any session while no task runs): done (with evidence paths, optionally #heading), na or defer (with a reason), reopen, link (board tasks that deliver an item). advance asks the owner and closes the current station. Every write returns what is left and the next step; docs/factory.md is regenerated.',
     parameters: {
       type: 'object',
       properties: {
-        action: { type: 'string', enum: ['status', 'next', 'done', 'na', 'defer', 'reopen', 'link', 'advance'], description: 'Default: next.' },
+        action: { type: 'string', enum: ['init', 'status', 'next', 'done', 'na', 'defer', 'reopen', 'link', 'advance'], description: 'Default: next.' },
+        platforms: { type: 'array', items: { type: 'string' }, description: 'For init: web, ios, android, desktop, cli, service.' },
+        traits: { type: 'array', items: { type: 'string' }, description: 'For init: accounts, payments, personal_data, uploads, realtime, notifications, offline, i18n, ai, analytics, location, public, eu_users, cross_platform, brownfield.' },
         item: { type: 'string', description: 'Checklist item ID, e.g. BLD-30.' },
         evidence: { type: 'array', items: { type: 'string' }, description: 'Project paths for done, e.g. docs/concept.md#user-stories.' },
         reason: { type: 'string', description: 'Reason for na or defer; a note for advance.' },
@@ -265,8 +273,9 @@ export function tools(ctx, config) {
       },
     },
     async execute(args, exec) {
-      const root = projectRoot(ctx, exec.agent, args.project)
       const action = typeof args.action === 'string' && args.action ? args.action : 'next'
+      if (action === 'init') return initLine(args, exec)
+      const root = projectRoot(ctx, exec.agent, args.project)
       const base = py(config, 'factory.py', '--root', root)
       if (action === 'status' || action === 'next') {
         const result = await run(ctx, exec.agent, [...base, action, '--json'], { cwd: root, timeoutMs: 60_000, signal: exec.signal })
@@ -297,10 +306,46 @@ export function tools(ctx, config) {
       if (action === 'link') argv.push('--task', (args.tasks ?? []).map(String).join(','))
       argv.push('--by', stateOf(exec.agent).role === 'lead' ? 'lead' : 'planner')
       const result = await run(ctx, exec.agent, argv, { cwd: root, timeoutMs: 60_000, signal: exec.signal })
-      if (result.code === 0) await render(ctx, config, exec.agent, root, exec.signal)
-      return { ok: result.code === 0, action, item, exit_code: result.code, output: outputOf(result) }
+      if (result.code !== 0) return { ok: false, action, item, exit_code: result.code, output: outputOf(result) }
+      await render(ctx, config, exec.agent, root, exec.signal)
+      return { ok: true, action, item, output: outputOf(result), ...(await whatIsLeft(base, root, exec)) }
     },
   })
+
+  /** After a write: the station, its remaining open items and the next step. */
+  async function whatIsLeft(base, root, exec) {
+    const view = lastJson((await run(ctx, exec.agent, [...base, 'next', '--json'], { cwd: root, timeoutMs: 60_000, signal: exec.signal })).stdout)
+    if (!view?.station) return { next: 'Every station is closed.' }
+    const remaining = (view.items ?? []).map((item) => item.id)
+    return {
+      station: view.station,
+      remaining,
+      next: remaining.length
+        ? `${remaining.length} open item(s) in station ${view.station}; next: ${remaining[0]}.`
+        : `Station ${view.station} has no open item: ask the owner to close it with pl_factory advance.`,
+    }
+  }
+
+  /** Start the line: show the plan, ask the owner, write only on yes. */
+  async function initLine(args, exec) {
+    const base = agentCwd(ctx, exec.agent)
+    const root = args.project ? path.resolve(base, args.project) : base
+    const platforms = (args.platforms ?? []).map(String).join(',')
+    if (!platforms) throw new Error('pl_factory init needs platforms, e.g. ["web"] or ["ios", "android"]')
+    const traits = (args.traits ?? []).map(String).join(',')
+    const argv = py(config, 'factory.py', '--root', root, 'init', '--platforms', platforms, ...(traits ? ['--traits', traits] : []))
+    const preview = await run(ctx, exec.agent, [...argv, '--dry-run', '--json'], { cwd: root, timeoutMs: 60_000, signal: exec.signal })
+    const planned = lastJson(preview.stdout)
+    if (preview.code !== 0 || !planned) return { ok: false, error: outputOf(preview) || `exit ${preview.code}` }
+    if (planned.exists) return { ok: false, error: `factory.json already exists in ${root}; change the scope instead of starting again` }
+    const perStation = Object.entries(planned.stations).filter(([, n]) => n > 0).map(([id, n]) => `${id} ${n}`).join(', ')
+    const answer = await askOwner(ctx, exec, `Start the Polier line in ${root}: ${planned.items} checklist items for ${planned.platforms.join(', ')} (traits ${planned.traits.join(', ') || 'none'}; ${perStation})?`)
+    if (!answer.ok) return { ok: false, planned, approval: answer.outcome, ...(answer.note ? { note: answer.note } : {}) }
+    const result = await run(ctx, exec.agent, [...argv, '--by', `${config.owner} (approved in DSH)`], { cwd: root, timeoutMs: 60_000, signal: exec.signal })
+    if (result.code !== 0) return { ok: false, planned, output: outputOf(result) }
+    await render(ctx, config, exec.agent, root, exec.signal)
+    return { ok: true, planned, ...(await whatIsLeft(py(config, 'factory.py', '--root', root), root, exec)) }
+  }
 
   const mode = jsonTool({
     name: 'pl_mode',

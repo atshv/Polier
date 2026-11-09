@@ -72,6 +72,7 @@ The full checklist — 175 items, each with the platforms and traits it applies 
 
 - **Process** — [`prompt/generator.md`](prompt/generator.md) · **In DSH** — [`prompt/dsh.md`](prompt/dsh.md) · **Your part** — [`guide/cheatsheet.md`](guide/cheatsheet.md)
 - **Limits** — Polier is not a sandbox: [what the guard does not cover](docs/guard-limits.md)
-- **Contributing** — [`AGENTS.md`](AGENTS.md) · **Changes** — [`CHANGELOG.md`](CHANGELOG.md)
+- **Tools** — [`docs/tools.md`](docs/tools.md) · **Architecture** — [`docs/architecture.md`](docs/architecture.md)
+- **Contributing** — [`CONTRIBUTING.md`](CONTRIBUTING.md), [`AGENTS.md`](AGENTS.md) · **Security** — [`SECURITY.md`](SECURITY.md) · **Changes** — [`CHANGELOG.md`](CHANGELOG.md)
 
 Tests: `npm install && npm test`. Licence: [MIT](LICENSE).

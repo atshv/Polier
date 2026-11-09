@@ -6,6 +6,8 @@ Polier is built for the DeepSeek Harness (DSH). This file maps each station of `
 
 ## 0. No commands: what the plugin gives every session
 
+Every tool, parameter and the guide text are listed in [`docs/tools.md`](../docs/tools.md), generated from the plugin code.
+
 | Seam | What Polier does with it |
 |---|---|
 | Runtime context (`ctx.systemPrompt.context`) | A live `<polier>` block in every model step: project, role, the factory station with its open items, the running task with scope and gates, ready tasks, policy limits, pending approvals and the next sensible move. Empty outside a Polier project. |
@@ -61,7 +63,7 @@ Runtime and orchestration state are not a harness feature; they are files shared
 |---|---|---|---|
 | all | `todo_write` | One item per phase (A, B, C+D, E, F, G, H, I); mark each when its approval or check is done. | none needed |
 | A1 tool check | session tool list | Fill in section 1 for this session and name the fallbacks in the profile proposal. With the plugin the `pl_*` tools and the `<polier>` block exist; without it, call `tools/*.py` with `bash`. | ask the user |
-| A4 start the line | `bash` once, then `pl_factory` | `python3 <package>/tools/factory.py init --platforms … --traits …`; from then on `pl_factory` records items and `pl_factory advance` asks the owner to close the station. | `tools/factory.py` |
+| A4 start the line | `pl_factory` init | Shows the owner the planned line (items per station) in an approval prompt and writes `factory.json` only on yes; then `pl_factory` records items and `pl_factory advance` asks the owner to close the station. Full parameters: `docs/tools.md`. | `tools/factory.py init` |
 | every station | `create_goal` | When the human asks to finish a station, a goal such as "Close Polier station concept: resolve every open item with evidence"; the `<polier>` block shows what is left in each round. | work turn by turn |
 | A2 interview | `ask_user_question` | Max. 10 questions per call. Give `options` where the answer space is closed (mode, profile, platform, yes/no), with the recommended option first; free text otherwise. | questions in chat |
 | A, B, F facts | `web_search`, `web_fetch` | Check library versions, APIs and formats before writing them down. Record the answer with `tools/research.py note` and versions with `tools/research.py versions --lookup --write`; briefs link the note. | `[UNVERIFIED]` + ask |
