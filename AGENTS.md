@@ -16,7 +16,8 @@ Polier is a DeepSeek Harness plugin and a Claude Code plugin plus the Python rul
 | `prompt/`, `templates/`, `guide/` | the process, the rubric, document templates, the owner's cheatsheet |
 | `tests/` | tool tests; `tests/fixtures/` holds the S and L reference projects |
 | `scripts/` | repository scripts: `check.py`, `tools-doc.mjs`, `roles-doc.py`, `claude-plugin.py`, `release.py` |
-| `docs/` | `architecture.md`, `tools.md` and `roles.md` (generated), `guard-limits.md` |
+| `docs/` | `architecture.md`, `tools.md` and `roles.md` (generated), `guard-limits.md`; the plan files of the Polier-next line (below) |
+| `board.json`, `factory.json`, `policy.json`, `ARCHITECTURE.md`, `STATUS.md`, `tasks/`, `runs/`, `reviews/` | Polier run on itself: the Polier-next line (`project-input.md`, `docs/concept.md`) |
 
 ## Commands
 
@@ -38,6 +39,15 @@ Polier is a DeepSeek Harness plugin and a Claude Code plugin plus the Python rul
 - Nothing private or project-specific in templates, fixtures or tests.
 - Tool results say what happened and what comes next (`next`, `remaining`); reports to the human separate what was observed, what was inferred and what was not checked.
 - Tests use the real harness packages and the fixtures in `tests/fixtures/`, not module mocks. Do not freeze arbitrary caps or call orders in tests.
+
+## The Polier-next line
+
+This repository is also a Polier project (profile S): Polier builds its next features with itself. `STATUS.md` shows the state, `docs/orchestration.md` the loop.
+
+- The lead picks work with `pl_next` and records status with `pl_state` (task and status, e.g. `M01`, `in_progress`); a worker calls `pl_role` and `pl_task <ID>` first, writes only its task's scope, proves it with `pl_gate` (gate names from `board.json`, commands in `docs/gates/`) and checks `pl_scope_check` and `git status` before it reports.
+- Approvals only with `pl_approval`: any change to `package.json` needs `new_dependency`; `policy.json`, `VERSION`, `CHANGELOG.md` and the release workflow are protected paths (lead only; `protected_path` approval).
+- Never edit `board.json`, `factory.json`, `runs/` or `reviews/approvals/` by hand.
+- One commit per task, in Conventional Commits form with the task ID: `feat(retro): error classes from project records (M03)`.
 
 ## Commits and releases
 

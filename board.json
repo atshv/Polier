@@ -1,0 +1,474 @@
+{
+  "project": "polier-next",
+  "profile": "S",
+  "base_branch": "main",
+  "generator_version": "0.4.7",
+  "stage": 1,
+  "decisions": [
+    {
+      "date": "2026-11-12",
+      "id": "ADR-0001",
+      "title": "Process evals with claude plugin eval against the real plugin",
+      "file": "docs/adr/ADR-0001-process-evals.md"
+    },
+    {
+      "date": "2026-11-12",
+      "id": "ADR-0002",
+      "title": "The retro reads project records read-only",
+      "file": "docs/adr/ADR-0002-retro-read-only.md"
+    },
+    {
+      "date": "2026-11-12",
+      "id": "ADR-0003",
+      "title": "Change proposals as approved deltas",
+      "file": "docs/adr/ADR-0003-change-proposals.md"
+    },
+    {
+      "date": "2026-11-12",
+      "id": "ADR-0004",
+      "title": "The quick track is an ordinary task",
+      "file": "docs/adr/ADR-0004-quick-track.md"
+    }
+  ],
+  "open_questions": [
+    {
+      "id": "Q1",
+      "question": "Which agent and judge model IDs does the eval workflow pin, and which Anthropic terms apply to the CI account?",
+      "blocks": [
+        "M02"
+      ],
+      "status": "open"
+    }
+  ],
+  "budgets": {
+    "architecture": {
+      "limit": 800,
+      "reason": "one page for four features in an existing package; split if it grows"
+    },
+    "agents": {
+      "limit": 900,
+      "reason": "the repository's contributor guide and the line's agent contract share one file"
+    }
+  },
+  "tasks": [
+    {
+      "id": "M01",
+      "title": "Process eval suite",
+      "goal": "evals/ holds eight process cases that claude plugin eval runs against the real plugin.",
+      "why": "Every later change is measured against these cases (F1, ADR-0001).",
+      "satisfies": [
+        "D1"
+      ],
+      "status": "pending",
+      "depends_on": [],
+      "complexity": 6,
+      "stage": 1,
+      "parallel_group": null,
+      "role": "backend-builder",
+      "scope_write": [
+        "evals/",
+        ".gitignore"
+      ],
+      "scope_read": [
+        "ARCHITECTURE.md",
+        "AGENTS.md",
+        "docs/module-map.md"
+      ],
+      "acceptance": [
+        "A1",
+        "A2",
+        "A3",
+        "A4",
+        "A5"
+      ],
+      "gates": [
+        "check",
+        "validate",
+        "evals-smoke"
+      ],
+      "owner": null,
+      "branch": "task/M01",
+      "worktree": null,
+      "round": 0,
+      "evidence": [],
+      "scope_write_forbidden": [],
+      "handoff": []
+    },
+    {
+      "id": "M02",
+      "title": "Eval runner and workflow",
+      "goal": "npm run evals runs the suite with the ADR-0001 flags locally and in a manual CI workflow.",
+      "why": "The owner and CI need one command and a cost ceiling (F1, D1).",
+      "satisfies": [
+        "D1"
+      ],
+      "status": "pending",
+      "depends_on": [
+        "M01"
+      ],
+      "complexity": 3,
+      "stage": 1,
+      "parallel_group": null,
+      "role": "backend-builder",
+      "scope_write": [
+        "package.json",
+        ".github/workflows/evals.yml",
+        "prompt/claude-code.md",
+        "AGENTS.md"
+      ],
+      "scope_read": [
+        "ARCHITECTURE.md",
+        "AGENTS.md",
+        "docs/module-map.md"
+      ],
+      "acceptance": [
+        "A1",
+        "A2",
+        "A3",
+        "A4"
+      ],
+      "gates": [
+        "check",
+        "validate",
+        "line"
+      ],
+      "owner": null,
+      "branch": "task/M02",
+      "worktree": null,
+      "round": 0,
+      "evidence": [],
+      "scope_write_forbidden": [],
+      "handoff": []
+    },
+    {
+      "id": "M03",
+      "title": "Retro over project records",
+      "goal": "tools/retro.py names error classes from the records of the folders it is given, read-only.",
+      "why": "Polier changes only for named classes of errors (F2, ADR-0002).",
+      "satisfies": [
+        "D2"
+      ],
+      "status": "pending",
+      "depends_on": [],
+      "complexity": 5,
+      "stage": 1,
+      "parallel_group": null,
+      "role": "backend-builder",
+      "scope_write": [
+        "core/retro.py",
+        "tools/retro.py",
+        "tests/test_retro.py"
+      ],
+      "scope_read": [
+        "ARCHITECTURE.md",
+        "AGENTS.md",
+        "docs/module-map.md"
+      ],
+      "acceptance": [
+        "A1",
+        "A2",
+        "A3",
+        "A4",
+        "A5"
+      ],
+      "gates": [
+        "tests",
+        "check",
+        "fixtures"
+      ],
+      "owner": null,
+      "branch": "task/M03",
+      "worktree": null,
+      "round": 0,
+      "evidence": [],
+      "scope_write_forbidden": [],
+      "handoff": []
+    },
+    {
+      "id": "M04",
+      "title": "Quick track rule and command",
+      "goal": "core/quick.py decides whether a request qualifies; tools/quick.py adds one track: quick task with its brief.",
+      "why": "Small changes after the build station cost one task (F4, ADR-0004).",
+      "satisfies": [
+        "D4"
+      ],
+      "status": "pending",
+      "depends_on": [],
+      "complexity": 5,
+      "stage": 1,
+      "parallel_group": null,
+      "role": "backend-builder",
+      "scope_write": [
+        "core/quick.py",
+        "tools/quick.py",
+        "core/board.py",
+        "templates/board.schema.json",
+        "core/tests/test_quick.py",
+        "tests/test_quick_cli.py"
+      ],
+      "scope_read": [
+        "ARCHITECTURE.md",
+        "AGENTS.md",
+        "docs/module-map.md"
+      ],
+      "acceptance": [
+        "A1",
+        "A2",
+        "A3",
+        "A4",
+        "A5"
+      ],
+      "gates": [
+        "tests",
+        "check",
+        "fixtures"
+      ],
+      "owner": null,
+      "branch": "task/M04",
+      "worktree": null,
+      "round": 0,
+      "evidence": [],
+      "scope_write_forbidden": [],
+      "handoff": []
+    },
+    {
+      "id": "M05",
+      "title": "pl_quick tool",
+      "goal": "Both harnesses offer pl_quick, forwarding to tools/quick.py.",
+      "why": "The owner asks in plain language; the agent needs a tool (F4, AD-5).",
+      "satisfies": [
+        "D4"
+      ],
+      "status": "pending",
+      "depends_on": [
+        "M04"
+      ],
+      "complexity": 3,
+      "stage": 1,
+      "parallel_group": null,
+      "role": "backend-builder",
+      "scope_write": [
+        "plugin/lib/tools.mjs",
+        "plugin/test/plugin.test.mjs",
+        "claude/test/claude.test.mjs",
+        "docs/tools.md"
+      ],
+      "scope_read": [
+        "ARCHITECTURE.md",
+        "AGENTS.md",
+        "docs/module-map.md"
+      ],
+      "acceptance": [
+        "A1",
+        "A2",
+        "A3"
+      ],
+      "gates": [
+        "tests",
+        "check",
+        "validate"
+      ],
+      "owner": null,
+      "branch": "task/M05",
+      "worktree": null,
+      "round": 0,
+      "evidence": [],
+      "scope_write_forbidden": [],
+      "handoff": []
+    },
+    {
+      "id": "M06",
+      "title": "Change proposals core",
+      "goal": "templates/change-proposal.md, core/changes.py and tools/change.py create, link, show and apply approved deltas.",
+      "why": "A shipped product changes with a record of what the owner approved (F3, ADR-0003).",
+      "satisfies": [
+        "D3"
+      ],
+      "status": "pending",
+      "depends_on": [],
+      "complexity": 6,
+      "stage": 1,
+      "parallel_group": null,
+      "role": "backend-builder",
+      "scope_write": [
+        "templates/change-proposal.md",
+        "core/changes.py",
+        "tools/change.py",
+        "core/tests/test_changes.py",
+        "tests/test_change_cli.py"
+      ],
+      "scope_read": [
+        "ARCHITECTURE.md",
+        "AGENTS.md",
+        "docs/module-map.md"
+      ],
+      "acceptance": [
+        "A1",
+        "A2",
+        "A3",
+        "A4",
+        "A5",
+        "A6"
+      ],
+      "gates": [
+        "tests",
+        "check",
+        "fixtures"
+      ],
+      "owner": null,
+      "branch": "task/M06",
+      "worktree": null,
+      "round": 0,
+      "evidence": [],
+      "scope_write_forbidden": [],
+      "handoff": []
+    },
+    {
+      "id": "M07",
+      "title": "pl_change tool and lint finding",
+      "goal": "Both harnesses offer pl_change; tools/check.py reports a proposal whose tasks are done but which is not applied.",
+      "why": "Proposals are used from plain language and cannot be forgotten (F3, AD-3, AD-5).",
+      "satisfies": [
+        "D3"
+      ],
+      "status": "pending",
+      "depends_on": [
+        "M05",
+        "M06"
+      ],
+      "complexity": 4,
+      "stage": 1,
+      "parallel_group": null,
+      "role": "backend-builder",
+      "scope_write": [
+        "plugin/lib/tools.mjs",
+        "tools/check.py",
+        "plugin/test/plugin.test.mjs",
+        "tests/test_check_rules.py",
+        "docs/tools.md"
+      ],
+      "scope_read": [
+        "ARCHITECTURE.md",
+        "AGENTS.md",
+        "docs/module-map.md"
+      ],
+      "acceptance": [
+        "A1",
+        "A2",
+        "A3",
+        "A4"
+      ],
+      "gates": [
+        "tests",
+        "check",
+        "fixtures"
+      ],
+      "owner": null,
+      "branch": "task/M07",
+      "worktree": null,
+      "round": 0,
+      "evidence": [],
+      "scope_write_forbidden": [],
+      "handoff": []
+    },
+    {
+      "id": "M08",
+      "title": "Process docs for the new tracks",
+      "goal": "generator, orchestration, harness guides, skill, cheatsheet and READMEs describe evals, retro, change proposals and the quick track.",
+      "why": "Agents follow only what the process files say.",
+      "satisfies": [
+        "D3",
+        "D4"
+      ],
+      "status": "pending",
+      "depends_on": [
+        "M02",
+        "M03",
+        "M05",
+        "M07"
+      ],
+      "complexity": 3,
+      "stage": 1,
+      "parallel_group": null,
+      "role": "architect",
+      "scope_write": [
+        "prompt/generator.md",
+        "prompt/orchestration.md",
+        "prompt/dsh.md",
+        "SKILL.md",
+        "guide/cheatsheet.md",
+        "README.md",
+        "README.de.md",
+        "docs/architecture.md"
+      ],
+      "scope_read": [
+        "ARCHITECTURE.md",
+        "AGENTS.md",
+        "docs/module-map.md"
+      ],
+      "acceptance": [
+        "A1",
+        "A2",
+        "A3",
+        "A4"
+      ],
+      "gates": [
+        "check",
+        "line"
+      ],
+      "owner": null,
+      "branch": "task/M08",
+      "worktree": null,
+      "round": 0,
+      "evidence": [],
+      "scope_write_forbidden": [],
+      "handoff": []
+    },
+    {
+      "id": "M09",
+      "title": "Security review of the first stage",
+      "goal": "An independent security review of the quick track, change apply, the retro and the eval secret.",
+      "why": "Two new paths to changed records and a new CI secret (VER-10).",
+      "satisfies": [
+        "D1",
+        "D3",
+        "D4"
+      ],
+      "status": "pending",
+      "depends_on": [
+        "M02",
+        "M05",
+        "M07"
+      ],
+      "complexity": 3,
+      "stage": 1,
+      "parallel_group": null,
+      "role": "security-reviewer",
+      "scope_write": [
+        "reviews/M09.md"
+      ],
+      "scope_read": [
+        "ARCHITECTURE.md",
+        "docs/adr/",
+        "docs/environments.md",
+        "policy.json",
+        "docs/guard-limits.md"
+      ],
+      "acceptance": [
+        "A1",
+        "A2",
+        "A3"
+      ],
+      "gates": [
+        "audit"
+      ],
+      "owner": null,
+      "branch": "task/M09",
+      "worktree": null,
+      "round": 0,
+      "evidence": [],
+      "scope_write_forbidden": [],
+      "handoff": []
+    }
+  ]
+}

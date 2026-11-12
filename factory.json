@@ -233,64 +233,156 @@
       "by": "lead"
     },
     "PLN-01": {
-      "status": "open"
+      "status": "done",
+      "evidence": [
+        "board.json"
+      ],
+      "at": "2026-11-12T23:29:05Z",
+      "by": "lead"
     },
     "PLN-02": {
-      "status": "open"
+      "status": "done",
+      "evidence": [
+        "policy.json"
+      ],
+      "at": "2026-11-12T23:29:05Z",
+      "by": "lead"
     },
     "PLN-03": {
-      "status": "open"
+      "status": "done",
+      "evidence": [
+        "docs/quality.md#trace"
+      ],
+      "at": "2026-11-12T23:29:06Z",
+      "by": "lead"
     },
     "PLN-04": {
-      "status": "open"
+      "status": "done",
+      "evidence": [
+        "factory.json"
+      ],
+      "at": "2026-11-12T23:29:06Z",
+      "by": "lead"
     },
     "PLN-05": {
-      "status": "open"
+      "status": "done",
+      "evidence": [
+        "docs/gates/"
+      ],
+      "at": "2026-11-12T23:29:06Z",
+      "by": "lead"
     },
     "PLN-06": {
-      "status": "open"
+      "status": "done",
+      "evidence": [
+        "tasks/"
+      ],
+      "at": "2026-11-12T23:29:06Z",
+      "by": "lead"
     },
     "PLN-07": {
-      "status": "open"
+      "status": "done",
+      "evidence": [
+        "docs/orchestration.md"
+      ],
+      "at": "2026-11-12T23:29:06Z",
+      "by": "lead"
     },
     "PLN-08": {
-      "status": "open"
+      "status": "done",
+      "evidence": [
+        ".gitignore"
+      ],
+      "at": "2026-11-12T23:29:06Z",
+      "by": "lead"
     },
     "PLN-09": {
-      "status": "open"
+      "status": "done",
+      "evidence": [
+        "AGENTS.md#commands"
+      ],
+      "at": "2026-11-12T23:29:06Z",
+      "by": "lead"
     },
     "PLN-10": {
-      "status": "open"
+      "status": "done",
+      "evidence": [
+        "docs/orchestration.md#branches-and-review"
+      ],
+      "at": "2026-11-12T23:29:06Z",
+      "by": "lead"
     },
     "PLN-11": {
-      "status": "open"
+      "status": "done",
+      "evidence": [
+        "reviews/cold-start-M01.md"
+      ],
+      "at": "2026-11-12T23:29:06Z",
+      "by": "lead"
     },
     "BLD-11": {
-      "status": "open"
+      "status": "open",
+      "tasks": [
+        "M03",
+        "M04",
+        "M06"
+      ]
     },
     "BLD-42": {
-      "status": "open"
+      "status": "open",
+      "tasks": [
+        "M02"
+      ]
     },
     "BLD-44": {
-      "status": "open"
+      "status": "na",
+      "reason": "Polier has no runtime dependency (AGENTS.md); the only dependencies are pinned dev packages used in tests"
     },
     "BLD-53": {
-      "status": "open"
+      "status": "open",
+      "tasks": [
+        "M01",
+        "M02"
+      ]
     },
     "BLD-70": {
-      "status": "open"
+      "status": "open",
+      "tasks": [
+        "M03",
+        "M04",
+        "M06"
+      ]
     },
     "VER-01": {
-      "status": "open"
+      "status": "open",
+      "tasks": [
+        "M03",
+        "M04",
+        "M06"
+      ]
     },
     "VER-07": {
-      "status": "open"
+      "status": "deferred",
+      "reason": "the new tools are short CLI runs over local files; a budget follows if the retro is slow on large projects"
     },
     "VER-10": {
-      "status": "open"
+      "status": "open",
+      "tasks": [
+        "M09"
+      ]
     },
     "VER-12": {
-      "status": "open"
+      "status": "open",
+      "tasks": [
+        "M01",
+        "M02",
+        "M03",
+        "M04",
+        "M05",
+        "M06",
+        "M07",
+        "M08"
+      ]
     },
     "REL-01": {
       "status": "open"
@@ -597,6 +689,209 @@
       "event": "advance",
       "by": "owner (asked in the Claude Code chat, no dialog in this session)",
       "station": "architecture"
+    },
+    {
+      "at": "2026-11-12T23:25:52Z",
+      "event": "link",
+      "by": "lead",
+      "item": "BLD-11",
+      "tasks": [
+        "M03",
+        "M04",
+        "M06"
+      ]
+    },
+    {
+      "at": "2026-11-12T23:25:52Z",
+      "event": "link",
+      "by": "lead",
+      "item": "BLD-42",
+      "tasks": [
+        "M02"
+      ]
+    },
+    {
+      "at": "2026-11-12T23:25:52Z",
+      "event": "link",
+      "by": "lead",
+      "item": "BLD-53",
+      "tasks": [
+        "M01",
+        "M02"
+      ]
+    },
+    {
+      "at": "2026-11-12T23:25:53Z",
+      "event": "link",
+      "by": "lead",
+      "item": "BLD-70",
+      "tasks": [
+        "M03",
+        "M04",
+        "M06"
+      ]
+    },
+    {
+      "at": "2026-11-12T23:25:53Z",
+      "event": "link",
+      "by": "lead",
+      "item": "VER-01",
+      "tasks": [
+        "M03",
+        "M04",
+        "M06"
+      ]
+    },
+    {
+      "at": "2026-11-12T23:25:53Z",
+      "event": "link",
+      "by": "lead",
+      "item": "VER-10",
+      "tasks": [
+        "M09"
+      ]
+    },
+    {
+      "at": "2026-11-12T23:25:53Z",
+      "event": "link",
+      "by": "lead",
+      "item": "VER-12",
+      "tasks": [
+        "M01",
+        "M02",
+        "M03",
+        "M04",
+        "M05",
+        "M06",
+        "M07",
+        "M08"
+      ]
+    },
+    {
+      "at": "2026-11-12T23:25:53Z",
+      "event": "item",
+      "by": "lead",
+      "item": "BLD-44",
+      "status": "na",
+      "reason": "Polier has no runtime dependency (AGENTS.md); the only dependencies are pinned dev packages used in tests"
+    },
+    {
+      "at": "2026-11-12T23:25:53Z",
+      "event": "item",
+      "by": "lead",
+      "item": "VER-07",
+      "status": "deferred",
+      "reason": "the new tools are short CLI runs over local files; a budget follows if the retro is slow on large projects"
+    },
+    {
+      "at": "2026-11-12T23:29:05Z",
+      "event": "item",
+      "by": "lead",
+      "item": "PLN-01",
+      "status": "done",
+      "evidence": [
+        "board.json"
+      ]
+    },
+    {
+      "at": "2026-11-12T23:29:05Z",
+      "event": "item",
+      "by": "lead",
+      "item": "PLN-02",
+      "status": "done",
+      "evidence": [
+        "policy.json"
+      ]
+    },
+    {
+      "at": "2026-11-12T23:29:06Z",
+      "event": "item",
+      "by": "lead",
+      "item": "PLN-03",
+      "status": "done",
+      "evidence": [
+        "docs/quality.md#trace"
+      ]
+    },
+    {
+      "at": "2026-11-12T23:29:06Z",
+      "event": "item",
+      "by": "lead",
+      "item": "PLN-04",
+      "status": "done",
+      "evidence": [
+        "factory.json"
+      ]
+    },
+    {
+      "at": "2026-11-12T23:29:06Z",
+      "event": "item",
+      "by": "lead",
+      "item": "PLN-05",
+      "status": "done",
+      "evidence": [
+        "docs/gates/"
+      ]
+    },
+    {
+      "at": "2026-11-12T23:29:06Z",
+      "event": "item",
+      "by": "lead",
+      "item": "PLN-06",
+      "status": "done",
+      "evidence": [
+        "tasks/"
+      ]
+    },
+    {
+      "at": "2026-11-12T23:29:06Z",
+      "event": "item",
+      "by": "lead",
+      "item": "PLN-07",
+      "status": "done",
+      "evidence": [
+        "docs/orchestration.md"
+      ]
+    },
+    {
+      "at": "2026-11-12T23:29:06Z",
+      "event": "item",
+      "by": "lead",
+      "item": "PLN-08",
+      "status": "done",
+      "evidence": [
+        ".gitignore"
+      ]
+    },
+    {
+      "at": "2026-11-12T23:29:06Z",
+      "event": "item",
+      "by": "lead",
+      "item": "PLN-09",
+      "status": "done",
+      "evidence": [
+        "AGENTS.md#commands"
+      ]
+    },
+    {
+      "at": "2026-11-12T23:29:06Z",
+      "event": "item",
+      "by": "lead",
+      "item": "PLN-10",
+      "status": "done",
+      "evidence": [
+        "docs/orchestration.md#branches-and-review"
+      ]
+    },
+    {
+      "at": "2026-11-12T23:29:06Z",
+      "event": "item",
+      "by": "lead",
+      "item": "PLN-11",
+      "status": "done",
+      "evidence": [
+        "reviews/cold-start-M01.md"
+      ]
     }
   ]
 }

@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "limits": {
+    "max_attempts_per_task": 3,
+    "max_in_progress": 1,
+    "max_review_rounds": 3
+  },
+  "scope": {
+    "protected_paths": [
+      ".env",
+      ".env.*",
+      "secrets/**",
+      "**/*.pem",
+      "**/*.key",
+      "**/id_rsa*",
+      "policy.json",
+      "VERSION",
+      "CHANGELOG.md",
+      "LICENSE",
+      ".github/workflows/release.yml",
+      ".claude-plugin/plugin.json",
+      ".claude-plugin/marketplace.json"
+    ]
+  },
+  "dependencies": {
+    "approval": true,
+    "manifests": ["package.json", "requirements.txt", "pyproject.toml"]
+  },
+  "approvals": {
+    "actions": ["new_dependency", "scope_change", "merge_to_base", "release", "reopen_done", "protected_path"],
+    "approver": "owner"
+  },
+  "commands": {
+    "deny": ["git push*", "git tag*", "npm publish*", "pnpm publish*", "yarn publish*", "docker push*", "gh release*", "rm -rf /*"],
+    "lead_only": ["*tools/state.py set*", "*tools/approve.py grant*", "*tools/approve.py deny*", "*tools/worktree.py finish*", "*tools/factory.py advance*"],
+    "warn": ["*kill*", "*pkill*", "killall*"]
+  },
+  "checks": {
+    "review_before_done": true,
+    "handoff_before_done": true,
+    "run_record": true,
+    "disjoint_scopes": true
+  },
+  "budget": {
+    "max_tokens_per_task": null,
+    "warn_at": 0.8
+  }
+}
