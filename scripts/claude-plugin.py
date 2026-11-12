@@ -104,7 +104,10 @@ def manifest(version: str, agent_ids) -> Dict:
         "agents": [f"./claude/agents/{rid}.md" for rid in agent_ids],
         "hooks": "./claude/hooks.json",
         "mcpServers": {
-            "polier": {"command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/claude/server.mjs"], "env": env},
+            # pl_gate runs test suites for up to timeout_s (default 600 s); a per-server
+            # timeout overrides an MCP_TOOL_TIMEOUT that would cut such a call short.
+            "polier": {"command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/claude/server.mjs"], "env": env,
+                       "timeout": 3_600_000},
         },
         "userConfig": OPTIONS,
     }
