@@ -21,11 +21,14 @@
       "approved_by": "owner (asked in the Claude Code chat, no dialog in this session)"
     },
     "concept": {
-      "status": "active",
-      "started": "2026-11-12T23:13:50Z"
+      "status": "done",
+      "started": "2026-11-12T23:13:50Z",
+      "closed": "2026-11-12T23:15:30Z",
+      "approved_by": "owner (asked in the Claude Code chat, no dialog in this session)"
     },
     "design": {
-      "status": "pending"
+      "status": "active",
+      "started": "2026-11-12T23:15:30Z"
     },
     "architecture": {
       "status": "pending"
@@ -160,28 +163,68 @@
       "by": "lead"
     },
     "DES-15": {
-      "status": "open"
+      "status": "done",
+      "evidence": [
+        "docs/ux-flows.md#commands"
+      ],
+      "at": "2026-11-12T23:16:23Z",
+      "by": "lead"
     },
     "ARC-01": {
-      "status": "open"
+      "status": "done",
+      "evidence": [
+        "docs/versions.md"
+      ],
+      "at": "2026-11-12T23:17:50Z",
+      "by": "lead"
     },
     "ARC-02": {
-      "status": "open"
+      "status": "done",
+      "evidence": [
+        "docs/module-map.md"
+      ],
+      "at": "2026-11-12T23:17:50Z",
+      "by": "lead"
     },
     "ARC-05": {
-      "status": "open"
+      "status": "done",
+      "evidence": [
+        "ARCHITECTURE.md#2-hard-constraints"
+      ],
+      "at": "2026-11-12T23:17:50Z",
+      "by": "lead"
     },
     "ARC-09": {
-      "status": "open"
+      "status": "done",
+      "evidence": [
+        "docs/environments.md"
+      ],
+      "at": "2026-11-12T23:17:50Z",
+      "by": "lead"
     },
     "ARC-10": {
-      "status": "open"
+      "status": "done",
+      "evidence": [
+        "docs/adr/ADR-0001-process-evals.md#third-party-services-arc-10"
+      ],
+      "at": "2026-11-12T23:17:50Z",
+      "by": "lead"
     },
     "ARC-12": {
-      "status": "open"
+      "status": "done",
+      "evidence": [
+        "docs/adr/"
+      ],
+      "at": "2026-11-12T23:17:51Z",
+      "by": "lead"
     },
     "ARC-16": {
-      "status": "open"
+      "status": "done",
+      "evidence": [
+        "docs/adr/ADR-0001-process-evals.md#ai-integration-arc-16"
+      ],
+      "at": "2026-11-12T23:17:51Z",
+      "by": "lead"
     },
     "PLN-01": {
       "status": "open"
@@ -432,6 +475,109 @@
       "status": "done",
       "evidence": [
         "docs/concept.md#risks"
+      ]
+    },
+    {
+      "at": "2026-11-12T23:15:30Z",
+      "event": "advance",
+      "by": "owner (asked in the Claude Code chat, no dialog in this session)",
+      "station": "concept"
+    },
+    {
+      "at": "2026-11-12T23:16:23Z",
+      "event": "item",
+      "by": "lead",
+      "item": "DES-15",
+      "status": "done",
+      "evidence": [
+        "docs/ux-flows.md#commands"
+      ]
+    },
+    {
+      "at": "2026-11-12T23:16:23Z",
+      "event": "item",
+      "by": "lead",
+      "item": "ARC-01",
+      "status": "done",
+      "evidence": [
+        "docs/ux-flows.md"
+      ]
+    },
+    {
+      "at": "2026-11-12T23:16:23Z",
+      "event": "item",
+      "by": "lead",
+      "item": "ARC-01",
+      "status": "open"
+    },
+    {
+      "at": "2026-11-12T23:17:50Z",
+      "event": "item",
+      "by": "lead",
+      "item": "ARC-01",
+      "status": "done",
+      "evidence": [
+        "docs/versions.md"
+      ]
+    },
+    {
+      "at": "2026-11-12T23:17:50Z",
+      "event": "item",
+      "by": "lead",
+      "item": "ARC-02",
+      "status": "done",
+      "evidence": [
+        "docs/module-map.md"
+      ]
+    },
+    {
+      "at": "2026-11-12T23:17:50Z",
+      "event": "item",
+      "by": "lead",
+      "item": "ARC-05",
+      "status": "done",
+      "evidence": [
+        "ARCHITECTURE.md#2-hard-constraints"
+      ]
+    },
+    {
+      "at": "2026-11-12T23:17:50Z",
+      "event": "item",
+      "by": "lead",
+      "item": "ARC-09",
+      "status": "done",
+      "evidence": [
+        "docs/environments.md"
+      ]
+    },
+    {
+      "at": "2026-11-12T23:17:50Z",
+      "event": "item",
+      "by": "lead",
+      "item": "ARC-10",
+      "status": "done",
+      "evidence": [
+        "docs/adr/ADR-0001-process-evals.md#third-party-services-arc-10"
+      ]
+    },
+    {
+      "at": "2026-11-12T23:17:51Z",
+      "event": "item",
+      "by": "lead",
+      "item": "ARC-12",
+      "status": "done",
+      "evidence": [
+        "docs/adr/"
+      ]
+    },
+    {
+      "at": "2026-11-12T23:17:51Z",
+      "event": "item",
+      "by": "lead",
+      "item": "ARC-16",
+      "status": "done",
+      "evidence": [
+        "docs/adr/ADR-0001-process-evals.md#ai-integration-arc-16"
       ]
     }
   ]
