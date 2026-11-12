@@ -1,0 +1,34 @@
+{
+  "task": "M01",
+  "state": "running",
+  "attempt": 1,
+  "attempts": [
+    {
+      "n": 1,
+      "started": "2026-11-12T23:31:36+00:00",
+      "ended": null,
+      "result": null,
+      "note": null
+    }
+  ],
+  "events": [
+    {
+      "at": "2026-11-12T23:31:36+00:00",
+      "kind": "start",
+      "data": {
+        "actor": "lead"
+      }
+    },
+    {
+      "at": "2026-11-12T23:31:36+00:00",
+      "kind": "state",
+      "data": {
+        "from": "pending",
+        "to": "in_progress",
+        "actor": "lead"
+      }
+    }
+  ],
+  "usage": {},
+  "updated": "2026-11-12T23:31:36+00:00"
+}

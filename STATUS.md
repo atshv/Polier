@@ -4,11 +4,10 @@
 
 > Generated from `board.json`. Do not edit by hand.
 
-Factory line (✓ closed, bold = current station): idea ✓ · concept ✓ · design ✓ · architecture ✓ · **plan (11/11 checklist items)** · build · verify · release · operate
+Factory line (✓ closed, bold = current station): idea ✓ · concept ✓ · design ✓ · architecture ✓ · plan ✓ · **build (1/5 checklist items)** · verify · release · operate
 
 ## Ready now
 
-- `M01` Process eval suite
 - `M03` Retro over project records
 - `M04` Quick track rule and command
 - `M06` Change proposals core
@@ -16,8 +15,8 @@ Factory line (✓ closed, bold = current station): idea ✓ · concept ✓ · de
 ## Orchestration
 
 - Limits: 3 attempts/task, 1 in progress
-- Next wave: `M01` (tasks/M01.md)
-- Running: none
+- Next wave: `M03` (tasks/M03.md)
+- Running: `M01` attempt 1/3
 - Blocked: M02, M05, M07, M08, M09 (open dependency)
 - Approvals pending: none
 
@@ -27,7 +26,7 @@ Factory line (✓ closed, bold = current station): idea ✓ · concept ✓ · de
 
 ## In progress
 
-- none
+- [ ] `M01` Process eval suite — status: `in_progress` — owner: —
 
 ## Blocked / failed
 
@@ -35,7 +34,6 @@ Factory line (✓ closed, bold = current station): idea ✓ · concept ✓ · de
 
 ## Open
 
-- [ ] `M01` Process eval suite — status: `pending` — owner: —
 - [ ] `M02` Eval runner and workflow — status: `pending` — owner: —
 - [ ] `M03` Retro over project records — status: `pending` — owner: —
 - [ ] `M04` Quick track rule and command — status: `pending` — owner: —
