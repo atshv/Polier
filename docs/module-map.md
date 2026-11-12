@@ -1,6 +1,6 @@
 # Module Structure: Polier next
 
-> Detail document for `ARCHITECTURE.md`. Paths are relative to the Polier repository (`..`). Existing modules in plain text, new ones **bold**.
+> Detail document for `ARCHITECTURE.md`. Paths are relative to the repository root. Existing modules in plain text, new ones **bold**.
 
 ## Layers
 

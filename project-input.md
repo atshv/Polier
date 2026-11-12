@@ -10,7 +10,7 @@ MODE:           brownfield
 PROFILE:        S
 LANGUAGE:       English (docs, code, prompts); README also in German
 BUDGET:         no money; agent tokens as usual; no deadline
-EXISTING REPO:  .. (the Polier repository, this folder's parent)
+EXISTING REPO:  . (the Polier repository; the line lives in its root)
 ```
 
 ## Problem

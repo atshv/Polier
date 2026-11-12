@@ -6,7 +6,7 @@
 
 ## 1. Purpose and non-goals
 
-Polier next adds four features to Polier (`docs/concept.md`, first stage F1–F4): process evals, a retro over project records, change proposals for a shipped product and a quick track for small changes. The code lives in the Polier repository (`..`); this folder holds the plan.
+Polier next adds four features to Polier (`docs/concept.md`, first stage F1–F4): process evals, a retro over project records, change proposals for a shipped product and a quick track for small changes. Code and plan share the Polier repository root, so the guard and the stop check protect the build tasks (`docs/architecture.md` describes the package as it is).
 
 **Non-goals:** no hosted service or telemetry, no own spec format, no autonomous change to Polier.
 
@@ -52,7 +52,7 @@ The existing one-way chain stays and the new code joins its layers (`docs/module
 | `plugin/lib/tools.mjs` | tool definitions | builder tasks | both adapters |
 | `evals/` | process suite | builder tasks; results only by `claude plugin eval` | maintainer |
 | `templates/change-proposal.md` | template | builder task | lead agents |
-| `self/` | this plan | lead | everyone |
+| plan files (`board.json`, `factory.json`, `docs/concept.md` …, `tasks/`) | the line | lead, through the tools | everyone |
 
 ## 6. Quality gates
 

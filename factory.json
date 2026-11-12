@@ -27,14 +27,20 @@
       "approved_by": "owner (asked in the Claude Code chat, no dialog in this session)"
     },
     "design": {
-      "status": "active",
-      "started": "2026-11-12T23:15:30Z"
+      "status": "done",
+      "started": "2026-11-12T23:15:30Z",
+      "closed": "2026-11-12T23:18:39Z",
+      "approved_by": "owner (asked in the Claude Code chat, no dialog in this session)"
     },
     "architecture": {
-      "status": "pending"
+      "status": "done",
+      "started": "2026-11-12T23:18:39Z",
+      "closed": "2026-11-12T23:18:39Z",
+      "approved_by": "owner (asked in the Claude Code chat, no dialog in this session)"
     },
     "plan": {
-      "status": "pending"
+      "status": "active",
+      "started": "2026-11-12T23:18:39Z"
     },
     "build": {
       "status": "pending"
@@ -579,6 +585,18 @@
       "evidence": [
         "docs/adr/ADR-0001-process-evals.md#ai-integration-arc-16"
       ]
+    },
+    {
+      "at": "2026-11-12T23:18:39Z",
+      "event": "advance",
+      "by": "owner (asked in the Claude Code chat, no dialog in this session)",
+      "station": "design"
+    },
+    {
+      "at": "2026-11-12T23:18:39Z",
+      "event": "advance",
+      "by": "owner (asked in the Claude Code chat, no dialog in this session)",
+      "station": "architecture"
     }
   ]
 }
