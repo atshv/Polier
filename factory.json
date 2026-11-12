@@ -39,11 +39,14 @@
       "approved_by": "owner (asked in the Claude Code chat, no dialog in this session)"
     },
     "plan": {
-      "status": "active",
-      "started": "2026-11-12T23:18:39Z"
+      "status": "done",
+      "started": "2026-11-12T23:18:39Z",
+      "closed": "2026-11-12T23:31:35Z",
+      "approved_by": "owner (asked in the Claude Code chat, no dialog in this session)"
     },
     "build": {
-      "status": "pending"
+      "status": "active",
+      "started": "2026-11-12T23:31:35Z"
     },
     "verify": {
       "status": "pending"
@@ -892,6 +895,12 @@
       "evidence": [
         "reviews/cold-start-M01.md"
       ]
+    },
+    {
+      "at": "2026-11-12T23:31:35Z",
+      "event": "advance",
+      "by": "owner (asked in the Claude Code chat, no dialog in this session)",
+      "station": "plan"
     }
   ]
 }
