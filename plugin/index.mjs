@@ -49,6 +49,10 @@ const DEFAULTS = {
   context: true,
   /** Register the bundled Polier skill. */
   skill: true,
+  /** Fixed for this harness, not configurable: claim label, record wording, shell tool names. */
+  harness: 'dsh',
+  host: 'DSH',
+  commandTools: ['bash'],
 }
 
 /** Merge the row's config with defaults; unknown keys are ignored. */

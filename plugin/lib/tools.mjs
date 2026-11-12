@@ -102,6 +102,19 @@ async function render(ctx, config, agent, root, signal) {
   } catch { /* the record is written; a stale page is check.py's finding */ }
 }
 
+/** What a DSH session needs from the harness: the approval prompt and the shell. */
+function dshChecks(ctx) {
+  const approval = ctx.get?.('approval')
+  return [
+    approval && typeof approval.request === 'function'
+      ? { check: 'approval prompts', level: 'ok', detail: 'owner decisions open a DSH approval prompt' }
+      : { check: 'approval prompts', level: 'warn', detail: 'no approval service: station closes, lead mode and approvals fail closed', fix: 'enable dsh-user-approval in the profile, or let the owner run tools/*.py by hand' },
+    ctx.get?.('shell')
+      ? { check: 'shell', level: 'ok', detail: 'gates run in the harness shell' }
+      : { check: 'shell', level: 'warn', detail: 'no harness shell: gates run as plain processes without the sandbox', fix: 'enable a tool executor with a shell in the profile' },
+  ]
+}
+
 export function tools(ctx, config) {
   const preflight = jsonTool({
     name: 'pl_preflight',
@@ -120,13 +133,7 @@ export function tools(ctx, config) {
         checks.push({ check: 'python', level: 'fail', detail: `${config.python} cannot be started: ${String(error?.message ?? error)}`, fix: 'install Python 3.9+ or set the plugin option python' })
       }
       if (result) checks.push(...result.checks)
-      const approval = ctx.get?.('approval')
-      checks.push(approval && typeof approval.request === 'function'
-        ? { check: 'approval prompts', level: 'ok', detail: 'owner decisions open a DSH approval prompt' }
-        : { check: 'approval prompts', level: 'warn', detail: 'no approval service: station closes, lead mode and approvals fail closed', fix: 'enable dsh-user-approval in the profile, or let the owner run tools/*.py by hand' })
-      checks.push(ctx.get?.('shell')
-        ? { check: 'shell', level: 'ok', detail: 'gates run in the harness shell' }
-        : { check: 'shell', level: 'warn', detail: 'no harness shell: gates run as plain processes without the sandbox', fix: 'enable a tool executor with a shell in the profile' })
+      checks.push(...(typeof config.hostChecks === 'function' ? await config.hostChecks(exec, result?.project) : dshChecks(ctx)))
       if (config.enforce === 'off') {
         checks.push({ check: 'write guard', level: 'warn', detail: 'enforce is off: writes outside the task scope are not blocked', fix: 'set the plugin option enforce to deny' })
       } else if (result?.project) {
@@ -383,7 +390,7 @@ export function tools(ctx, config) {
         const counts = row ? ` ${row.done} done, ${row.na} n/a, ${row.deferred} deferred, ${row.open} open.` : ''
         const answer = await askOwner(ctx, exec, `Close the Polier station "${station}" and open the next one?${counts} Details: docs/factory.md.`)
         if (!answer.ok) return { ok: false, station, approval: answer.outcome, ...(answer.note ? { note: answer.note } : {}) }
-        const argv = [...base, 'advance', '--by', `${config.owner} (approved in DSH)`]
+        const argv = [...base, 'advance', '--by', `${config.owner} (approved in ${config.host ?? 'DSH'})`]
         if (typeof args.reason === 'string' && args.reason.trim()) argv.push('--note', args.reason.trim())
         const result = await run(ctx, exec.agent, argv, { cwd: root, timeoutMs: 60_000, signal: exec.signal })
         if (result.code === 0) await render(ctx, config, exec.agent, root, exec.signal)
@@ -443,7 +450,7 @@ export function tools(ctx, config) {
     const perStation = Object.entries(planned.stations).filter(([, n]) => n > 0).map(([id, n]) => `${id} ${n}`).join(', ')
     const answer = await askOwner(ctx, exec, `Start the Polier line in ${root}: ${planned.items} checklist items for ${planned.platforms.join(', ')} (traits ${planned.traits.join(', ') || 'none'}; ${perStation})?`)
     if (!answer.ok) return { ok: false, planned, approval: answer.outcome, ...(answer.note ? { note: answer.note } : {}) }
-    const result = await run(ctx, exec.agent, [...argv, '--by', `${config.owner} (approved in DSH)`], { cwd: root, timeoutMs: 60_000, signal: exec.signal })
+    const result = await run(ctx, exec.agent, [...argv, '--by', `${config.owner} (approved in ${config.host ?? 'DSH'})`], { cwd: root, timeoutMs: 60_000, signal: exec.signal })
     if (result.code !== 0) return { ok: false, planned, output: outputOf(result) }
     await render(ctx, config, exec.agent, root, exec.signal)
     return { ok: true, planned, ...(await whatIsLeft(py(config, 'factory.py', '--root', root), root, exec)) }
@@ -577,7 +584,7 @@ export function tools(ctx, config) {
       }
       const verdict = answer.ok ? 'grant' : 'deny'
       const result = await run(ctx, exec.agent,
-        py(config, 'approve.py', verdict, id, '--by', config.owner, '--note', 'answered in the DSH approval prompt', '--root', root),
+        py(config, 'approve.py', verdict, id, '--by', config.owner, '--note', `answered in the ${config.host ?? 'DSH'} approval prompt`, '--root', root),
         { cwd: root, timeoutMs: 60_000, signal: exec.signal })
       return { ok: answer.ok && result.code === 0, id, status: answer.ok ? 'granted' : 'denied', output: outputOf(result) }
     },
