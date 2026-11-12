@@ -68,7 +68,8 @@ def package() -> List[dict]:
                            "roles/roles.json", "templates/AGENTS.template.md") if not (PACKAGE / p).is_file()]
     if missing:
         return [_check("polier", "fail", f"Polier {version}: missing {', '.join(missing)}",
-                       "reinstall the plugin (dsh plugin add github:atshv/polier)")]
+                       "reinstall the plugin (DSH: dsh plugin add github:atshv/polier; "
+                       "Claude Code: /plugin install polier@polier)")]
     return [_check("polier", "ok", f"Polier {version}")]
 
 

@@ -1,6 +1,6 @@
 # Polier — The AI Software Factory
 
-**Version: see `VERSION` · Harness: DeepSeek Harness (`prompt/dsh.md`) · Meta-prompt**
+**Version: see `VERSION` · Harness: DeepSeek Harness (`prompt/dsh.md`) or Claude Code (`prompt/claude-code.md`) · Meta-prompt**
 
 Paths starting with `prompt/`, `templates/`, `tools/`, `factory/`, `roles/` or `plugin/` refer to this package; all other paths refer to the generated project.
 
@@ -70,7 +70,7 @@ Every station runs the same way: `pl_factory next` (or `tools/factory.py next`) 
 
 ## Station 1 — Idea
 
-**Tool check.** Look at the session's tools (`prompt/dsh.md` §1). With the plugin, the `pl_*` tools and a `<polier>` block exist: the block shows the live state, the guard blocks writes outside the running task's scope, and every owner decision is an approval prompt. Planning needs no lead mode while no task runs; once a task is `in_progress`, the planning session switches with `pl_mode lead`, which the owner approves. Without the plugin, call `tools/*.py` with `bash`.
+**Tool check.** Look at the session's tools (`prompt/dsh.md` §1, in Claude Code `prompt/claude-code.md` §1). With the plugin, the `pl_*` tools and a `<polier>` block exist: the block shows the live state, the guard blocks writes outside the running task's scope, and every owner decision is an approval prompt (a dialog in Claude Code). Planning needs no lead mode while no task runs; once a task is `in_progress`, the planning session switches with `pl_mode lead`, which the owner approves. Without the plugin, call `tools/*.py` with `bash`.
 
 **Interview.** At most 10 questions per round, hardest first, with a recommended default as the first option. Skip what the description answers or what you can research. Continue until these are clear: goal and success in four weeks; 3–5 done scenarios; non-goals; tech, versions and structure; data (source, ownership, deletion, personal data); constraints (offline, legal, licences, budget, deployment, where secrets live); non-functional needs; what must never happen; brownfield conventions and no-go areas; which tasks can run in parallel; runtime (servers, ports, test databases, anything that must run alone); delivery (environments, variable names, smoke URL, who publishes); platforms (which ships first, native or shared code, store accounts); traits. When the owner is unsure what a choice brings, show `tools/factory.py catalog --platforms … --traits …`.
 
@@ -144,7 +144,7 @@ Complexity ≥ 7 → split. No cycles. Only stage 1 in full. Tasks sharing files
 
 ### Agent contract
 
-`AGENTS.md` (from `templates/AGENTS.template.md`) holds commands, deviations and rules: records through the tools, ports from `.polier-slot`, never stop foreign processes, at L imports per `may_import`, agents never publish. `docs/orchestration.md` (from `templates/orchestration.md`) holds the task loop, checkpoints, approvals and escalation; the full model is `prompt/orchestration.md`. Roles: lead, worker, verifier, reviewer; specialist roles (`docs/roles.md`) sit on top, three or four builder roles per project, adjusted in `docs/roles/`. A role never grants lead or widens a scope. The reviewer is not the author, sees diff, criteria and gate records only, and never edits.
+`AGENTS.md` (from `templates/AGENTS.template.md`) holds commands, deviations and rules; in Claude Code a `CLAUDE.md` with the single line `@AGENTS.md` sits next to every `AGENTS.md`, because Claude Code loads only `CLAUDE.md`. `AGENTS.md` records through the tools, ports from `.polier-slot`, never stop foreign processes, at L imports per `may_import`, agents never publish. `docs/orchestration.md` (from `templates/orchestration.md`) holds the task loop, checkpoints, approvals and escalation; the full model is `prompt/orchestration.md`. Roles: lead, worker, verifier, reviewer; specialist roles (`docs/roles.md`) sit on top, three or four builder roles per project, adjusted in `docs/roles/`. A role never grants lead or widens a scope. The reviewer is not the author, sees diff, criteria and gate records only, and never edits.
 
 ### Briefs
 

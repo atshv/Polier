@@ -5,7 +5,7 @@ name: release
 # version is a pre-release: feat/fix/perf → patch, breaking → minor. From 1.0:
 # feat → minor, fix/perf → patch, breaking → major. A hand-made change of VERSION
 # with its own CHANGELOG section is released as written. The workflow
-# commits VERSION, package.json and CHANGELOG.md as "chore(release): vX.Y.Z",
+# commits VERSION, package.json, .claude-plugin/plugin.json and CHANGELOG.md as "chore(release): vX.Y.Z",
 # runs the tests, tags and creates the GitHub Release. Tags and releases are
 # never moved or overwritten. "Run workflow" (manual) does the same on demand.
 
@@ -56,7 +56,7 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add VERSION package.json CHANGELOG.md
+          git add VERSION package.json .claude-plugin/plugin.json CHANGELOG.md
           git commit -m "chore(release): ${{ steps.plan.outputs.tag }}"
           git push origin HEAD:main
 

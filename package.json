@@ -1,7 +1,7 @@
 {
   "name": "dsh-polier",
   "version": "0.4.6",
-  "description": "AI software factory for DeepSeek Harness: runs a project through nine stations from idea to operation (web, iOS, Android, desktop, CLI, services), shows the live state in every model step, turns every owner decision into an approval prompt and keeps builder agents to the plan with a write guard, recorded test evidence and reviews.",
+  "description": "AI software factory for DeepSeek Harness and Claude Code: runs a project through nine stations from idea to operation (web, iOS, Android, desktop, CLI, services), shows the live state in every model step, turns every owner decision into an approval prompt and keeps builder agents to the plan with a write guard, recorded test evidence and reviews.",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -11,6 +11,8 @@
     "deepseek-harness",
     "dsh",
     "dsh-plugin",
+    "claude-code",
+    "claude-code-plugin",
     "cordis",
     "agents",
     "planning",
@@ -28,6 +30,13 @@
   "files": [
     "plugin/index.mjs",
     "plugin/lib/",
+    "claude/hook.mjs",
+    "claude/server.mjs",
+    "claude/statusline.mjs",
+    "claude/hooks.json",
+    "claude/lib/",
+    "claude/agents/",
+    ".claude-plugin/",
     "core/*.py",
     "cordis.patch.yml",
     "SKILL.md",
@@ -55,12 +64,12 @@
     "@deepseek-ai/cordis": "4.1.0",
     "@deepseek-ai/dsh-skill": "0.2.2-rc.1",
     "@deepseek-ai/dsh-system-prompt": "0.2.2-rc.1",
-    "@deepseek-ai/dsh-tool-executor-native": "^0.2.2-rc.1",
+    "@deepseek-ai/dsh-tool-executor-native": "0.2.2-rc.1",
     "@deepseek-ai/dsh-tools": "0.2.2-rc.1"
   },
   "scripts": {
-    "test": "node --test plugin/test/*.test.mjs && python3 -m unittest discover -s tests && python3 -m unittest discover -s core/tests -t .",
+    "test": "node --test plugin/test/*.test.mjs claude/test/*.test.mjs && python3 -m unittest discover -s tests && python3 -m unittest discover -s core/tests -t .",
     "check": "python3 scripts/check.py",
-    "docs": "node scripts/tools-doc.mjs && python3 scripts/roles-doc.py && python3 tools/factory.py catalog --write"
+    "docs": "node scripts/tools-doc.mjs && python3 scripts/roles-doc.py && python3 tools/factory.py catalog --write && python3 scripts/claude-plugin.py"
   }
 }

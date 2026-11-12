@@ -9,4 +9,4 @@ Please report privately, through GitHub's **Report a vulnerability** on this rep
 - run a command the project's `policy.json` denies,
 - or make the plugin execute something other than the package's own Python tools.
 
-Include the DSH version, the Polier version and the steps. Supported is the latest release.
+Include the harness version (DSH or Claude Code), the Polier version and the steps. Supported is the latest release.

@@ -1,0 +1,16 @@
+{
+  "name": "polier",
+  "owner": {
+    "name": "atshv",
+    "url": "https://github.com/atshv"
+  },
+  "description": "Polier, the AI software factory, for Claude Code.",
+  "plugins": [
+    {
+      "name": "polier",
+      "source": "./",
+      "description": "AI software factory: runs a project through nine stations from idea to operation (web, iOS, Android, desktop, CLI, services), shows the live state in every prompt, turns every owner decision into a dialog and keeps builder agents to the plan with a write guard, recorded test evidence and reviews.",
+      "category": "development"
+    }
+  ]
+}

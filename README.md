@@ -7,20 +7,34 @@
   <a href="https://github.com/atshv/Polier/actions/workflows/test.yml"><img alt="tests" src="https://img.shields.io/github/actions/workflow/status/atshv/Polier/test.yml?branch=main&style=flat-square&label=tests"></a>
   <img alt="license" src="https://img.shields.io/badge/license-MIT-34d399?style=flat-square">
   <img alt="DeepSeek Harness" src="https://img.shields.io/badge/DeepSeek%20Harness-0.2.2-1f5f8b?style=flat-square">
+  <img alt="Claude Code" src="https://img.shields.io/badge/Claude%20Code-plugin-d97757?style=flat-square">
   <img alt="dependencies" src="https://img.shields.io/badge/runtime%20deps-none-34d399?style=flat-square">
 </p>
 
 <p align="center"><b>English</b> · <a href="README.de.md">Deutsch</a></p>
 
-**Polier is an AI software factory for DeepSeek Harness.** You describe the product; Polier runs it through nine stations — idea, concept, design, architecture, plan, build, verify, release, operate — for a website, an iOS or Android app, a desktop app, a CLI or a backend service. At every station it knows what your kind of product needs (sign-up, payments, offline mode, privacy policy, App Store privacy label, Play closed test, signing, monitoring …), asks for proof and closes the station only when you approve it.
+**Polier is an AI software factory for DeepSeek Harness and Claude Code.** You describe the product; Polier runs it through nine stations — idea, concept, design, architecture, plan, build, verify, release, operate — for a website, an iOS or Android app, a desktop app, a CLI or a backend service. At every station it knows what your kind of product needs (sign-up, payments, offline mode, privacy policy, App Store privacy label, Play closed test, signing, monitoring …), asks for proof and closes the station only when you approve it.
 
 ## Install
+
+**DeepSeek Harness**
 
 ```bash
 dsh plugin --profile web add github:atshv/polier
 ```
 
-Restart DSH (or enable *dsh-polier* under **Plugins**). Python 3.9+ must be on the PATH; nothing else is installed.
+Restart DSH (or enable *dsh-polier* under **Plugins**).
+
+**Claude Code**
+
+```text
+/plugin marketplace add atshv/polier
+/plugin install polier@polier
+```
+
+Or in one step: `/plugin install polier --marketplace atshv/Polier`. Restart the session. You get the `pl_*` tools, the live context, the write guard and the stop check as hooks, a subagent per specialist role (`polier:frontend-builder`, `polier:reviewer` …) and the `polier` skill ([`prompt/claude-code.md`](prompt/claude-code.md)).
+
+Python 3.9+ (and Node 20+ for Claude Code) must be on the PATH; nothing else is installed.
 
 ## No commands
 
@@ -30,7 +44,7 @@ Open a session in an empty folder and say what you want: *"Build an app with Pol
 |---|---|
 | "Is everything ready?" | The agent calls `pl_preflight`: Python, git, DSH services, the write guard and the project, each problem with its fix |
 | "What is still missing?" | The agent already sees the live `<polier>` block: station, open items, running task, next move |
-| "Close the station." | You get a DSH approval prompt; only your answer closes it |
+| "Close the station." | You get an approval prompt (in Claude Code a dialog); only your answer closes it |
 | "Take task M03." | The session binds the task, claims it and may write only inside its scope |
 | "We need the httpx library." | An approval prompt; the answer is recorded in `reviews/approvals/` |
 | "Plan the next stage." | The session asks for lead mode — again a prompt you answer |
@@ -59,13 +73,14 @@ The full checklist — 176 items, each with the platforms and traits it applies 
 - A task is done only with recorded gate runs, a passing independent review and a handoff.
 - A worker writes only inside its task's scope; protected paths, dependency manifests and denied commands follow `policy.json`.
 - Every task names a specialist role. A fresh subagent takes it and gets that role's instructions; a role only narrows what it may do.
-- DSH goals, subagents and Ralph loops fit in, but their reports are claims: gates and checkpoints decide.
+- DSH goals and Ralph loops, Claude Code subagents and worktrees fit in, but their reports are claims: gates and checkpoints decide.
 
 ## Inside
 
 | | |
 |---|---|
 | [`plugin/`](plugin) | the DSH plugin: live context, guide, guard, stop check, the `pl_*` tools |
+| [`claude/`](claude), [`.claude-plugin/`](.claude-plugin) | the Claude Code plugin: the same tools as an MCP server, hooks for context, guard and stop check, a subagent per role |
 | [`factory/`](factory) | the catalog of stations and items |
 | [`roles/`](roles) | specialist roles — frontend, backend and mobile builders, reviewers, release manager ([`docs/roles.md`](docs/roles.md)) |
 | [`core/`](core), [`tools/`](tools) | the rules and the Python tools underneath (also usable headless) |
@@ -73,7 +88,7 @@ The full checklist — 176 items, each with the platforms and traits it applies 
 
 ## Learn more
 
-- **Process** — [`prompt/generator.md`](prompt/generator.md) · **In DSH** — [`prompt/dsh.md`](prompt/dsh.md) · **Your part** — [`guide/cheatsheet.md`](guide/cheatsheet.md)
+- **Process** — [`prompt/generator.md`](prompt/generator.md) · **In DSH** — [`prompt/dsh.md`](prompt/dsh.md) · **In Claude Code** — [`prompt/claude-code.md`](prompt/claude-code.md) · **Your part** — [`guide/cheatsheet.md`](guide/cheatsheet.md)
 - **Limits** — Polier is not a sandbox: [what the guard does not cover](docs/guard-limits.md)
 - **Tools** — [`docs/tools.md`](docs/tools.md) · **Architecture** — [`docs/architecture.md`](docs/architecture.md)
 - **Contributing** — [`CONTRIBUTING.md`](CONTRIBUTING.md), [`AGENTS.md`](AGENTS.md) · **Security** — [`SECURITY.md`](SECURITY.md) · **Changes** — [`CHANGELOG.md`](CHANGELOG.md)

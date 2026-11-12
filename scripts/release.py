@@ -17,7 +17,7 @@ Usage:
   ``refactor``, ``style``, ``build``) and non-conventional subjects release
   nothing.
 
-``--write`` updates ``VERSION``, ``package.json`` and ``CHANGELOG.md``;
+``--write`` updates ``VERSION``, ``package.json``, ``.claude-plugin/plugin.json`` and ``CHANGELOG.md``;
 ``--notes`` writes the release notes (the changelog section); and
 ``--github-output`` appends ``release``, ``version``, ``tag``, ``prerelease``
 and ``changed`` for a GitHub Actions step. Standard library only.
@@ -181,7 +181,7 @@ def plan(root: Path) -> Dict[str, object]:
 
 
 def write(root: Path, result: Dict[str, object]) -> bool:
-    """Apply a planned release to VERSION, package.json and CHANGELOG.md; True when a file changed."""
+    """Apply a planned release to VERSION, package.json, .claude-plugin/plugin.json and CHANGELOG.md; True when a file changed."""
     if not result["release"]:
         return False
     version = str(result["version"])
@@ -190,12 +190,13 @@ def write(root: Path, result: Dict[str, object]) -> bool:
     if not version_file.is_file() or version_file.read_text(encoding="utf-8").strip() != version:
         version_file.write_text(version + "\n", encoding="utf-8")
         changed = True
-    package = root / "package.json"
-    if package.is_file():
-        data = json.loads(package.read_text(encoding="utf-8"))
+    for manifest in (root / "package.json", root / ".claude-plugin" / "plugin.json"):
+        if not manifest.is_file():
+            continue
+        data = json.loads(manifest.read_text(encoding="utf-8"))
         if data.get("version") != version:
             data["version"] = version
-            package.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+            manifest.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
             changed = True
     if result["needs_section"]:
         changelog = root / "CHANGELOG.md"
@@ -208,7 +209,7 @@ def write(root: Path, result: Dict[str, object]) -> bool:
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="Next release from Conventional Commits.")
     parser.add_argument("--root", default=".")
-    parser.add_argument("--write", action="store_true", help="update VERSION, package.json and CHANGELOG.md")
+    parser.add_argument("--write", action="store_true", help="update VERSION, package.json, .claude-plugin/plugin.json and CHANGELOG.md")
     parser.add_argument("--notes", help="write the release notes to this file")
     parser.add_argument("--github-output", help="append release, version, tag and changed to this file")
     args = parser.parse_args(argv)

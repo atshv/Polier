@@ -81,7 +81,7 @@ passing with exit code 0 and a result other than `infra`, `busy` or `timeout`.
 `budget.max_tokens_per_task` in `policy.json` caps what one task may spend
 across all its attempts and sessions (`null` switches it off). The use is
 stored per session in `runs/<ID>.json`: the lead records it with
-`tools/usage.py record <ID> --tokens N` (DSH does not hand token counts to plugins). At `budget.warn_at` (default 80 %)
+`tools/usage.py record <ID> --tokens N` (neither DSH nor Claude Code hands token counts to plugins). At `budget.warn_at` (default 80 %)
 the tools warn; once the budget is used, `tools/state.py` refuses another
 `in_progress` and the dispatch plan lists the task as blocked. Continuing needs a granted
 `state_override`. `tools/usage.py show` lists the use per task.

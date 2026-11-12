@@ -1,0 +1,97 @@
+{
+  "name": "polier",
+  "displayName": "Polier",
+  "version": "0.4.6",
+  "description": "AI software factory: runs a project through nine stations from idea to operation (web, iOS, Android, desktop, CLI, services), shows the live state in every prompt, turns every owner decision into a dialog and keeps builder agents to the plan with a write guard, recorded test evidence and reviews.",
+  "author": {
+    "name": "atshv",
+    "url": "https://github.com/atshv"
+  },
+  "homepage": "https://github.com/atshv/Polier",
+  "repository": "https://github.com/atshv/Polier",
+  "license": "MIT",
+  "icon": "./.claude-plugin/icon.png",
+  "keywords": [
+    "polier",
+    "software-factory",
+    "agents",
+    "planning",
+    "checklist",
+    "write-guard"
+  ],
+  "skills": [
+    "."
+  ],
+  "agents": [
+    "./claude/agents/analyst.md",
+    "./claude/agents/designer.md",
+    "./claude/agents/architect.md",
+    "./claude/agents/frontend-builder.md",
+    "./claude/agents/backend-builder.md",
+    "./claude/agents/mobile-builder.md",
+    "./claude/agents/reviewer.md",
+    "./claude/agents/security-reviewer.md",
+    "./claude/agents/release-manager.md"
+  ],
+  "hooks": "./claude/hooks.json",
+  "mcpServers": {
+    "polier": {
+      "command": "node",
+      "args": [
+        "${CLAUDE_PLUGIN_ROOT}/claude/server.mjs"
+      ],
+      "env": {
+        "POLIER_ENFORCE": "${user_config.enforce}",
+        "POLIER_STOP_CHECK": "${user_config.stop_check}",
+        "POLIER_MAX_STOP_REMINDERS": "${user_config.max_stop_reminders}",
+        "POLIER_PYTHON": "${user_config.python}",
+        "POLIER_OWNER": "${user_config.owner}",
+        "POLIER_CONTEXT": "${user_config.context}"
+      }
+    }
+  },
+  "userConfig": {
+    "enforce": {
+      "type": "string",
+      "title": "Write guard",
+      "description": "deny blocks writes outside the task scope, ask turns a denial into a permission prompt, off disables the guard.",
+      "options": [
+        "deny",
+        "ask",
+        "off"
+      ],
+      "default": "deny"
+    },
+    "stop_check": {
+      "type": "boolean",
+      "title": "Stop check",
+      "description": "Compare the git diff with the worker's scope before its turn ends.",
+      "default": true
+    },
+    "max_stop_reminders": {
+      "type": "number",
+      "title": "Stop reminders",
+      "description": "Reminders per turn before the stop check lets the turn end.",
+      "default": 2,
+      "min": 0,
+      "max": 10
+    },
+    "python": {
+      "type": "string",
+      "title": "Python",
+      "description": "Python 3.9+ interpreter for the Polier tools. Empty: python3 (python on Windows)."
+    },
+    "owner": {
+      "type": "string",
+      "title": "Owner name",
+      "description": "Name written into records the owner decides in a Polier dialog.",
+      "default": "owner"
+    },
+    "context": {
+      "type": "boolean",
+      "title": "Live context",
+      "description": "Show the live <polier> block and the guide to the model inside a Polier project.",
+      "default": true
+    }
+  }
+}
