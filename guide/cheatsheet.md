@@ -121,7 +121,7 @@ Stop. Keep only files that prevent a concrete class of errors, cut the architect
 Update only between stages, when the current stage is `done` and committed — never during a task, and not while M/L workers run. Skip updates that fix nothing you need, and keep the old version for the final stage.
 
 1. Read `CHANGELOG.md` from your `generator_version` up to the new `VERSION`.
-2. Update the plugin: `dsh plugin --profile <name> add github:atshv/polier#v<version>` and restart (or enable it under **Plugins**).
+2. Update the plugin: `dsh plugin --profile <name> add github:atshv/polier#v<version>` and restart (or enable it under **Plugins**); in Claude Code `/plugin marketplace update polier`, then `/plugin update polier@polier` and restart the session.
 3. Run `pl_check` on the project and apply the steps the changelog names until it is green.
 4. Set `generator_version` in `board.json`, run `render_status.py`, commit `chore: update generator to <version>`.
 

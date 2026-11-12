@@ -8,7 +8,6 @@ import path from 'node:path'
 import { run } from './run.mjs'
 import { beatClaims, context, stateOf } from './session.mjs'
 
-const COMMAND_TOOLS = new Set(['bash'])
 const MAX_VERDICTS = 256
 
 export function message(text) {
@@ -30,9 +29,10 @@ function targetOf(exec, guarded) {
   return typeof value === 'string' && value ? value : undefined
 }
 
-function commandOf(exec) {
+function commandOf(exec, config) {
   const args = exec.arguments && typeof exec.arguments === 'object' ? exec.arguments : {}
-  return COMMAND_TOOLS.has(exec.name) && typeof args.command === 'string' ? args.command : ''
+  const shells = config.commandTools ?? ['bash']
+  return shells.includes(exec.name) && typeof args.command === 'string' ? args.command : ''
 }
 
 /** Ask tools/guard.py; returns { deny, kills } or { error }. */
@@ -106,38 +106,62 @@ export async function scopeCheck(ctx, config, agent, info, taskId, signal) {
   }
 }
 
-/** Before a worker's turn ends: compare the git diff with the scope (catches writes through bash). */
-export async function onTurnStopping(ctx, config, payload) {
-  if (!config.stopCheck) return
-  const agent = payload?.agent
-  if (!agent || typeof agent.steer !== 'function') return
+/**
+ * The stop check for one worker session: the reminder to send when the working
+ * tree has changes outside the scope of its single task, or undefined.
+ */
+export async function stopReminder(ctx, config, agent, signal) {
   const info = context(ctx, agent)
-  if (!info || info.state.role !== 'worker' || info.tasks.length !== 1) return
-  const state = info.state
-  if (state.stop.turn !== payload.turn) state.stop = { turn: payload.turn, count: 0 }
-  if (state.stop.count >= config.maxStopReminders) return
+  if (!info || info.state.role !== 'worker' || info.tasks.length !== 1) return undefined
   const task = info.tasks[0]
   let result
   try {
-    result = await scopeCheck(ctx, config, agent, info, task.id, payload.signal)
+    result = await scopeCheck(ctx, config, agent, info, task.id, signal)
   } catch {
-    return
+    return undefined
   }
-  if (!result || result.ok || !Array.isArray(result.violations)) return
-  state.stop.count += 1
+  if (!result || result.ok || !Array.isArray(result.violations)) return undefined
   const lines = result.violations.slice(0, 20).map((v) => `- ${v.path}: ${v.reason}`)
   const foreign = Array.isArray(result.foreign) ? result.foreign : []
   if (foreign.length > 0) {
     lines.push('', 'Foreign changes from other live claims (not yours):')
     for (const item of foreign.slice(0, 20)) lines.push(`- foreign changes (task ${item.task}, harness ${item.harness}): ${item.path}`)
   }
-  agent.steer(message([
+  return [
     `Polier: the working tree has changes outside the scope of ${task.id}.`,
     ...lines,
     `Allowed: ${(task.scope_write ?? []).join(', ') || 'nothing'}.`,
     'Undo these changes (git checkout/rm for files you created or edited), or, if they are needed,',
     'keep them and report each one under open_questions in your result. Then finish.',
-  ].join('\n')))
+  ].join('\n')
+}
+
+/** Before a worker's turn ends: compare the git diff with the scope (catches writes through bash). */
+export async function onTurnStopping(ctx, config, payload) {
+  if (!config.stopCheck) return
+  const agent = payload?.agent
+  if (!agent || typeof agent.steer !== 'function') return
+  const state = stateOf(agent)
+  if (state.stop.turn !== payload.turn) state.stop = { turn: payload.turn, count: 0 }
+  if (state.stop.count >= config.maxStopReminders) return
+  const text = await stopReminder(ctx, config, agent, payload.signal)
+  if (!text) return
+  state.stop.count += 1
+  agent.steer(message(text))
+}
+
+/**
+ * The guard decision for one shell command: a denial reason, and whether the
+ * command stops processes (the advisory kill warning).
+ * @returns {Promise<{ deny?: string, kills: boolean }>}
+ */
+export async function checkCommand(ctx, config, exec) {
+  const command = commandOf(exec, config)
+  if (!exec.agent || !command.trim() || config.enforce === 'off') return { kills: false }
+  const info = context(ctx, exec.agent)
+  if (!info || info.state.role === 'off') return { kills: false }
+  const answer = await ask(ctx, config, exec.agent, info, { command })
+  return { deny: answer.deny, kills: answer.kills === true }
 }
 
 /**
@@ -157,18 +181,10 @@ export async function onToolPreExecute(ctx, config, exec, next, store) {
   }
   try {
     if (agent) {
-      const command = commandOf(exec)
-      let kills = false
-      if (command.trim() && config.enforce !== 'off') {
-        const info = context(ctx, agent)
-        if (info && info.state.role !== 'off') {
-          const answer = await ask(ctx, config, agent, info, { command })
-          if (answer.deny) {
-            store?.put(exec, answer.deny)
-            return { kind: 'deny', reason: answer.deny }
-          }
-          kills = answer.kills === true
-        }
+      const { deny, kills } = await checkCommand(ctx, config, exec)
+      if (deny) {
+        store?.put(exec, deny)
+        return { kind: 'deny', reason: deny }
       }
       await beatClaims(ctx, config, agent)
       if (kills) {

@@ -65,7 +65,7 @@ function lastLine(result) {
 }
 
 export async function takeClaim(ctx, config, agent, root, id) {
-  const argv = claimArgv(config, 'take', id, '--harness', 'dsh', '--session', String(agent.id), '--root', String(root))
+  const argv = claimArgv(config, 'take', id, '--harness', config.harness ?? 'dsh', '--session', String(agent.id), '--root', String(root))
   const task = (loadBoard(root)?.tasks ?? []).find((t) => t?.id === id)
   if (task && typeof task.worktree === 'string' && task.worktree.trim()) argv.push('--worktree', path.resolve(root, task.worktree))
   const slot = polierSlot(agentCwd(ctx, agent) || root)

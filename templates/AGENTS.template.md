@@ -36,7 +36,7 @@ Details: `ARCHITECTURE.md`. Progress: `STATUS.md`. Structure: `docs/module-map.m
 - Layer direction: UI calls logic, logic calls data, never back.
 - Versions only from docs or a manifest; no invented packages.
 - No secrets in the repo or bundle; web/mobile bundles are public; secrets live on the server.
-- Without DeepSeek Harness the same steps run as `python3 <polier>/tools/<name>.py` (dispatch, state, gate, approve, factory, review).
+- Without the Polier plugin (DeepSeek Harness or Claude Code) the same steps run as `python3 <polier>/tools/<name>.py` (dispatch, state, gate, approve, factory, review).
 
 ## Profile L only
 

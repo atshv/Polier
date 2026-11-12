@@ -1,13 +1,13 @@
 ---
 name: polier
-description: AI software factory for DeepSeek Harness. Runs a software project through nine stations — idea, concept, design, architecture, plan, build, verify, release, operate — for web, iOS, Android, desktop, CLI or backend services. Interviews the owner, writes the concept, design rules, a one-page architecture and a task DAG, maps every applicable checklist item (accounts, payments, store listings, privacy, monitoring …) to tasks, then keeps builder agents to the plan with a write guard, recorded gate evidence, reviews and owner approvals. Use when the user wants to plan, build, release or structure a new or existing software project with AI agents, asks what a website or app needs, or asks for the next station or stage of a project created this way.
+description: AI software factory for DeepSeek Harness and Claude Code. Runs a software project through nine stations — idea, concept, design, architecture, plan, build, verify, release, operate — for web, iOS, Android, desktop, CLI or backend services. Interviews the owner, writes the concept, design rules, a one-page architecture and a task DAG, maps every applicable checklist item (accounts, payments, store listings, privacy, monitoring …) to tasks, then keeps builder agents to the plan with a write guard, recorded gate evidence, reviews and owner approvals. Use when the user wants to plan, build, release or structure a new or existing software project with AI agents, asks what a website or app needs, or asks for the next station or stage of a project created this way.
 ---
 
 # Polier — AI software factory
 
-1. Read [`prompt/generator.md`](prompt/generator.md) completely and follow it; it is the only source of the process. Read [`prompt/dsh.md`](prompt/dsh.md) sections 0–2 for how it runs in DeepSeek Harness.
-2. If the input block is not filled in, ask for it first (`templates/project-input.md`), with `ask_user_question` where the answers are closed.
-3. Never ask the human to type a command. The `<polier>` block in your context is the live state; the `pl_*` tools change it:
+1. Read [`prompt/generator.md`](prompt/generator.md) completely and follow it; it is the only source of the process. Read sections 0–2 of the harness file: [`prompt/dsh.md`](prompt/dsh.md) in DeepSeek Harness, [`prompt/claude-code.md`](prompt/claude-code.md) in Claude Code.
+2. If the input block is not filled in, ask for it first (`templates/project-input.md`), with `ask_user_question` (Claude Code: `AskUserQuestion`) where the answers are closed.
+3. Never ask the human to type a command. The `<polier>` block in your context is the live state; the `pl_*` tools change it (in Claude Code they are named `mcp__plugin_polier_polier__pl_*`; load them with ToolSearch when they are deferred):
 
 | Intent of the human | Tool |
 |---|---|
@@ -19,9 +19,9 @@ description: AI software factory for DeepSeek Harness. Runs a software project t
 | plan, merge, record status | `pl_mode` lead (owner approves), then `pl_state` |
 | take a specialist role | `pl_role` (frontend-builder, backend-builder, reviewer …; `docs/roles.md`) |
 | work on a task | `pl_task` (takes the task's role too), then `pl_gate` per gate and `pl_scope_check` |
-| delegate a task | fresh subagent: `pl_role` with the task's role, then `pl_task` |
-| review | fresh subagent, `pl_role` reviewer, `pl_task`, `pl_review` (the packet), appends a round to `reviews/<ID>.md` |
-| a risky action | `pl_approval` — the owner answers the prompt |
+| delegate a task | fresh subagent: `pl_role` with the task's role, then `pl_task` (Claude Code: the subagent type `polier:<role>`) |
+| review | fresh subagent (Claude Code: `polier:reviewer`), `pl_role` reviewer, `pl_task`, `pl_review` (the packet), appends a round to `reviews/<ID>.md` |
+| a risky action | `pl_approval` — the owner answers the prompt (Claude Code: a dialog) |
 | lint the project | `pl_check` |
 
 4. Read other files only when their station starts:
@@ -38,8 +38,8 @@ description: AI software factory for DeepSeek Harness. Runs a software project t
 | 9 operate | `templates/runbook.md` |
 | reference | `tests/fixtures/minimal-cli/` (profile S), `tests/fixtures/monorepo-mini/` (profile L) |
 
-5. Python tools without a plugin tool, run with `bash` against the project: `tools/research.py`, `tools/worktree.py`, `tools/slot.py`, `tools/audit.py`, `tools/boundaries.py`, `tools/contracts.py`, `tools/release_check.py`, `tools/smoke.py`, `tools/usage.py`. Headless (no approval prompt), the owner uses the matching `tools/*.py` command instead of the prompt.
+5. Python tools without a plugin tool, run with `bash` against the project: `tools/research.py`, `tools/worktree.py`, `tools/slot.py`, `tools/audit.py`, `tools/boundaries.py`, `tools/contracts.py`, `tools/release_check.py`, `tools/smoke.py`, `tools/usage.py`. Headless (no approval prompt or dialog), the owner uses the matching `tools/*.py` command instead of the prompt.
 
-When scaffolding (station 5) write the gate, state, approval and factory rules into `AGENTS.md` as tool names (`pl_gate`, `pl_state`, `pl_approval`, `pl_factory`) and the runtime rules (ports, database and bucket names only from `.polier-slot`; never hard-code ports; never touch slot 0's data; no `kill`/`pkill`). Never hand-edit `board.json`, `factory.json`, `runs/` or `reviews/approvals/`.
+When scaffolding (station 5) write the gate, state, approval and factory rules into `AGENTS.md` (in Claude Code plus a `CLAUDE.md` with the single line `@AGENTS.md`) as tool names (`pl_gate`, `pl_state`, `pl_approval`, `pl_factory`) and the runtime rules (ports, database and bucket names only from `.polier-slot`; never hard-code ports; never touch slot 0's data; no `kill`/`pkill`). Never hand-edit `board.json`, `factory.json`, `runs/` or `reviews/approvals/`.
 
-This package is not part of the project: never copy or commit it there.
+The package folder is the folder of this file: paths such as `prompt/generator.md` and `tools/check.py` are relative to it. This package is not part of the project: never copy or commit it there.

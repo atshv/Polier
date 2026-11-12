@@ -6,9 +6,10 @@ Usage:
 
 1. factory/CATALOG.md matches factory/catalog.json.
 2. docs/tools.md and docs/roles.md match the plugin's tools and roles/.
-3. pyflakes finds nothing in core/, tools/, scripts/ and tests/*.py.
-4. Every export of plugin/lib/*.mjs is imported somewhere else in plugin/ or scripts/.
-5. node --check passes for every plugin and script module.
+3. The Claude Code plugin files (.claude-plugin/, claude/agents/) match VERSION and roles/.
+4. pyflakes finds nothing in core/, tools/, scripts/ and tests/*.py.
+5. Every export of plugin/lib/*.mjs and claude/lib/*.mjs is imported somewhere else in plugin/, claude/ or scripts/.
+6. node --check passes for every plugin, Claude Code and script module.
 
 Exit 0 when all pass, 1 otherwise. Needs pyflakes (pip install pyflakes).
 """
@@ -39,13 +40,17 @@ def main() -> int:
         problems.append(f"scripts/tools-doc.mjs failed: {doc.stderr.strip()[-500:]}")
     elif (ROOT / "docs" / "tools.md").read_text(encoding="utf-8") != doc.stdout:
         problems.append("docs/tools.md is stale: node scripts/tools-doc.mjs")
+    claude = run([sys.executable, "scripts/claude-plugin.py", "--check"])
+    if claude.returncode != 0:
+        problems.append("Claude Code plugin files are stale: python3 scripts/claude-plugin.py\n" + claude.stdout.strip())
     flakes = run([sys.executable, "-m", "pyflakes", "core", "tools", "scripts", *map(str, sorted((ROOT / "tests").glob("*.py")))])
     if flakes.returncode != 0:
         output = flakes.stdout.strip() or flakes.stderr.strip()
         problems.append("pyflakes:\n" + output)
-    modules = sorted((ROOT / "plugin").rglob("*.mjs")) + sorted((ROOT / "scripts").glob("*.mjs"))
+    modules = (sorted((ROOT / "plugin").rglob("*.mjs")) + sorted((ROOT / "claude").rglob("*.mjs"))
+               + sorted((ROOT / "scripts").glob("*.mjs")))
     sources = {path: path.read_text(encoding="utf-8") for path in modules}
-    for path in sorted((ROOT / "plugin" / "lib").glob("*.mjs")):
+    for path in sorted((ROOT / "plugin" / "lib").glob("*.mjs")) + sorted((ROOT / "claude" / "lib").glob("*.mjs")):
         for name in re.findall(r"^export (?:async )?(?:function|const) ([A-Za-z_$][\w$]*)", sources[path], re.M):
             used = any(re.search(rf"\b{re.escape(name)}\b", text) for other, text in sources.items() if other != path)
             if not used:
