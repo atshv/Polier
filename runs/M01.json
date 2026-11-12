@@ -81,8 +81,26 @@
         "result": "pass",
         "record": "reviews/evidence/M01-evals-smoke-20261112T234708Z.json"
       }
+    },
+    {
+      "at": "2026-11-12T23:48:19+00:00",
+      "kind": "state",
+      "data": {
+        "from": "in_progress",
+        "to": "verifying",
+        "actor": "lead"
+      }
+    },
+    {
+      "at": "2026-11-12T23:48:19+00:00",
+      "kind": "state",
+      "data": {
+        "from": "verifying",
+        "to": "review",
+        "actor": "lead"
+      }
     }
   ],
   "usage": {},
-  "updated": "2026-11-12T23:47:20+00:00"
+  "updated": "2026-11-12T23:48:19+00:00"
 }
