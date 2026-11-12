@@ -16,7 +16,7 @@ Factory line (✓ closed, bold = current station): idea ✓ · concept ✓ · de
 
 - Limits: 3 attempts/task, 1 in progress
 - Next wave: `M03` (tasks/M03.md)
-- Running: `M01` attempt 1/3
+- Running: `M01` attempt 2/3
 - Blocked: M02, M05, M07, M08, M09 (open dependency)
 - Approvals pending: none
 
@@ -26,7 +26,7 @@ Factory line (✓ closed, bold = current station): idea ✓ · concept ✓ · de
 
 ## In progress
 
-- [ ] `M01` Process eval suite — status: `rework` — owner: —
+- [ ] `M01` Process eval suite — status: `in_progress` — owner: —
 
 ## Blocked / failed
 

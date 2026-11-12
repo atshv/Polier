@@ -1,7 +1,7 @@
 {
   "task": "M01",
-  "state": "failed",
-  "attempt": 1,
+  "state": "running",
+  "attempt": 2,
   "attempts": [
     {
       "n": 1,
@@ -9,6 +9,13 @@
       "ended": "2026-11-12T23:51:20+00:00",
       "result": "fail",
       "note": "review round 1: record a full-suite run as evals-smoke (A1, A4); item-still-open back to arm: both; write-attempt graders stay with-only (brief corrected)"
+    },
+    {
+      "n": 2,
+      "started": "2026-11-12T23:51:31+00:00",
+      "ended": null,
+      "result": null,
+      "note": null
     }
   ],
   "events": [
@@ -109,8 +116,24 @@
         "actor": "lead",
         "note": "review round 1: record a full-suite run as evals-smoke (A1, A4); item-still-open back to arm: both; write-attempt graders stay with-only (brief corrected)"
       }
+    },
+    {
+      "at": "2026-11-12T23:51:31+00:00",
+      "kind": "start",
+      "data": {
+        "actor": "lead"
+      }
+    },
+    {
+      "at": "2026-11-12T23:51:31+00:00",
+      "kind": "state",
+      "data": {
+        "from": "rework",
+        "to": "in_progress",
+        "actor": "lead"
+      }
     }
   ],
   "usage": {},
-  "updated": "2026-11-12T23:51:20+00:00"
+  "updated": "2026-11-12T23:51:31+00:00"
 }
