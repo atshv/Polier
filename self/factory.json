@@ -15,11 +15,14 @@
   ],
   "stations": {
     "idea": {
-      "status": "active",
-      "started": "2026-11-12T23:12:38Z"
+      "status": "done",
+      "started": "2026-11-12T23:12:38Z",
+      "closed": "2026-11-12T23:13:50Z",
+      "approved_by": "owner (asked in the Claude Code chat, no dialog in this session)"
     },
     "concept": {
-      "status": "pending"
+      "status": "active",
+      "started": "2026-11-12T23:13:50Z"
     },
     "design": {
       "status": "pending"
@@ -101,25 +104,60 @@
       "by": "lead"
     },
     "CON-01": {
-      "status": "open"
+      "status": "done",
+      "evidence": [
+        "docs/concept.md#personas"
+      ],
+      "at": "2026-11-12T23:13:50Z",
+      "by": "lead"
     },
     "CON-02": {
-      "status": "open"
+      "status": "done",
+      "evidence": [
+        "docs/concept.md#features"
+      ],
+      "at": "2026-11-12T23:13:50Z",
+      "by": "lead"
     },
     "CON-03": {
-      "status": "open"
+      "status": "done",
+      "evidence": [
+        "docs/concept.md#user-stories"
+      ],
+      "at": "2026-11-12T23:13:50Z",
+      "by": "lead"
     },
     "CON-04": {
-      "status": "open"
+      "status": "done",
+      "evidence": [
+        "docs/quality.md"
+      ],
+      "at": "2026-11-12T23:13:50Z",
+      "by": "lead"
     },
     "CON-05": {
-      "status": "open"
+      "status": "done",
+      "evidence": [
+        "docs/concept.md#alternatives"
+      ],
+      "at": "2026-11-12T23:13:50Z",
+      "by": "lead"
     },
     "CON-06": {
-      "status": "open"
+      "status": "done",
+      "evidence": [
+        "docs/concept.md#costs"
+      ],
+      "at": "2026-11-12T23:13:50Z",
+      "by": "lead"
     },
     "CON-10": {
-      "status": "open"
+      "status": "done",
+      "evidence": [
+        "docs/concept.md#risks"
+      ],
+      "at": "2026-11-12T23:13:50Z",
+      "by": "lead"
     },
     "DES-15": {
       "status": "open"
@@ -318,6 +356,82 @@
       "status": "done",
       "evidence": [
         "docs/repo-facts.md"
+      ]
+    },
+    {
+      "at": "2026-11-12T23:13:50Z",
+      "event": "advance",
+      "by": "owner (asked in the Claude Code chat, no dialog in this session)",
+      "station": "idea"
+    },
+    {
+      "at": "2026-11-12T23:13:50Z",
+      "event": "item",
+      "by": "lead",
+      "item": "CON-01",
+      "status": "done",
+      "evidence": [
+        "docs/concept.md#personas"
+      ]
+    },
+    {
+      "at": "2026-11-12T23:13:50Z",
+      "event": "item",
+      "by": "lead",
+      "item": "CON-02",
+      "status": "done",
+      "evidence": [
+        "docs/concept.md#features"
+      ]
+    },
+    {
+      "at": "2026-11-12T23:13:50Z",
+      "event": "item",
+      "by": "lead",
+      "item": "CON-03",
+      "status": "done",
+      "evidence": [
+        "docs/concept.md#user-stories"
+      ]
+    },
+    {
+      "at": "2026-11-12T23:13:50Z",
+      "event": "item",
+      "by": "lead",
+      "item": "CON-04",
+      "status": "done",
+      "evidence": [
+        "docs/quality.md"
+      ]
+    },
+    {
+      "at": "2026-11-12T23:13:50Z",
+      "event": "item",
+      "by": "lead",
+      "item": "CON-05",
+      "status": "done",
+      "evidence": [
+        "docs/concept.md#alternatives"
+      ]
+    },
+    {
+      "at": "2026-11-12T23:13:50Z",
+      "event": "item",
+      "by": "lead",
+      "item": "CON-06",
+      "status": "done",
+      "evidence": [
+        "docs/concept.md#costs"
+      ]
+    },
+    {
+      "at": "2026-11-12T23:13:50Z",
+      "event": "item",
+      "by": "lead",
+      "item": "CON-10",
+      "status": "done",
+      "evidence": [
+        "docs/concept.md#risks"
       ]
     }
   ]
