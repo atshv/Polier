@@ -59,7 +59,7 @@
       "satisfies": [
         "D1"
       ],
-      "status": "review",
+      "status": "rework",
       "depends_on": [],
       "complexity": 6,
       "stage": 1,
@@ -89,7 +89,7 @@
       "owner": null,
       "branch": "task/M01",
       "worktree": null,
-      "round": 0,
+      "round": 1,
       "evidence": [],
       "scope_write_forbidden": [],
       "handoff": []
