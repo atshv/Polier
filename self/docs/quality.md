@@ -1,6 +1,6 @@
 # Quality: Polier next
 
-> Station 2 (concept), **draft**. Done scenarios D1..Dn (`CON-04`); every MVP story maps to one.
+> Station 2 (concept), draft for the owner's approval. Done scenarios D1..Dn (`CON-04`); every MVP story maps to one.
 
 | ID | Scenario | Stories |
 | --- | --- | --- |

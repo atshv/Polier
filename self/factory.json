@@ -1,0 +1,324 @@
+{
+  "factory_version": "3.0",
+  "platforms": [
+    "cli"
+  ],
+  "traits": [
+    "ai",
+    "brownfield",
+    "public"
+  ],
+  "resolved_traits": [
+    "ai",
+    "brownfield",
+    "public"
+  ],
+  "stations": {
+    "idea": {
+      "status": "active",
+      "started": "2026-11-12T23:12:38Z"
+    },
+    "concept": {
+      "status": "pending"
+    },
+    "design": {
+      "status": "pending"
+    },
+    "architecture": {
+      "status": "pending"
+    },
+    "plan": {
+      "status": "pending"
+    },
+    "build": {
+      "status": "pending"
+    },
+    "verify": {
+      "status": "pending"
+    },
+    "release": {
+      "status": "pending"
+    },
+    "operate": {
+      "status": "pending"
+    }
+  },
+  "items": {
+    "IDEA-01": {
+      "status": "done",
+      "evidence": [
+        "project-input.md#problem"
+      ],
+      "at": "2026-11-12T23:12:44Z",
+      "by": "lead"
+    },
+    "IDEA-02": {
+      "status": "done",
+      "evidence": [
+        "project-input.md#users"
+      ],
+      "at": "2026-11-12T23:12:44Z",
+      "by": "lead"
+    },
+    "IDEA-03": {
+      "status": "done",
+      "evidence": [
+        "project-input.md#success-signal"
+      ],
+      "at": "2026-11-12T23:12:44Z",
+      "by": "lead"
+    },
+    "IDEA-04": {
+      "status": "done",
+      "evidence": [
+        "project-input.md#non-goals"
+      ],
+      "at": "2026-11-12T23:12:44Z",
+      "by": "lead"
+    },
+    "IDEA-05": {
+      "status": "done",
+      "evidence": [
+        "factory.json"
+      ],
+      "at": "2026-11-12T23:12:44Z",
+      "by": "lead"
+    },
+    "IDEA-06": {
+      "status": "done",
+      "evidence": [
+        "project-input.md#budget-and-time"
+      ],
+      "at": "2026-11-12T23:12:44Z",
+      "by": "lead"
+    },
+    "IDEA-07": {
+      "status": "done",
+      "evidence": [
+        "docs/repo-facts.md"
+      ],
+      "at": "2026-11-12T23:12:44Z",
+      "by": "lead"
+    },
+    "CON-01": {
+      "status": "open"
+    },
+    "CON-02": {
+      "status": "open"
+    },
+    "CON-03": {
+      "status": "open"
+    },
+    "CON-04": {
+      "status": "open"
+    },
+    "CON-05": {
+      "status": "open"
+    },
+    "CON-06": {
+      "status": "open"
+    },
+    "CON-10": {
+      "status": "open"
+    },
+    "DES-15": {
+      "status": "open"
+    },
+    "ARC-01": {
+      "status": "open"
+    },
+    "ARC-02": {
+      "status": "open"
+    },
+    "ARC-05": {
+      "status": "open"
+    },
+    "ARC-09": {
+      "status": "open"
+    },
+    "ARC-10": {
+      "status": "open"
+    },
+    "ARC-12": {
+      "status": "open"
+    },
+    "ARC-16": {
+      "status": "open"
+    },
+    "PLN-01": {
+      "status": "open"
+    },
+    "PLN-02": {
+      "status": "open"
+    },
+    "PLN-03": {
+      "status": "open"
+    },
+    "PLN-04": {
+      "status": "open"
+    },
+    "PLN-05": {
+      "status": "open"
+    },
+    "PLN-06": {
+      "status": "open"
+    },
+    "PLN-07": {
+      "status": "open"
+    },
+    "PLN-08": {
+      "status": "open"
+    },
+    "PLN-09": {
+      "status": "open"
+    },
+    "PLN-10": {
+      "status": "open"
+    },
+    "PLN-11": {
+      "status": "open"
+    },
+    "BLD-11": {
+      "status": "open"
+    },
+    "BLD-42": {
+      "status": "open"
+    },
+    "BLD-44": {
+      "status": "open"
+    },
+    "BLD-53": {
+      "status": "open"
+    },
+    "BLD-70": {
+      "status": "open"
+    },
+    "VER-01": {
+      "status": "open"
+    },
+    "VER-07": {
+      "status": "open"
+    },
+    "VER-10": {
+      "status": "open"
+    },
+    "VER-12": {
+      "status": "open"
+    },
+    "REL-01": {
+      "status": "open"
+    },
+    "REL-02": {
+      "status": "open"
+    },
+    "REL-09": {
+      "status": "open"
+    },
+    "REL-12": {
+      "status": "open"
+    },
+    "REL-CLI-01": {
+      "status": "open"
+    },
+    "OPS-05": {
+      "status": "open"
+    },
+    "OPS-06": {
+      "status": "open"
+    },
+    "OPS-08": {
+      "status": "open"
+    },
+    "OPS-10": {
+      "status": "open"
+    },
+    "OPS-11": {
+      "status": "open"
+    }
+  },
+  "history": [
+    {
+      "at": "2026-11-12T23:12:38Z",
+      "event": "init",
+      "by": "owner (asked in the Claude Code chat, no dialog in this session)",
+      "platforms": [
+        "cli"
+      ],
+      "traits": [
+        "ai",
+        "brownfield",
+        "public"
+      ]
+    },
+    {
+      "at": "2026-11-12T23:12:44Z",
+      "event": "item",
+      "by": "lead",
+      "item": "IDEA-01",
+      "status": "done",
+      "evidence": [
+        "project-input.md#problem"
+      ]
+    },
+    {
+      "at": "2026-11-12T23:12:44Z",
+      "event": "item",
+      "by": "lead",
+      "item": "IDEA-02",
+      "status": "done",
+      "evidence": [
+        "project-input.md#users"
+      ]
+    },
+    {
+      "at": "2026-11-12T23:12:44Z",
+      "event": "item",
+      "by": "lead",
+      "item": "IDEA-03",
+      "status": "done",
+      "evidence": [
+        "project-input.md#success-signal"
+      ]
+    },
+    {
+      "at": "2026-11-12T23:12:44Z",
+      "event": "item",
+      "by": "lead",
+      "item": "IDEA-04",
+      "status": "done",
+      "evidence": [
+        "project-input.md#non-goals"
+      ]
+    },
+    {
+      "at": "2026-11-12T23:12:44Z",
+      "event": "item",
+      "by": "lead",
+      "item": "IDEA-05",
+      "status": "done",
+      "evidence": [
+        "factory.json"
+      ]
+    },
+    {
+      "at": "2026-11-12T23:12:44Z",
+      "event": "item",
+      "by": "lead",
+      "item": "IDEA-06",
+      "status": "done",
+      "evidence": [
+        "project-input.md#budget-and-time"
+      ]
+    },
+    {
+      "at": "2026-11-12T23:12:44Z",
+      "event": "item",
+      "by": "lead",
+      "item": "IDEA-07",
+      "status": "done",
+      "evidence": [
+        "docs/repo-facts.md"
+      ]
+    }
+  ]
+}

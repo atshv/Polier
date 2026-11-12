@@ -1,6 +1,6 @@
 # Concept: Polier next
 
-> Station 2 (concept), **draft** — station 1 is not closed yet. Polier run on itself. Research: `docs/research/neighbours.md`, `docs/research/verification-reports.md`, `docs/research/claude-plugin-eval.md`.
+> Station 2 (concept), draft for the owner's approval. Polier run on itself. Owner decision 2026-11-12: the first stage is F1–F4. Research: `docs/research/neighbours.md`, `docs/research/verification-reports.md`, `docs/research/claude-plugin-eval.md`.
 
 ## Direction
 
@@ -28,7 +28,7 @@ Polier does not try to win at writing specs; Spec Kit, OpenSpec and Kiro do that
 | F8 | **Other MCP clients**: run `claude/server.mjs` from Codex, Gemini CLI or Cursor (tools only, guard where the client has hooks) | later | the server is already harness-neutral; reach without a third adapter |
 | F9 | **Two review lenses by default at M/L**: spec compliance first, code quality second | later | Superpowers shows it; Polier's rubric already has both parts |
 
-The MVP is F1–F4: F1 measures, F2 learns, F3 and F4 make the line usable after the first release.
+The MVP, and the first stage, is F1–F4 (owner, 2026-11-12): F1 measures, F2 learns, F3 and F4 make the line usable after the first release. F5–F9 wait for a later stage.
 
 ## User stories
 
