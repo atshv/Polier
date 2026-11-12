@@ -27,8 +27,62 @@
         "to": "in_progress",
         "actor": "lead"
       }
+    },
+    {
+      "at": "2026-11-12T23:34:30+00:00",
+      "kind": "gate",
+      "data": {
+        "gate": "check",
+        "result": "pass",
+        "record": "reviews/evidence/M01-check-20261112T233429Z.json"
+      }
+    },
+    {
+      "at": "2026-11-12T23:34:31+00:00",
+      "kind": "gate",
+      "data": {
+        "gate": "validate",
+        "result": "pass",
+        "record": "reviews/evidence/M01-validate-20261112T233430Z.json"
+      }
+    },
+    {
+      "at": "2026-11-12T23:34:45+00:00",
+      "kind": "gate",
+      "data": {
+        "gate": "evals-smoke",
+        "result": "pass",
+        "record": "reviews/evidence/M01-evals-smoke-20261112T233433Z.json"
+      }
+    },
+    {
+      "at": "2026-11-12T23:47:03+00:00",
+      "kind": "gate",
+      "data": {
+        "gate": "check",
+        "result": "pass",
+        "record": "reviews/evidence/M01-check-20261112T234702Z.json"
+      }
+    },
+    {
+      "at": "2026-11-12T23:47:04+00:00",
+      "kind": "gate",
+      "data": {
+        "gate": "validate",
+        "result": "pass",
+        "record": "reviews/evidence/M01-validate-20261112T234703Z.json"
+      }
+    },
+    {
+      "at": "2026-11-12T23:47:20+00:00",
+      "kind": "gate",
+      "data": {
+        "gate": "evals-smoke",
+        "result": "pass",
+        "record": "reviews/evidence/M01-evals-smoke-20261112T234708Z.json"
+      }
     }
   ],
   "usage": {},
-  "updated": "2026-11-12T23:31:36+00:00"
+  "updated": "2026-11-12T23:47:20+00:00"
 }
