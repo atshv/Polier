@@ -225,8 +225,29 @@ def paths_overlap(a: str, b: str) -> bool:
     return a == b or a.startswith(b + "/") or b.startswith(a + "/")
 
 
+VENDORED = {"node_modules", ".git", ".venv", "venv", "__pycache__"}
+
+
+def markdown_files(root: Path) -> list[Path]:
+    """The project's own Markdown files: what git tracks or would track (ignored
+    files such as node_modules/ are skipped); without git, every file outside
+    vendored and hidden folders."""
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(root), "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", "*.md"],
+            capture_output=True, check=False,
+        )
+    except FileNotFoundError:
+        result = None
+    if result is not None and result.returncode == 0:
+        names = [n for n in result.stdout.decode("utf-8", "replace").split("\0") if n]
+        return sorted(p for p in (root / n for n in names) if p.is_file())
+    return sorted(p for p in root.rglob("*.md")
+                  if not any(part in VENDORED or part.startswith(".") for part in p.relative_to(root).parts[:-1]))
+
+
 def check_links(root: Path, errors: list[str]) -> None:
-    for path in root.rglob("*.md"):
+    for path in markdown_files(root):
         text = path.read_text(encoding="utf-8")
         for target in re.findall(r"\]\(([^)#]+)(?:#[^)]*)?\)", text):
             target = target.strip()

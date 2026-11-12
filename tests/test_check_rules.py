@@ -380,3 +380,23 @@ class OrchestrationChecks(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Links(unittest.TestCase):
+    def test_vendored_and_ignored_markdown_is_not_linted(self):
+        import subprocess
+        root = Path(tempfile.mkdtemp(prefix="pl-links-"))
+        (root / "README.md").write_text("[ok](docs/a.md) [broken](docs/missing.md)\n")
+        (root / "docs").mkdir()
+        (root / "docs" / "a.md").write_text("a\n")
+        for folder in ("node_modules/pkg", "build"):
+            (root / folder).mkdir(parents=True)
+            (root / folder / "README.md").write_text("[gone](src/index.ts)\n")
+        (root / ".gitignore").write_text("node_modules/\nbuild/\n")
+        errors: list = []
+        check.check_links(root, errors)
+        self.assertEqual(sorted(errors), ["README.md: broken link: docs/missing.md", "build/README.md: broken link: src/index.ts"])
+        subprocess.run(["git", "init", "-q", str(root)], check=True)
+        errors = []
+        check.check_links(root, errors)
+        self.assertEqual(errors, ["README.md: broken link: docs/missing.md"])
