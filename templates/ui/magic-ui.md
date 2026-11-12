@@ -36,5 +36,22 @@ Every component the product uses is listed once; a component not in the table is
 
 ## Agents
 
-- Optional agent skill from the Magic UI repository: `npx skills add magicuidesign/magicui --skill magic-ui`. [VERIFY: the folder DeepSeek Harness reads skills from.]
-- Optional MCP server for browsing the registry: see [magicui.design/docs/mcp](https://magicui.design/docs/mcp); DeepSeek Harness connects MCP servers through its MCP client. The install contract above stays the rule either way.
+The install contract above stays the rule either way: a skill or an MCP server helps an agent find components, it never replaces `npx shadcn@latest add`, the `## Components` table or the `pl_approval` for a new dependency. Both are optional; adding one is the owner's call, because it widens what agents can reach (`docs/guard-limits.md`).
+
+**DeepSeek Harness**
+
+- Agent skill from the Magic UI repository: `npx skills add magicuidesign/magicui --skill magic-ui`. [VERIFY: the folder DeepSeek Harness reads skills from.]
+- MCP server for browsing the registry: see [magicui.design/docs/mcp](https://magicui.design/docs/mcp); DeepSeek Harness connects MCP servers through its MCP client.
+
+**Claude Code**
+
+- MCP server: the shadcn MCP server with the Magic UI registry (as of 2026-11-12, [magicui.design/docs/mcp](https://magicui.design/docs/mcp), [ui.shadcn.com/docs/mcp](https://ui.shadcn.com/docs/mcp)).
+  1. In `components.json` → `registries`: `"@magicui": "https://magicui.design/r/{name}.json"`.
+  2. `npx shadcn@latest mcp init --client claude`, or by hand a project `.mcp.json`:
+     ```json
+     { "mcpServers": { "shadcn": { "command": "npx", "args": ["shadcn@latest", "mcp"] } } }
+     ```
+  3. Restart the session; `/mcp` shows `shadcn` as connected. Claude Code asks the owner once before it starts a server from a project `.mcp.json`.
+  `components.json` and `.mcp.json` belong to the task that creates the web shell: list them in its scope.
+- Agent skill: `npx skills add magicuidesign/magicui --skill magic-ui`, choosing Claude Code as the target, puts it under `.claude/skills/`; commit it with the project so every session and subagent gets it. [VERIFY: the skill name and the CLI's Claude Code target against the Magic UI repository.]
+- The `polier:frontend-builder` and `polier:designer` subagents inherit the session's MCP servers and skills; nothing else is needed.
