@@ -1,0 +1,86 @@
+$ python3 tools/check.py tests/fixtures/minimal-cli && python3 tools/check.py tests/fixtures/monorepo-mini && python3 tools/audit.py --root tests/fixtures/monorepo-mini
+[exit 0]
+
+WARN: AGENTS.md: 303 words (target max. 300)
+WARN: M01: evidence is free text; use the record paths printed by tools/gate.py
+WARN: M02: evidence is free text; use the record paths printed by tools/gate.py
+WARN: board.json: project uses generator 0.4.4, package is 0.4.7; see CHANGELOG.md before updating
+WARN: policy.json is missing — the orchestration checks are off
+OK: /home/user/Polier/tests/fixtures/minimal-cli passes the mandatory checks. (5 warning(s))
+WARN: F-01: record reviews/evidence/F-01-layout-20261025T010516Z.json was made on commit a65e479902, which is not in HEAD's history
+WARN: F-02: record reviews/evidence/F-02-layout-20261025T010516Z.json was made on commit a65e479902, which is not in HEAD's history
+WARN: F-02: record reviews/evidence/F-02-contracts-20261025T010516Z.json was made on commit a65e479902, which is not in HEAD's history
+WARN: board.json: project uses generator 0.4.4, package is 0.4.7; see CHANGELOG.md before updating
+WARN: dispatch: ENG-02 is blocked — waits for ENG-01
+WARN: dispatch: API-01 is blocked — stage waits for engine-spike
+WARN: dispatch: WEB-01 is blocked — stage waits for engine-spike
+WARN: dispatch: WEB-02 is blocked — stage waits for surface
+WARN: dispatch: REL-01 is blocked — stage waits for surface
+OK: /home/user/Polier/tests/fixtures/monorepo-mini passes the mandatory checks. (9 warning(s))
+F-01 Workspace scaffold and package map
+  status: done · attempts: 1/3
+  gates: layout (pass)
+  review: reviews/F-01.md verdict: pass
+  handoff: 2 line(s)
+  approvals: none
+  run record: yes
+
+F-02 State contract schema and fixtures
+  status: done · attempts: 1/3
+  gates: layout (pass), contracts (pass)
+  review: reviews/F-02.md verdict: pass
+  handoff: 2 line(s)
+  approvals: none
+  run record: yes
+
+ENG-01 C++ scene core and unit tests
+  status: pending · attempts: 0/3
+  gates: configure (missing), build (missing), cpp-unit (missing), boundaries (missing)
+  review: reviews/ENG-01.md (missing)
+  handoff: 0 line(s)
+  approvals: none
+  run record: no
+
+ENG-02 WASM bindings and size budget
+  status: pending · attempts: 0/3
+  gates: wasm-build (missing), wasm-test (missing), wasm-size (missing), boundaries (missing)
+  review: reviews/ENG-02.md (missing)
+  handoff: 0 line(s)
+  approvals: none
+  run record: no
+
+API-01 Sync service over the state contract
+  status: pending · attempts: 0/3
+  gates: types (missing), tests (missing), contracts (missing), boundaries (missing), smoke (missing)
+  review: reviews/API-01.md (missing)
+  handoff: 0 line(s)
+  approvals: new_dependency pending (AP-001)
+  run record: no
+
+WEB-01 Toolbar and stage in the UI kit
+  status: pending · attempts: 0/3
+  gates: types (missing), tests (missing), visual-diff (missing), boundaries (missing)
+  review: reviews/WEB-01.md (missing)
+  handoff: 0 line(s)
+  approvals: none
+  run record: no
+
+WEB-02 Web app shell and sync wiring
+  status: pending · attempts: 0/3
+  gates: types (missing), tests (missing), e2e (missing), smoke (missing), boundaries (missing)
+  review: reviews/WEB-02.md (missing)
+  handoff: 0 line(s)
+  approvals: none
+  run record: no · dependency manifest: package.json
+
+REL-01 Release readiness and environments
+  status: pending · attempts: 0/3
+  gates: release (missing), smoke (missing)
+  review: reviews/REL-01.md (missing)
+  handoff: 0 line(s)
+  approvals: none
+  run record: no
+
+ERRORS: none
+WARNINGS: none
+audit: 0 error(s), 0 warning(s)

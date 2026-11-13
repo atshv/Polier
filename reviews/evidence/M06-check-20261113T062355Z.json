@@ -1,0 +1,17 @@
+{
+  "task": "M06",
+  "gate": "check",
+  "command": "npm run check",
+  "exit_code": 0,
+  "result": "pass",
+  "slot": null,
+  "exclusive": [],
+  "lock_wait_s": 0.0,
+  "lock_warning": null,
+  "started": "2026-11-13T06:23:55+00:00",
+  "finished": "2026-11-13T06:23:56+00:00",
+  "commit": "cef938e25fe43104fbf031f04ef1f62f1aa7cf22",
+  "dirty": true,
+  "log": "M06-check-20261113T062355Z.log",
+  "log_sha256": "318266123b2405d03e8f89fbf68ce35e6f32f6cd1dc4a20bdb719efd221e2b07"
+}
