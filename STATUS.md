@@ -26,7 +26,7 @@ Factory line (✓ closed, bold = current station): idea ✓ · concept ✓ · de
 
 ## In progress
 
-- [ ] `M01` Process eval suite — status: `in_progress` — owner: —
+- [ ] `M01` Process eval suite — status: `review` — owner: —
 
 ## Blocked / failed
 
