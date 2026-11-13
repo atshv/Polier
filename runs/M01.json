@@ -132,8 +132,35 @@
         "to": "in_progress",
         "actor": "lead"
       }
+    },
+    {
+      "at": "2026-11-12T23:51:45+00:00",
+      "kind": "gate",
+      "data": {
+        "gate": "check",
+        "result": "pass",
+        "record": "reviews/evidence/M01-check-20261112T235143Z.json"
+      }
+    },
+    {
+      "at": "2026-11-12T23:51:45+00:00",
+      "kind": "gate",
+      "data": {
+        "gate": "validate",
+        "result": "pass",
+        "record": "reviews/evidence/M01-validate-20261112T235145Z.json"
+      }
+    },
+    {
+      "at": "2026-11-13T00:00:08+00:00",
+      "kind": "gate",
+      "data": {
+        "gate": "evals-smoke",
+        "result": "pass",
+        "record": "reviews/evidence/M01-evals-smoke-20261112T235824Z.json"
+      }
     }
   ],
   "usage": {},
-  "updated": "2026-11-12T23:51:31+00:00"
+  "updated": "2026-11-13T00:00:08+00:00"
 }

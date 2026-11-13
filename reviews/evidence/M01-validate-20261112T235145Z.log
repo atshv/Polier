@@ -1,0 +1,16 @@
+$ claude plugin validate . --strict
+[exit 0]
+
+Validating marketplace manifest: /home/user/Polier/.claude-plugin/marketplace.json
+
+Plugin directory checks for /home/user/Polier. The plugin directory is the catalog that plugins are submitted to; this is a subset of what it runs.
+
+About these checks:
+
+  > This folder also holds a marketplace manifest. The plugin directory treats such a folder as a plugin, so these checks cover only the plugin in this folder. To check another plugin that the marketplace lists, run validate on that plugin's folder.
+
+√ These checks found nothing to report
+
+The directory also runs a safety scan and a policy review that this command does not.
+
+√ Validation passed

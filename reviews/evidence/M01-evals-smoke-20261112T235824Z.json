@@ -1,0 +1,17 @@
+{
+  "task": "M01",
+  "gate": "evals-smoke",
+  "command": "claude plugin eval . --runs 1 --ablation none --mocks off --allow-tools \"mcp__plugin_polier_polier__*\" Write Edit --scaffold --trust-plugin --no-publish --max-cost-usd 3 --threshold 0",
+  "exit_code": 0,
+  "result": "pass",
+  "slot": null,
+  "exclusive": [],
+  "lock_wait_s": 0.0,
+  "lock_warning": null,
+  "started": "2026-11-12T23:58:24+00:00",
+  "finished": "2026-11-13T00:00:08+00:00",
+  "commit": "80852e27013f8558d35b10206b25aec3f768b274",
+  "dirty": true,
+  "log": "M01-evals-smoke-20261112T235824Z.log",
+  "log_sha256": "01fac7f5c27992a01e94bddfbfa757ba702a8622054e7e4951b676a42e6985fc"
+}
