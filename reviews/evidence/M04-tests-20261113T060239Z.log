@@ -1,0 +1,327 @@
+$ npm test
+[exit 0]
+
+
+> dsh-polier@0.4.7 test
+> node --test plugin/test/*.test.mjs claude/test/*.test.mjs && python3 -m unittest discover -s tests && python3 -m unittest discover -s core/tests -t .
+
+TAP version 13
+# Subtest: the server lists every pl_* tool with its schema
+ok 1 - the server lists every pl_* tool with its schema
+  ---
+  duration_ms: 128.964037
+  type: 'test'
+  ...
+# Subtest: outside a Polier project every hook stays silent
+ok 2 - outside a Polier project every hook stays silent
+  ---
+  duration_ms: 248.452524
+  type: 'test'
+  ...
+# Subtest: inside a project the session starts with the guide and every prompt carries the live block
+ok 3 - inside a project the session starts with the guide and every prompt carries the live block
+  ---
+  duration_ms: 252.322783
+  type: 'test'
+  ...
+# Subtest: a worker writes inside its scope only; ask mode turns the denial into a permission prompt
+ok 4 - a worker writes inside its scope only; ask mode turns the denial into a permission prompt
+  ---
+  duration_ms: 426.686406
+  type: 'test'
+  ...
+# Subtest: a command the policy denies is refused; a kill is warned about once per prompt
+ok 5 - a command the policy denies is refused; a kill is warned about once per prompt
+  ---
+  duration_ms: 592.812163
+  type: 'test'
+  ...
+# Subtest: lead mode needs the owner: approve in the dialog widens the session, a subagent stays a worker
+ok 6 - lead mode needs the owner: approve in the dialog widens the session, a subagent stays a worker
+  ---
+  duration_ms: 670.150377
+  type: 'test'
+  ...
+# Subtest: without an elicitation dialog every owner decision fails closed
+ok 7 - without an elicitation dialog every owner decision fails closed
+  ---
+  duration_ms: 255.452806
+  type: 'test'
+  ...
+# Subtest: the owner starts the line in a dialog and the record names Claude Code
+ok 8 - the owner starts the line in a dialog and the record names Claude Code
+  ---
+  duration_ms: 297.838771
+  type: 'test'
+  ...
+# Subtest: a bound task is claimed for Claude Code, its role instructions come back, and the claim ends with the session
+ok 9 - a bound task is claimed for Claude Code, its role instructions come back, and the claim ends with the session
+  ---
+  duration_ms: 501.375291
+  type: 'test'
+  ...
+# Subtest: the stop check holds a worker back while its tree has changes outside the scope
+ok 10 - the stop check holds a worker back while its tree has changes outside the scope
+  ---
+  duration_ms: 579.306737
+  type: 'test'
+  ...
+# Subtest: the plugin manifest matches the package
+ok 11 - the plugin manifest matches the package
+  ---
+  duration_ms: 1.163219
+  type: 'test'
+  ...
+# Subtest: guard allows writes inside the scope and blocks the rest
+ok 12 - guard allows writes inside the scope and blocks the rest
+  ---
+  duration_ms: 353.961687
+  type: 'test'
+  ...
+# Subtest: forbidden paths win and no running task means no guard
+ok 13 - forbidden paths win and no running task means no guard
+  ---
+  duration_ms: 243.843092
+  type: 'test'
+  ...
+# Subtest: pl_mode lead needs the owner and lifts the guard for that session only
+ok 14 - pl_mode lead needs the owner and lifts the guard for that session only
+  ---
+  duration_ms: 296.290502
+  type: 'test'
+  ...
+# Subtest: pl_mode lead fails closed without an approval service
+ok 15 - pl_mode lead fails closed without an approval service
+  ---
+  duration_ms: 87.552567
+  type: 'test'
+  ...
+# Subtest: pl_mode reviewer may write only under reviews/, with or without a running task
+ok 16 - pl_mode reviewer may write only under reviews/, with or without a running task
+  ---
+  duration_ms: 359.606704
+  type: 'test'
+  ...
+# Subtest: pl_task binds a session when several tasks run
+ok 17 - pl_task binds a session when several tasks run
+  ---
+  duration_ms: 289.130376
+  type: 'test'
+  ...
+# Subtest: enforce off and ask
+ok 18 - enforce off and ask
+  ---
+  duration_ms: 141.233357
+  type: 'test'
+  ...
+# Subtest: pl_status lists the running and ready tasks with handoffs
+ok 19 - pl_status lists the running and ready tasks with handoffs
+  ---
+  duration_ms: 198.483359
+  type: 'test'
+  ...
+# Subtest: pl_gate writes a record and reports pass and fail
+ok 20 - pl_gate writes a record and reports pass and fail
+  ---
+  duration_ms: 198.571512
+  type: 'test'
+  ...
+# Subtest: pl_scope_check and the stop check see writes made outside the tools
+ok 21 - pl_scope_check and the stop check see writes made outside the tools
+  ---
+  duration_ms: 298.836565
+  type: 'test'
+  ...
+# Subtest: pl_check runs tools/check.py
+ok 22 - pl_check runs tools/check.py
+  ---
+  duration_ms: 134.029662
+  type: 'test'
+  ...
+# Subtest: the bundled skill parses
+ok 23 - the bundled skill parses
+  ---
+  duration_ms: 0.564876
+  type: 'test'
+  ...
+# Subtest: registers the tools, the live context and the skill with the real services
+ok 24 - registers the tools, the live context and the skill with the real services
+  ---
+  duration_ms: 176.549165
+  type: 'test'
+  ...
+# Subtest: pl_task takes the claim and pl_status lists the live claims
+ok 25 - pl_task takes the claim and pl_status lists the live claims
+  ---
+  duration_ms: 399.421345
+  type: 'test'
+  ...
+# Subtest: pl_task refuses a task claimed by another harness and names the holder
+ok 26 - pl_task refuses a task claimed by another harness and names the holder
+  ---
+  duration_ms: 191.788565
+  type: 'test'
+  ...
+# Subtest: tool calls refresh the claim heartbeat at most once per minute
+ok 27 - tool calls refresh the claim heartbeat at most once per minute
+  ---
+  duration_ms: 322.10623
+  type: 'test'
+  ...
+# Subtest: disposing an agent releases the claims it held
+ok 28 - disposing an agent releases the claims it held
+  ---
+  duration_ms: 234.170403
+  type: 'test'
+  ...
+# Subtest: the guard denies writes in the main checkout when worktrees are required
+ok 29 - the guard denies writes in the main checkout when worktrees are required
+  ---
+  duration_ms: 178.626395
+  type: 'test'
+  ...
+# Subtest: foreign changes are reported separately and do not trigger the stop reminder
+ok 30 - foreign changes are reported separately and do not trigger the stop reminder
+  ---
+  duration_ms: 459.674873
+  type: 'test'
+  ...
+# Subtest: a bash kill command steers once per turn and is never a denial
+ok 31 - a bash kill command steers once per turn and is never a denial
+  ---
+  duration_ms: 212.976912
+  type: 'test'
+  ...
+# Subtest: pl_gate passes the slot and the exclusive resources of the task
+ok 32 - pl_gate passes the slot and the exclusive resources of the task
+  ---
+  duration_ms: 211.032885
+  type: 'test'
+  ...
+# Subtest: ready tasks respect stage exit gates and the owner decision
+ok 33 - ready tasks respect stage exit gates and the owner decision
+  ---
+  duration_ms: 0.822602
+  type: 'test'
+  ...
+# Subtest: pl_factory works before the board exists and closes a station only with the owner
+ok 34 - pl_factory works before the board exists and closes a station only with the owner
+  ---
+  duration_ms: 1438.173709
+  type: 'test'
+  ...
+# Subtest: tool results name pl_* tools, and pl_review packs a task for the reviewer
+ok 35 - tool results name pl_* tools, and pl_review packs a task for the reviewer
+  ---
+  duration_ms: 472.2194
+  type: 'test'
+  ...
+# Subtest: pl_preflight checks machine, harness, guard and project without changing anything
+ok 36 - pl_preflight checks machine, harness, guard and project without changing anything
+  ---
+  duration_ms: 243.102084
+  type: 'test'
+  ...
+# Subtest: pl_factory writes need the lead while tasks run
+ok 37 - pl_factory writes need the lead while tasks run
+  ---
+  duration_ms: 125.20717
+  type: 'test'
+  ...
+# Subtest: pl_approval records the owner answer from the prompt
+ok 38 - pl_approval records the owner answer from the prompt
+  ---
+  duration_ms: 330.123737
+  type: 'test'
+  ...
+# Subtest: pl_factory init shows the plan, waits for the owner and then writes the line
+ok 39 - pl_factory init shows the plan, waits for the owner and then writes the line
+  ---
+  duration_ms: 442.053916
+  type: 'test'
+  ...
+# Subtest: pl_role adds the role instructions and only narrows the session
+ok 40 - pl_role adds the role instructions and only narrows the session
+  ---
+  duration_ms: 323.554517
+  type: 'test'
+  ...
+# Subtest: pl_task gives a builder the task role and leaves a reviewer a reviewer
+ok 41 - pl_task gives a builder the task role and leaves a reviewer a reviewer
+  ---
+  duration_ms: 388.742538
+  type: 'test'
+  ...
+# Subtest: the guard denies a protected path and a manifest without an approval
+ok 42 - the guard denies a protected path and a manifest without an approval
+  ---
+  duration_ms: 441.571021
+  type: 'test'
+  ...
+# Subtest: without policy.json the 1.0 guard stays exactly as it was
+ok 43 - without policy.json the 1.0 guard stays exactly as it was
+  ---
+  duration_ms: 229.981522
+  type: 'test'
+  ...
+# Subtest: the policy command guard denies deny-list commands for every role
+ok 44 - the policy command guard denies deny-list commands for every role
+  ---
+  duration_ms: 339.118061
+  type: 'test'
+  ...
+# Subtest: lead-only commands are refused to workers and reviewers, allowed to the lead
+ok 45 - lead-only commands are refused to workers and reviewers, allowed to the lead
+  ---
+  duration_ms: 280.740916
+  type: 'test'
+  ...
+# Subtest: a lead session bypasses the path and dependency rules only
+ok 46 - a lead session bypasses the path and dependency rules only
+  ---
+  duration_ms: 246.31101
+  type: 'test'
+  ...
+# Subtest: pl_status reports the policy and the disabled default
+ok 47 - pl_status reports the policy and the disabled default
+  ---
+  duration_ms: 388.603619
+  type: 'test'
+  ...
+# Subtest: pl_next returns the dispatch plan
+ok 48 - pl_next returns the dispatch plan
+  ---
+  duration_ms: 126.739293
+  type: 'test'
+  ...
+# Subtest: pl_state shows state and only a lead session may set it
+ok 49 - pl_state shows state and only a lead session may set it
+  ---
+  duration_ms: 266.361934
+  type: 'test'
+  ...
+# Subtest: a denied command is a denial in ask mode as well, never a question
+ok 50 - a denied command is a denial in ask mode as well, never a question
+  ---
+  duration_ms: 119.775547
+  type: 'test'
+  ...
+1..50
+# tests 50
+# suites 0
+# pass 50
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 8910.160329
+............................................................................................................................................................................................................
+----------------------------------------------------------------------
+Ran 204 tests in 22.191s
+
+OK
+................................................................................................................................................................................................................................................................................................................s.............................................................................
+----------------------------------------------------------------------
+Ran 382 tests in 22.393s
+
+OK (skipped=1)

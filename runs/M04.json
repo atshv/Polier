@@ -1,0 +1,37 @@
+{
+  "task": "M04",
+  "state": "idle",
+  "attempt": 0,
+  "attempts": [],
+  "events": [
+    {
+      "at": "2026-11-13T06:03:32+00:00",
+      "kind": "gate",
+      "data": {
+        "gate": "tests",
+        "result": "pass",
+        "record": "reviews/evidence/M04-tests-20261113T060239Z.json"
+      }
+    },
+    {
+      "at": "2026-11-13T06:03:37+00:00",
+      "kind": "gate",
+      "data": {
+        "gate": "check",
+        "result": "pass",
+        "record": "reviews/evidence/M04-check-20261113T060336Z.json"
+      }
+    },
+    {
+      "at": "2026-11-13T06:03:41+00:00",
+      "kind": "gate",
+      "data": {
+        "gate": "fixtures",
+        "result": "pass",
+        "record": "reviews/evidence/M04-fixtures-20261113T060341Z.json"
+      }
+    }
+  ],
+  "usage": {},
+  "updated": "2026-11-13T06:03:41+00:00"
+}
