@@ -47,7 +47,8 @@
         "POLIER_PYTHON": "${user_config.python}",
         "POLIER_OWNER": "${user_config.owner}",
         "POLIER_CONTEXT": "${user_config.context}"
-      }
+      },
+      "timeout": 3600000
     }
   },
   "userConfig": {

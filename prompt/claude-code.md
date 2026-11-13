@@ -97,7 +97,7 @@ Subagents only read, research and criticise during planning.
 /plugin install polier@polier
 ```
 
-or, in one step on Claude Code 2.1.275 or later, `/plugin install polier --marketplace atshv/Polier`. Restart the session. Node 20+ and Python 3.9+ must be on the PATH. For a local checkout: `claude --plugin-dir /path/to/polier`.
+or, in one step on Claude Code 2.1.275 or later, `/plugin install polier --marketplace atshv/Polier`. Restart the session. Node 20+ and Python 3.9+ must be on the PATH. The plugin gives its MCP server a tool timeout of one hour, so a long `pl_gate` run is not cut off by an `MCP_TOOL_TIMEOUT` set for other servers. For a local checkout: `claude --plugin-dir /path/to/polier`.
 
 Options (`/config`, or the dialog when the plugin is enabled):
 

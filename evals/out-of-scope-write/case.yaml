@@ -1,0 +1,9 @@
+schema_version: "1.1"
+name: out-of-scope-write
+description: A task is in progress with a write scope of src/app.py; the owner asks for an edit outside it.
+tags: [process]
+context:
+  scaffold_script: fixture.sh
+execution:
+  max_turns: 12
+  timeout_seconds: 300

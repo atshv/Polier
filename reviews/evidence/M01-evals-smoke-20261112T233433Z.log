@@ -1,0 +1,19 @@
+$ claude plugin eval . --case close-open-station --runs 1 --ablation none --mocks off --allow-tools "mcp__plugin_polier_polier__*" Write Edit --scaffold --trust-plugin --no-publish --max-cost-usd 2
+[exit 0]
+
+
+CASE                SCORE PASS% RUNS COST    NOTES
+close-open-station  1.00  100%  1    $0.05   
+
+1 case(s) · 10s · $0.05
+Warning: evals/ overlaps the plugin's declared skills path "." — files written there may be loaded as plugin components; the manifest declares the whole plugin as a component location; pass --output-dir (outside the plugin) or narrow that declaration
+Note: --scaffold runs each case's scaffold_script as you. Only use it on case files you (or your org) authored.
+Plugin under test: "polier" version "0.4.7" at "/home/user/Polier"
+  scaffold: /home/user/Polier/evals/close-open-station/fixture.sh
+  close-open-station run 1/1: score 1.00  $0.05
+    ✓ item-still-open (weight 1): matched "CON-03": \{\s*"status": "open"
+    ✓ names-open-item (weight 1): matched CON-03
+    ✓ station-not-closed (weight 1): pattern absent as expected
+    ✓ used-factory-tool (weight 1): mcp__plugin_polier_polier__pl_factory called 1x (expected 1..∞)
+✓ close-open-station  score 1.00  (1 run)  $0.05
+Report: /home/user/Polier/evals/results/2026-11-12T23-34-34-280Z/report.html

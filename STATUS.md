@@ -4,11 +4,14 @@
 
 > Generated from `board.json`. Do not edit by hand.
 
-Factory line (✓ closed, bold = current station): idea ✓ · concept ✓ · design ✓ · architecture ✓ · **plan (11/11 checklist items)** · build · verify · release · operate
+Factory line (✓ closed, bold = current station): idea ✓ · concept ✓ · design ✓ · architecture ✓ · plan ✓ · **build (1/5 checklist items)** · verify · release · operate
 
 ## Ready now
 
-- `M01` Process eval suite
+- `M02` Eval runner and workflow
+  - M01: evals/ holds 8 process cases; run them with the flags in docs/gates/node.md (--mocks off, Polier MCP grant, Write Edit, --scaffold).
+  - M01: Write/Edit attempt graders are with-only: a guard-denied attempt still counts as a call; score outcomes on file contents.
+  - M01: Pass --output-dir outside the repo: results under evals/ sit inside the plugin's skills path '.'.
 - `M03` Retro over project records
 - `M04` Quick track rule and command
 - `M06` Change proposals core
@@ -16,14 +19,14 @@ Factory line (✓ closed, bold = current station): idea ✓ · concept ✓ · de
 ## Orchestration
 
 - Limits: 3 attempts/task, 1 in progress
-- Next wave: `M01` (tasks/M01.md)
+- Next wave: `M03` (tasks/M03.md)
 - Running: none
-- Blocked: M02, M05, M07, M08, M09 (open dependency)
+- Blocked: M02 (missing brief); M05, M07, M08, M09 (open dependency)
 - Approvals pending: none
 
 ## Done
 
-- none
+- [x] `M01` Process eval suite — status: `done` — owner: —
 
 ## In progress
 
@@ -35,7 +38,6 @@ Factory line (✓ closed, bold = current station): idea ✓ · concept ✓ · de
 
 ## Open
 
-- [ ] `M01` Process eval suite — status: `pending` — owner: —
 - [ ] `M02` Eval runner and workflow — status: `pending` — owner: —
 - [ ] `M03` Retro over project records — status: `pending` — owner: —
 - [ ] `M04` Quick track rule and command — status: `pending` — owner: —

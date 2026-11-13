@@ -1,0 +1,194 @@
+{
+  "task": "M01",
+  "state": "done",
+  "attempt": 2,
+  "attempts": [
+    {
+      "n": 1,
+      "started": "2026-11-12T23:31:36+00:00",
+      "ended": "2026-11-12T23:51:20+00:00",
+      "result": "fail",
+      "note": "review round 1: record a full-suite run as evals-smoke (A1, A4); item-still-open back to arm: both; write-attempt graders stay with-only (brief corrected)"
+    },
+    {
+      "n": 2,
+      "started": "2026-11-12T23:51:31+00:00",
+      "ended": "2026-11-13T00:03:49+00:00",
+      "result": "pass",
+      "note": "review round 2 pass, gates green"
+    }
+  ],
+  "events": [
+    {
+      "at": "2026-11-12T23:31:36+00:00",
+      "kind": "start",
+      "data": {
+        "actor": "lead"
+      }
+    },
+    {
+      "at": "2026-11-12T23:31:36+00:00",
+      "kind": "state",
+      "data": {
+        "from": "pending",
+        "to": "in_progress",
+        "actor": "lead"
+      }
+    },
+    {
+      "at": "2026-11-12T23:34:30+00:00",
+      "kind": "gate",
+      "data": {
+        "gate": "check",
+        "result": "pass",
+        "record": "reviews/evidence/M01-check-20261112T233429Z.json"
+      }
+    },
+    {
+      "at": "2026-11-12T23:34:31+00:00",
+      "kind": "gate",
+      "data": {
+        "gate": "validate",
+        "result": "pass",
+        "record": "reviews/evidence/M01-validate-20261112T233430Z.json"
+      }
+    },
+    {
+      "at": "2026-11-12T23:34:45+00:00",
+      "kind": "gate",
+      "data": {
+        "gate": "evals-smoke",
+        "result": "pass",
+        "record": "reviews/evidence/M01-evals-smoke-20261112T233433Z.json"
+      }
+    },
+    {
+      "at": "2026-11-12T23:47:03+00:00",
+      "kind": "gate",
+      "data": {
+        "gate": "check",
+        "result": "pass",
+        "record": "reviews/evidence/M01-check-20261112T234702Z.json"
+      }
+    },
+    {
+      "at": "2026-11-12T23:47:04+00:00",
+      "kind": "gate",
+      "data": {
+        "gate": "validate",
+        "result": "pass",
+        "record": "reviews/evidence/M01-validate-20261112T234703Z.json"
+      }
+    },
+    {
+      "at": "2026-11-12T23:47:20+00:00",
+      "kind": "gate",
+      "data": {
+        "gate": "evals-smoke",
+        "result": "pass",
+        "record": "reviews/evidence/M01-evals-smoke-20261112T234708Z.json"
+      }
+    },
+    {
+      "at": "2026-11-12T23:48:19+00:00",
+      "kind": "state",
+      "data": {
+        "from": "in_progress",
+        "to": "verifying",
+        "actor": "lead"
+      }
+    },
+    {
+      "at": "2026-11-12T23:48:19+00:00",
+      "kind": "state",
+      "data": {
+        "from": "verifying",
+        "to": "review",
+        "actor": "lead"
+      }
+    },
+    {
+      "at": "2026-11-12T23:51:20+00:00",
+      "kind": "state",
+      "data": {
+        "from": "review",
+        "to": "rework",
+        "actor": "lead",
+        "note": "review round 1: record a full-suite run as evals-smoke (A1, A4); item-still-open back to arm: both; write-attempt graders stay with-only (brief corrected)"
+      }
+    },
+    {
+      "at": "2026-11-12T23:51:31+00:00",
+      "kind": "start",
+      "data": {
+        "actor": "lead"
+      }
+    },
+    {
+      "at": "2026-11-12T23:51:31+00:00",
+      "kind": "state",
+      "data": {
+        "from": "rework",
+        "to": "in_progress",
+        "actor": "lead"
+      }
+    },
+    {
+      "at": "2026-11-12T23:51:45+00:00",
+      "kind": "gate",
+      "data": {
+        "gate": "check",
+        "result": "pass",
+        "record": "reviews/evidence/M01-check-20261112T235143Z.json"
+      }
+    },
+    {
+      "at": "2026-11-12T23:51:45+00:00",
+      "kind": "gate",
+      "data": {
+        "gate": "validate",
+        "result": "pass",
+        "record": "reviews/evidence/M01-validate-20261112T235145Z.json"
+      }
+    },
+    {
+      "at": "2026-11-13T00:00:08+00:00",
+      "kind": "gate",
+      "data": {
+        "gate": "evals-smoke",
+        "result": "pass",
+        "record": "reviews/evidence/M01-evals-smoke-20261112T235824Z.json"
+      }
+    },
+    {
+      "at": "2026-11-13T00:00:43+00:00",
+      "kind": "state",
+      "data": {
+        "from": "in_progress",
+        "to": "verifying",
+        "actor": "lead"
+      }
+    },
+    {
+      "at": "2026-11-13T00:00:43+00:00",
+      "kind": "state",
+      "data": {
+        "from": "verifying",
+        "to": "review",
+        "actor": "lead"
+      }
+    },
+    {
+      "at": "2026-11-13T00:03:49+00:00",
+      "kind": "state",
+      "data": {
+        "from": "review",
+        "to": "done",
+        "actor": "lead",
+        "note": "review round 2 pass, gates green"
+      }
+    }
+  ],
+  "usage": {},
+  "updated": "2026-11-13T00:03:49+00:00"
+}
