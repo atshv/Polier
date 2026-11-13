@@ -30,8 +30,35 @@
         "result": "pass",
         "record": "reviews/evidence/M06-fixtures-20261113T061755Z.json"
       }
+    },
+    {
+      "at": "2026-11-13T06:23:49+00:00",
+      "kind": "gate",
+      "data": {
+        "gate": "tests",
+        "result": "pass",
+        "record": "reviews/evidence/M06-tests-20261113T062252Z.json"
+      }
+    },
+    {
+      "at": "2026-11-13T06:23:56+00:00",
+      "kind": "gate",
+      "data": {
+        "gate": "check",
+        "result": "pass",
+        "record": "reviews/evidence/M06-check-20261113T062355Z.json"
+      }
+    },
+    {
+      "at": "2026-11-13T06:23:59+00:00",
+      "kind": "gate",
+      "data": {
+        "gate": "fixtures",
+        "result": "pass",
+        "record": "reviews/evidence/M06-fixtures-20261113T062359Z.json"
+      }
     }
   ],
   "usage": {},
-  "updated": "2026-11-13T06:17:55+00:00"
+  "updated": "2026-11-13T06:23:59+00:00"
 }

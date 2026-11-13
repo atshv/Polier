@@ -11,6 +11,8 @@ Delta blocks go under "Deltas to the living docs", one per target, as a level-3 
   MODIFIED  an "Old:" and a "New:" fenced block; the old text must occur exactly once under the heading and is replaced.
   REMOVED   an "Old:" fenced block; the text is removed.
 
+Text that contains a Markdown heading (a new section, say) must sit in a fenced block of its own (```markdown ... ```, a longer fence when the text holds fences); the fence content is inserted without the fence. An unfenced heading inside a delta body ends the deltas section, and a delta heading after the section ended is an error, so nothing is dropped silently. Targets under changes/, reviews/, tasks/ and runs/, the board, factory and policy files and the protected paths of policy.json are refused. The approval is found by the first word of its requested note: it must be {{ID}}.
+
 Deltas apply top-down in file order; a second MODIFIED on one heading must match the text after the first.
 
 ### `docs/concept.md#features` — ADDED

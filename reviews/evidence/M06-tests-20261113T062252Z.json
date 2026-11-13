@@ -1,0 +1,17 @@
+{
+  "task": "M06",
+  "gate": "tests",
+  "command": "npm test",
+  "exit_code": 0,
+  "result": "pass",
+  "slot": null,
+  "exclusive": [],
+  "lock_wait_s": 0.0,
+  "lock_warning": null,
+  "started": "2026-11-13T06:22:52+00:00",
+  "finished": "2026-11-13T06:23:49+00:00",
+  "commit": "cef938e25fe43104fbf031f04ef1f62f1aa7cf22",
+  "dirty": true,
+  "log": "M06-tests-20261113T062252Z.log",
+  "log_sha256": "ff710e0df8f75dcf42c88ff441465051d509cceb0169429692ef6452d706769f"
+}

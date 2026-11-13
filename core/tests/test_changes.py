@@ -189,6 +189,19 @@ class Gates(unittest.TestCase):
             changes.apply(root, "C01", "lead")
         self.assertEqual(concept(root), before)
 
+    def test_only_the_first_word_of_the_requested_note_names_the_proposal(self):
+        root = setup(proposal(ADDED))
+        record = approvals.request(root, "scope_change", by="lead", note="C02 export")
+        approvals.grant(root, record["id"], "owner", "fine, but keep C01 separate")
+        self.assertIsNone(changes.find_approval(root, "C01"))
+        with self.assertRaises(PolierError):
+            changes.apply(root, "C01", "lead")
+        record = approvals.request(root, "scope_change", by="lead", note="keep C01 apart")
+        approvals.grant(root, record["id"], "owner")
+        self.assertIsNone(changes.find_approval(root, "C01"))
+        grant(root, note="C01 export")
+        self.assertIsNotNone(changes.find_approval(root, "C01"))
+
     def test_a_task_that_is_not_done_refuses(self):
         root = setup(proposal(ADDED), status="review")
         grant(root)
@@ -254,19 +267,99 @@ class NewAndLink(unittest.TestCase):
             changes.link(root, "C07", ["M01"])
 
 
-class HandWritten(unittest.TestCase):
-    """The two proposals written by hand in this repository keep parsing."""
+class Visible(unittest.TestCase):
+    """No delta may vanish silently."""
 
-    def test_the_proposals_in_this_repository_parse(self):
-        repo = Path(__file__).resolve().parents[2]
-        found = [repo / "changes" / n / "proposal.md" for n in ("C01", "C02")]
-        found = [path for path in found if path.is_file()]
-        if not found:
-            self.skipTest("no hand-written proposals in this checkout")
-        for path in found:
-            parsed = changes.parse(path.read_text(encoding="utf-8"))
-            self.assertEqual(parsed["errors"], [], path.name)
-            self.assertTrue(parsed["deltas"], path.name)
+    SECTION = """### `docs/concept.md#risks` — ADDED
+
+```markdown
+## Export
+
+New section text.
+```
+"""
+    LATER = "### `docs/concept.md#features` — ADDED\n\n| F2 | x | MVP | y |\n"
+
+    def test_a_fenced_heading_is_inserted_without_the_fence_and_later_deltas_apply(self):
+        root = setup(proposal(self.SECTION + "\n" + self.LATER))
+        grant(root)
+        result = changes.apply(root, "C01", "lead")
+        self.assertEqual(result["changed"], ["docs/concept.md#risks", "docs/concept.md#features"])
+        text = concept(root)
+        self.assertTrue(text.endswith("Second line.\n\n## Export\n\nNew section text.\n"))
+        self.assertNotIn("```", text)
+        self.assertIn("| F2 | x | MVP | y |", text)
+
+    def test_an_unfenced_heading_in_a_body_is_an_error_and_nothing_is_written(self):
+        unfenced = "### `docs/concept.md#risks` — ADDED\n\n#### Deeper\n\ntext\n"
+        root = setup(proposal(unfenced))
+        grant(root)
+        before = concept(root)
+        parsed = changes.parse(changes.proposal_path(root, "C01").read_text())
+        self.assertTrue(any("outside a fenced block" in e for e in parsed["errors"]))
+        with self.assertRaises(PolierError):
+            changes.apply(root, "C01", "lead")
+        self.assertEqual(concept(root), before)
+        self.assertEqual(changes.load(root, "C01")["status"], "draft")
+
+    def test_an_unfenced_section_heading_that_hides_a_later_delta_is_refused(self):
+        hidden = ("### `docs/concept.md#risks` — ADDED\n\ntext\n\n## Export\n\nmore\n\n"
+                  "### `docs/concept.md#features` — REMOVED\n\n**Old:**\n```\n| scan | MVP | core |\n```\n")
+        root = setup(proposal(hidden))
+        grant(root)
+        before = concept(root)
+        errors = changes.parse(changes.proposal_path(root, "C01").read_text())["errors"]
+        self.assertTrue(any("outside the deltas section" in e and "features" in e for e in errors), errors)
+        with self.assertRaises(PolierError) as caught:
+            changes.apply(root, "C01", "lead")
+        self.assertIn("not valid", str(caught.exception))
+        self.assertEqual(concept(root), before)
+
+    def test_a_delta_after_the_section_is_an_error(self):
+        late = proposal(ADDED) + "\n" + MODIFIED
+        errors = changes.parse(late)["errors"]
+        self.assertTrue(any("outside the deltas section" in e for e in errors), errors)
+
+
+class Targets(unittest.TestCase):
+    def refused(self, target: str, make=None, policy_json=None):
+        delta = f"### `{target}#why` — ADDED\n\ntext\n"
+        root = setup(proposal(delta))
+        if make:
+            make(root)
+        if policy_json:
+            (root / "policy.json").write_text(policy_json)
+        grant(root)
+        with self.assertRaises(PolierError) as caught:
+            changes.apply(root, "C01", "lead")
+        self.assertIn("delta 1", str(caught.exception))
+        self.assertEqual(changes.load(root, "C01")["status"], "draft")
+        return str(caught.exception)
+
+    @staticmethod
+    def doc(path):
+        def make(root):
+            (root / path).parent.mkdir(parents=True, exist_ok=True)
+            (root / path).write_text("# T\n\n## Why\n\nx\n")
+        return make
+
+    def test_the_proposal_itself_and_other_proposals(self):
+        self.refused("changes/C01/proposal.md")
+        self.refused("changes/C02/proposal.md", self.doc("changes/C02/proposal.md"))
+
+    def test_records_folders(self):
+        for path in ("reviews/M01.md", "tasks/M01.md", "runs/notes.md"):
+            self.refused(path, self.doc(path))
+
+    def test_board_factory_and_policy_files(self):
+        for name in ("board.json", "factory.json", "policy.json"):
+            self.refused(name, self.doc(name))
+
+    def test_protected_paths_from_the_policy(self):
+        self.refused("secrets/notes.md", self.doc("secrets/notes.md"),
+                     policy_json='{"enabled": true}')
+        self.refused("CHANGELOG.md", self.doc("CHANGELOG.md"),
+                     policy_json='{"enabled": true, "scope": {"protected_paths": ["CHANGELOG.md"]}}')
 
 
 if __name__ == "__main__":

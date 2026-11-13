@@ -16,10 +16,11 @@ import time
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from . import approvals
+from . import approvals, policy
 from .board import load_board, tasks_of
 from .errors import PolierError
 from .factory import _slug
+from .paths import normalized
 
 PACKAGE = Path(__file__).resolve().parent.parent
 TEMPLATE = PACKAGE / "templates" / "change-proposal.md"
@@ -37,6 +38,9 @@ FENCE_RE = re.compile(r"^\s*(`{3,}|~{3,})")
 LABEL_RE = re.compile(r"^\*{0,2}(Old|New):?\*{0,2}:?\s*$", re.IGNORECASE)
 LIST_RE = re.compile(r"^\s*([-*+]|[0-9]+\.)\s")
 COMMENT_RE = re.compile(r"<!--.*?-->", re.DOTALL)
+STRAY_DELTA_RE = re.compile(r"^###\s+`[^`]+#[^`]*`\s+[—–-]+\s+[A-Za-z]+\s*$")
+RECORD_DIRS = ("changes", "reviews", "tasks", "runs")
+RECORD_FILES = ("board.json", "factory.json", "policy.json")
 
 
 # ---------------------------------------------------------------------------
@@ -123,10 +127,19 @@ def _read_block(body: List[str], start: int) -> Tuple[Optional[str], int]:
 def _parse_delta_body(kind: str, body: List[str]) -> dict:
     """Old, new and added text of one delta body; raises ValueError on a bad one."""
     if kind == "ADDED":
-        text = "\n".join(body).strip("\n")
-        if not text.strip():
+        text, after = _read_block(body, 0)
+        if text is not None and not any(line.strip() for line in body[after:]):
+            added = text
+        else:
+            added = "\n".join(body).strip("\n")
+            flags = _fenced(body)
+            for line, inside in zip(body, flags):
+                if not inside and HEADING_RE.match(line):
+                    raise ValueError(f"ADDED text contains the heading {line.strip()!r} outside a "
+                                     "fenced block; put the text in a ```markdown block")
+        if not added.strip():
             raise ValueError("ADDED has no text")
-        return {"added": text}
+        return {"added": added}
     blocks: Dict[str, str] = {}
     i = 0
     while i < len(body):
@@ -213,6 +226,12 @@ def parse(text: str) -> dict:
                 continue
             deltas.append({"number": number, "file": target.strip(), "heading": heading.strip(),
                            "kind": kind, **body})
+    inside = range(*sections[key]) if key else range(0)
+    for i, line in enumerate(lines):
+        if i not in inside and not fenced[i] and STRAY_DELTA_RE.match(line):
+            errors.append(f"line {i + 1}: delta heading {line.strip()!r} is outside the deltas section; "
+                          "an unfenced level-1 or level-2 heading inside a delta body ends the "
+                          "section, so put such text in a ```markdown block")
     return {"id": change_id, "title": title, "status": status, "tasks": tasks,
             "deltas": deltas, "errors": errors}
 
@@ -298,11 +317,12 @@ def link(root, change_id: str, task_ids: List[str]) -> List[str]:
 # ---------------------------------------------------------------------------
 
 def find_approval(root, change_id: str) -> Optional[dict]:
-    """The newest granted scope_change approval whose note names `change_id`."""
-    pattern = re.compile(rf"(?<![A-Za-z0-9]){re.escape(change_id)}(?![A-Za-z0-9])")
+    """The newest granted scope_change approval whose requested note starts with `change_id`."""
+    pattern = re.compile(rf"^\s*{re.escape(change_id)}(?![A-Za-z0-9])")
+    # the requested note comes first; the owner's grant note is appended after ' | '
     found = [r for r in approvals.load_all(root)
              if r.get("status") == "granted" and r.get("action") == "scope_change"
-             and isinstance(r.get("note"), str) and pattern.search(r["note"])]
+             and isinstance(r.get("note"), str) and pattern.match(r["note"].split(" | ", 1)[0])]
     return found[-1] if found else None
 
 
@@ -382,6 +402,20 @@ def _replace(lines: List[str], start: int, end: int, old: str, new: Optional[str
     return head + body.split("\n") + tail
 
 
+def _forbidden_target(root: Path, rel: str) -> Optional[str]:
+    """Why a delta may not target `rel` (relative to the project), or None."""
+    rel = normalized(rel)
+    parts = rel.lower().split("/")
+    if parts[0] in RECORD_DIRS:
+        return f"{parts[0]}/ holds records, not living docs"
+    if rel.lower() in RECORD_FILES:
+        return f"{rel} is a record"
+    hit = policy.protected_match(policy.load_policy(root), rel)
+    if hit:
+        return f"{rel} is a protected path ({hit})"
+    return None
+
+
 def merge(root, deltas: List[dict]) -> Dict[Path, str]:
     """Apply every delta in memory; {path: new text}. PolierError names the failing delta."""
     root = Path(root).resolve()
@@ -391,6 +425,10 @@ def merge(root, deltas: List[dict]) -> Dict[Path, str]:
         target = (root / delta["file"]).resolve()
         if root != target and root not in target.parents:
             raise PolierError(f"{label}: file is outside the project")
+        for rel in (delta["file"], target.relative_to(root).as_posix()):
+            why = _forbidden_target(root, rel)
+            if why:
+                raise PolierError(f"{label}: {why}")
         if target not in texts:
             try:
                 texts[target] = _read(target).split("\n")
