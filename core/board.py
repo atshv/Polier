@@ -12,10 +12,12 @@ from __future__ import annotations
 import json
 import os
 import re
+import time
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from .errors import PolierError
+from .runs import FileLock
 
 BOARD = "board.json"
 
@@ -28,6 +30,7 @@ STATUSES = {
     "pending", "claimed", "in_progress", "verifying", "review",
     "rework", "done", "blocked", "failed",
 }
+TRACKS = {"quick"}
 PROFILES = {"S", "M", "L"}
 WORKTREE_MODES = {"required", "recommended", "off"}
 OWNER_DECISIONS = {"pending", "continue", "stop"}
@@ -41,7 +44,7 @@ TASK_REQUIRED = (
 TASK_FIELDS = frozenset(TASK_REQUIRED + (
     "why", "satisfies", "parallel_group", "scope_read", "owner", "branch",
     "worktree", "round", "evidence", "scope_write_forbidden", "handoff",
-    "package", "exclusive", "resources", "claim", "contract_followups", "role",
+    "package", "exclusive", "resources", "claim", "contract_followups", "role", "track",
 ))
 
 BOARD_REQUIRED = ("project", "profile", "base_branch", "tasks")
@@ -94,6 +97,36 @@ def load_board(root, strict: bool = True) -> Optional[dict]:
         if not strict:
             return None
         raise PolierError("board.json has no task list")
+    return board
+
+
+def add_task(root, build, write_brief=None) -> dict:
+    """Append the task `build(board)` returns to board.json under its lock.
+
+    `build` runs under the lock, so an ID it picks cannot be taken meanwhile.
+    The board must stay valid; `write_brief(task)` (optional) writes the brief
+    and returns its path, which is removed again if the board write fails.
+    PolierError on a duplicate ID or an invalid result; returns the written board.
+    """
+    path = Path(root) / BOARD
+    with FileLock(path.with_name(path.name + ".lock")):
+        board = load_board(root)
+        task = build(board)
+        if any(entry.get("id") == task.get("id") for entry in tasks_of(board)):
+            raise PolierError(f"task {task.get('id')} is already on the board")
+        board["tasks"].append(task)
+        errors = board_errors(board)
+        if errors:
+            raise PolierError("the new task makes board.json invalid: " + "; ".join(errors))
+        brief = write_brief(task) if write_brief else None
+        tmp = path.with_name(f"{path.name}.{os.getpid()}.{time.time_ns()}.tmp")
+        try:
+            tmp.write_text(json.dumps(board, indent=2) + "\n", encoding="utf-8")
+            os.replace(tmp, path)
+        except OSError:
+            if brief is not None:
+                brief.unlink(missing_ok=True)
+            raise
     return board
 
 
@@ -291,6 +324,9 @@ def _check_task(task, known_ids: set, errors: List[str], stage_id_set: set,
     if "role" in task and (not isinstance(task.get("role"), str)
                            or not re.match(r"^[a-z][a-z0-9-]{1,40}$", task["role"])):
         errors.append(f"{label}: role must be a role id such as frontend-builder")
+
+    if "track" in task and task.get("track") not in TRACKS:
+        errors.append(f"{label}: track must be one of {sorted(TRACKS)}")
 
     if "package" in task:
         package = task.get("package")

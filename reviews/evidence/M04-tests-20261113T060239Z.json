@@ -1,0 +1,17 @@
+{
+  "task": "M04",
+  "gate": "tests",
+  "command": "npm test",
+  "exit_code": 0,
+  "result": "pass",
+  "slot": null,
+  "exclusive": [],
+  "lock_wait_s": 0.0,
+  "lock_warning": null,
+  "started": "2026-11-13T06:02:39+00:00",
+  "finished": "2026-11-13T06:03:32+00:00",
+  "commit": "8e53b23d51a0818dc3e88a649f7684d7ac760d9a",
+  "dirty": true,
+  "log": "M04-tests-20261113T060239Z.log",
+  "log_sha256": "7a1a5a119e91487375fdaf25283eed157e85a24af5845cc6f0fc269859e17d24"
+}
