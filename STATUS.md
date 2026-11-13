@@ -20,9 +20,9 @@ Factory line (✓ closed, bold = current station): idea ✓ · concept ✓ · de
 ## Orchestration
 
 - Limits: 3 attempts/task, 1 in progress
-- Next wave: none — nothing is ready
+- Next wave: `M05` (tasks/M05.md)
 - Running: none
-- Blocked: M02, M05 (missing brief); M07, M08, M09 (open dependency)
+- Blocked: M02 (missing brief); M07, M08, M09, M10, M11 (open dependency)
 - Approvals pending: none
 
 ## Done
@@ -47,6 +47,8 @@ Factory line (✓ closed, bold = current station): idea ✓ · concept ✓ · de
 - [ ] `M07` pl_change tool and lint finding — status: `pending` — owner: —
 - [ ] `M08` Process docs for the new tracks — status: `pending` — owner: —
 - [ ] `M09` Security review of the first stage — status: `pending` — owner: —
+- [ ] `M10` Lock the scope of a task under review — status: `pending` — owner: —
+- [ ] `M11` Owner decisions when no dialog appears — status: `pending` — owner: —
 
 ## Decisions
 
@@ -57,4 +59,4 @@ Factory line (✓ closed, bold = current station): idea ✓ · concept ✓ · de
 
 ## Open questions
 
-- `Q1` Which agent and judge model IDs does the eval workflow pin, and which Anthropic terms apply to the CI account? — blocks: M02 — status: `open`
+- `Q2` Tasks of an approved change proposal cannot name its new D-items (D5–D8) on the board until the proposal is applied, which happens only after its tasks are done. Should check.py accept D-items of approved, unapplied proposals (M07)? — blocks: M07 — status: `open`

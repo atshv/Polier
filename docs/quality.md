@@ -13,7 +13,7 @@
 
 | D-item | Task (`satisfies`) | Acceptance | Gate |
 | --- | --- | --- | --- |
-| D1 | M01, M02, M09 | M01 A1–A5, M02 A1–A4, M09 A3 | evals-smoke, validate, line, audit |
+| D1 | M01, M02, M09, M10, M11 | M01 A1–A5, M02 A1–A4, M09 A3, M10 A1–A5, M11 A1–A5 | evals-smoke, validate, line, audit, tests |
 | D2 | M03 | A1–A5 | tests, fixtures |
 | D3 | M06, M07, M08, M09 | M06 A1–A6, M07 A1–A4, M09 A2 | tests, fixtures, line, audit |
 | D4 | M04, M05, M08, M09 | M04 A1–A5, M05 A1–A3, M09 A1 | tests, fixtures, validate, audit |

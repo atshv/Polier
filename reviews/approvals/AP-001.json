@@ -1,0 +1,11 @@
+{
+  "id": "AP-001",
+  "action": "scope_change",
+  "task": null,
+  "status": "granted",
+  "requested_by": "lead",
+  "requested_at": "2026-11-13T17:47:26+00:00",
+  "approved_by": "owner (approved in chat; the Polier dialog does not reach the Claude app)",
+  "approved_at": "2026-11-13T17:47:26+00:00",
+  "note": "C01: owner accepted the change proposal in chat on 2026-11-13 | C01/C02 accepted with M02 models Sonnet and Haiku"
+}
