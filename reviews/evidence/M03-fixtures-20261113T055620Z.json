@@ -1,0 +1,17 @@
+{
+  "task": "M03",
+  "gate": "fixtures",
+  "command": "python3 tools/check.py tests/fixtures/minimal-cli && python3 tools/check.py tests/fixtures/monorepo-mini && python3 tools/audit.py --root tests/fixtures/monorepo-mini",
+  "exit_code": 0,
+  "result": "pass",
+  "slot": null,
+  "exclusive": [],
+  "lock_wait_s": 0.0,
+  "lock_warning": null,
+  "started": "2026-11-13T05:56:20+00:00",
+  "finished": "2026-11-13T05:56:20+00:00",
+  "commit": "50a12c4c842601a75f352d84ff489ac1e7fbe7aa",
+  "dirty": true,
+  "log": "M03-fixtures-20261113T055620Z.log",
+  "log_sha256": "0a2b8020fdd97eba4a0d050de98612fc40e489c7955dc26ad5111a13facbe37c"
+}

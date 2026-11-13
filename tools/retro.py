@@ -35,6 +35,8 @@ def _markdown(result: dict) -> str:
         lines += [f"## {entry['class']} ({entry['count']})", "",
                   f"Points at: {', '.join(f'`{p}`' for p in entry['points_at'])}", ""]
         lines += [f"- `{ex['record']}`: {ex['detail']}" for ex in entry["examples"]]
+        if entry.get("by_heading"):
+            lines += ["", "Findings by heading: " + ", ".join(f"{h} ({n})" for h, n in entry["by_heading"].items())]
         lines.append("")
     if result["skipped"]:
         lines += ["## Skipped", ""]

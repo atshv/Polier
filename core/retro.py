@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Callable, Dict, List, Optional
 
 from . import approvals, evidence, factory, runs
-from .board import load_board, tasks_of
+from .board import load_board
 from .errors import PolierError
 from .evidence import REVIEW_VERDICT
 
@@ -27,7 +27,7 @@ MAX_EXAMPLES = 3
 RECORD_PARTS = ("board.json", "factory.json", "runs", "reviews")
 SCOPE_WORDS = re.compile(r"\b(outside|out of) (the |its |my )?(write )?scope\b|\bscope (change|pressure)\b",
                          re.IGNORECASE)
-CRITERION = re.compile(r"(?m)^\s*(?:-\s*)?criterion:\s*[\"']?([^\"'\n]+)")
+CRITERION = re.compile(r"(?m)^\s*(?:-\s*)?criterion:[ \t]*(.+?)[ \t]*$")
 
 
 def parse_since(value: str) -> dt.datetime:
@@ -74,36 +74,86 @@ def _hit(folder, rel: str, detail: str) -> dict:
     return {"record": f"{folder}/{rel}".replace("\\", "/"), "detail": detail}
 
 
-def _evidence_rel(record: dict) -> str:
-    log = record.get("log")
-    if isinstance(log, str) and log.endswith(".log"):
-        return f"reviews/evidence/{log[:-4]}.json"
-    return f"reviews/evidence ({record.get('task')}/{record.get('gate')})"
+def _evidence(folder) -> List[tuple]:
+    """``(project-relative path, record)`` for every readable gate record.
+
+    ``record_files`` and ``gate_records`` apply the same filters in the same
+    order, so for one task they line up pair by pair.
+    """
+    pairs = []
+    for task in _task_ids(folder):
+        files = evidence.record_files(folder, task)
+        records = evidence.gate_records(folder, task)
+        pairs += [(f"reviews/evidence/{path.name}", record) for path, record in zip(files, records)]
+    return pairs
 
 
 def _task_ids(folder) -> List[str]:
     return sorted({r.get("task") for r in evidence.gate_records(folder) if isinstance(r.get("task"), str)})
 
 
-def _is_failure(record: dict) -> bool:
-    return record.get("exit_code") not in (0, None) and record.get("result") not in evidence.INFRA_RESULTS
+def _run_ids(folder) -> List[str]:
+    try:
+        return sorted(p.stem for p in (Path(folder) / "runs").glob("*.json"))
+    except OSError:
+        return []
+
+
+def _attempt_of(record: dict, event_at) -> int:
+    """The number of the attempt a moment falls in (the last one started before it)."""
+    moment, number = _moment(event_at), 0
+    for attempt in record["attempts"]:
+        started = _moment(attempt["started"])
+        if started is not None and moment is not None and started <= moment:
+            number = attempt["n"]
+    return number
 
 
 def repeated_gate_failure(folders, since=None) -> dict:
+    """The same gate failing in at least two attempts of one task, from ``gate`` events in runs/."""
     hits = []
     for folder in folders:
-        failing: Dict[tuple, list] = {}
-        for record in evidence.gate_records(folder):
-            if _is_failure(record) and _recent(record.get("finished") or record.get("started"), since):
-                failing.setdefault((record.get("task"), record.get("gate")), []).append(record)
-        for (task, gate), found in sorted(failing.items(), key=lambda item: str(item[0])):
-            if len(found) >= 2:
-                hits.append(_hit(folder, _evidence_rel(found[0]), f"{task}: gate {gate} failed {len(found)} times"))
+        for task in _run_ids(folder):
+            try:
+                record = runs.load_run(folder, task)
+            except PolierError:
+                continue
+            failing: Dict[str, dict] = {}
+            for event in record["events"]:
+                data = event["data"]
+                if event["kind"] != "gate" or data.get("result") in ("pass", *evidence.INFRA_RESULTS) \
+                        or not _recent(event["at"], since):
+                    continue
+                failing.setdefault(str(data.get("gate")), {}).setdefault(_attempt_of(record, event["at"]), data)
+            for gate, by_attempt in sorted(failing.items()):
+                if len(by_attempt) >= 2:
+                    first = by_attempt[min(by_attempt)]
+                    path = first.get("record") or f"runs/{task}.json"
+                    hits.append(_hit(folder, path, f"{task}: gate {gate} failed in {len(by_attempt)} attempts"))
     return _result("repeated gate failure", hits, ["templates/gates/<stack>.md", "templates/task-brief.md"])
 
 
+def _heading(criterion: str) -> str:
+    """The part of a finding's criterion before ' / ', ' (' or ';'."""
+    return re.split(r" / | \(|;", criterion, maxsplit=1)[0].strip()
+
+
+def _criteria(text: str) -> List[str]:
+    found = []
+    for raw in CRITERION.findall(text):
+        value = raw.strip()
+        if value[:1] in ("'", '"') and value.endswith(value[0]) and len(value) > 1:
+            value = value[1:-1]
+        elif value[:1] in ("'", '"'):
+            value = value[1:]
+        if value.strip():
+            found.append(value.strip())
+    return found
+
+
 def long_review(folders, since=None) -> dict:
-    hits = []
+    """Reviews with more than one round, with the findings grouped by criterion heading."""
+    hits, by_heading = [], {}
     for folder in folders:
         for path in sorted((Path(folder) / "reviews").glob("*.md")):
             try:
@@ -112,11 +162,15 @@ def long_review(folders, since=None) -> dict:
                 continue
             rounds = len(REVIEW_VERDICT.findall(text))
             if rounds > 1 and _recent(_mtime(path), since):
-                headings = sorted({c.strip() for c in CRITERION.findall(text)})
+                headings = sorted({_heading(c) for c in _criteria(text)})
+                for heading in headings:
+                    by_heading[heading] = by_heading.get(heading, 0) + 1
                 detail = f"{path.stem}: {rounds} review rounds"
                 hits.append(_hit(folder, f"reviews/{path.name}",
                                  detail + (f"; findings on {', '.join(headings)}" if headings else "")))
-    return _result("long review", hits, ["prompt/rubric.md", "roles/<role>.md"])
+    result = _result("long review", hits, ["prompt/rubric.md", "roles/<role>.md"])
+    result["by_heading"] = dict(sorted(by_heading.items(), key=lambda item: (-item[1], item[0])))
+    return result
 
 
 def _text_of(question) -> str:
@@ -124,6 +178,7 @@ def _text_of(question) -> str:
 
 
 def scope_pressure(folders, since=None) -> dict:
+    """Open questions that name paths outside the scope. Stop-check reports are not recorded in runs/."""
     hits = []
     for folder in folders:
         board = load_board(folder, strict=False) or {}
@@ -131,13 +186,6 @@ def scope_pressure(folders, since=None) -> dict:
             if SCOPE_WORDS.search(_text_of(question)):
                 label = question.get("id", "question") if isinstance(question, dict) else "question"
                 hits.append(_hit(folder, "board.json", f"{label}: {_text_of(question)[:100]}"))
-        for task in tasks_of(board):
-            tid = task.get("id")
-            if not isinstance(tid, str) or not (Path(folder) / "runs" / f"{tid}.json").is_file():
-                continue
-            for event in runs.load_run(folder, tid)["events"]:
-                if event["kind"] in ("scope", "stop_check") and _recent(event["at"], since):
-                    hits.append(_hit(folder, f"runs/{tid}.json", f"{tid}: {event['kind']} event"))
     return _result("scope pressure", hits, ["prompt/generator.md", "templates/task-brief.md"])
 
 
@@ -167,17 +215,17 @@ def stalled_approval(folders, since=None, now=None) -> dict:
             days = (now - asked).days
             if days >= STALL_DAYS:
                 hits.append(_hit(folder, f"reviews/approvals/{record.get('id')}.json",
-                                 f"{record.get('action')} for {record.get('task')} pending {days} days"))
+                                 f"{record.get('action')} for {record.get('task')} pending {days} days, threshold {STALL_DAYS}"))
     return _result("stalled approval", hits, ["prompt/orchestration.md"])
 
 
 def busy_or_infra_gate(folders, since=None) -> dict:
     hits = []
     for folder in folders:
-        for record in evidence.gate_records(folder):
+        for rel, record in _evidence(folder):
             if record.get("result") in evidence.INFRA_RESULTS \
                     and _recent(record.get("finished") or record.get("started"), since):
-                hits.append(_hit(folder, _evidence_rel(record),
+                hits.append(_hit(folder, rel,
                                  f"{record.get('task')}: gate {record.get('gate')} {record.get('result')}"))
     return _result("busy or infra gate", hits, ["templates/gates/", "docs/slots.md"])
 

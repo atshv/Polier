@@ -36,6 +36,20 @@ def gate_record(root: Path, name: str, task: str, gate: str, exit_code: int, res
         "log": f"{name}.log"}))
 
 
+def write_run(root: Path, task: str, gates: list) -> None:
+    """A run record with one attempt per distinct number in `gates` = (gate, result, attempt)."""
+    numbers = sorted({n for _, _, n in gates})
+    attempts = [{"n": n, "started": f"2026-10-25T0{n}:00:00+00:00", "ended": None, "result": None,
+                 "note": None} for n in numbers]
+    events = [{"at": f"2026-10-25T0{n}:30:00+00:00", "kind": "gate",
+               "data": {"gate": g, "result": r, "record": f"reviews/evidence/{task}-{g}-{n}.json"}}
+              for g, r, n in gates]
+    (root / "runs").mkdir(exist_ok=True)
+    (root / "runs" / f"{task}.json").write_text(json.dumps(
+        {"task": task, "state": "failed", "attempt": len(attempts), "attempts": attempts,
+         "events": events, "usage": {}, "updated": None}))
+
+
 class RetroTest(unittest.TestCase):
     def test_a1_monorepo_prints_class_count_example_and_target(self):
         root = copy("monorepo-mini")
@@ -47,8 +61,7 @@ class RetroTest(unittest.TestCase):
 
     def test_every_class_with_a_signal(self):
         root = copy("minimal-cli")
-        gate_record(root, "M01-tests-1", "M01", "tests", 1, "fail")
-        gate_record(root, "M01-tests-2", "M01", "tests", 1, "fail")
+        write_run(root, "M01", [("tests", "fail", 1), ("tests", "fail", 2)])
         gate_record(root, "M01-lint-3", "M01", "lint", 1, "busy")
         gate_record(root, "M01-lint-4", "M01", "lint", 1, "timeout")
         (root / "reviews" / "M02.md").write_text(
@@ -61,6 +74,7 @@ class RetroTest(unittest.TestCase):
                        "BLD-2": {"status": "na", "reason": "no"}, "BLD-3": {"status": "done"}}}))
         found = {c["class"]: c for c in retro.report([root])["classes"]}
         self.assertEqual(found["repeated gate failure"]["count"], 1)
+        self.assertIn("2 attempts", found["repeated gate failure"]["examples"][0]["detail"])
         self.assertEqual(found["busy or infra gate"]["count"], 2)
         self.assertEqual(found["long review"]["count"], 1)
         self.assertIn("A2", found["long review"]["examples"][0]["detail"])
@@ -68,6 +82,39 @@ class RetroTest(unittest.TestCase):
         self.assertEqual(found["deferred or n/a item"]["count"], 2)
         for entry in found.values():
             self.assertTrue(entry["points_at"] and entry["examples"])
+
+    def test_failures_in_one_attempt_are_not_repeated(self):
+        root = copy("minimal-cli")
+        write_run(root, "M01", [("tests", "fail", 1), ("tests", "fail", 1), ("lint", "fail", 1),
+                                ("lint", "pass", 2), ("tests", "busy", 2)])
+        names = [c["class"] for c in retro.report([root])["classes"]]
+        self.assertNotIn("repeated gate failure", names)
+
+    def test_review_criteria_with_quotes_are_grouped_by_heading(self):
+        root = copy("minimal-cli")
+        review = ("verdict: rework\n"
+                  "- criterion: \"A2 / brief scope table ('Scored outcome (both arms)')\"\n"
+                  "- criterion: \"Scope ('.gitignore: evals/results/')\"\n"
+                  "verdict: pass\n")
+        (root / "reviews" / "M05.md").write_text(review)
+        (root / "reviews" / "M06.md").write_text(review.replace("Scope (", "Scope2 ("))
+        found = {c["class"]: c for c in retro.report([root])["classes"]}["long review"]
+        self.assertEqual(found["by_heading"], {"A2": 2, "Scope": 1, "Scope2": 1})
+        for example in found["examples"]:
+            self.assertNotIn("(,", example["detail"])
+            self.assertIn("A2, Scope", example["detail"].replace("Scope2", "Scope") )
+
+    def test_example_path_is_the_record_file_even_without_a_log(self):
+        root = copy("minimal-cli")
+        gate_record(root, "odd-name", "M01", "tests", 1, "busy")
+        (root / "reviews" / "evidence" / "odd-name.json").write_text(json.dumps(
+            {"task": "M01", "gate": "tests", "exit_code": 1, "result": "busy"}))
+        found = {c["class"]: c for c in retro.report([root])["classes"]}["busy or infra gate"]
+        self.assertTrue(found["examples"][0]["record"].endswith("reviews/evidence/odd-name.json"))
+
+    def test_stalled_threshold_is_in_the_report(self):
+        result = run_tool("retro.py", str(copy("monorepo-mini")))
+        self.assertIn(f"threshold {retro.STALL_DAYS}", result.stdout)
 
     def test_busy_and_infra_records_are_not_failures(self):
         root = copy("minimal-cli")

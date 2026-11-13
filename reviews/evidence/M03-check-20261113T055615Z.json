@@ -1,0 +1,17 @@
+{
+  "task": "M03",
+  "gate": "check",
+  "command": "npm run check",
+  "exit_code": 0,
+  "result": "pass",
+  "slot": null,
+  "exclusive": [],
+  "lock_wait_s": 0.0,
+  "lock_warning": null,
+  "started": "2026-11-13T05:56:15+00:00",
+  "finished": "2026-11-13T05:56:16+00:00",
+  "commit": "50a12c4c842601a75f352d84ff489ac1e7fbe7aa",
+  "dirty": true,
+  "log": "M03-check-20261113T055615Z.log",
+  "log_sha256": "318266123b2405d03e8f89fbf68ce35e6f32f6cd1dc4a20bdb719efd221e2b07"
+}
