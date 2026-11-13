@@ -100,23 +100,33 @@ def load_board(root, strict: bool = True) -> Optional[dict]:
     return board
 
 
-def add_task(root, task: dict) -> dict:
-    """Append `task` to board.json under its lock; PolierError when the result is invalid.
+def add_task(root, build, write_brief=None) -> dict:
+    """Append the task `build(board)` returns to board.json under its lock.
 
-    The ID must be free. Returns the written board.
+    `build` runs under the lock, so an ID it picks cannot be taken meanwhile.
+    The board must stay valid; `write_brief(task)` (optional) writes the brief
+    and returns its path, which is removed again if the board write fails.
+    PolierError on a duplicate ID or an invalid result; returns the written board.
     """
     path = Path(root) / BOARD
     with FileLock(path.with_name(path.name + ".lock")):
         board = load_board(root)
+        task = build(board)
         if any(entry.get("id") == task.get("id") for entry in tasks_of(board)):
             raise PolierError(f"task {task.get('id')} is already on the board")
         board["tasks"].append(task)
         errors = board_errors(board)
         if errors:
             raise PolierError("the new task makes board.json invalid: " + "; ".join(errors))
+        brief = write_brief(task) if write_brief else None
         tmp = path.with_name(f"{path.name}.{os.getpid()}.{time.time_ns()}.tmp")
-        tmp.write_text(json.dumps(board, indent=2) + "\n", encoding="utf-8")
-        os.replace(tmp, path)
+        try:
+            tmp.write_text(json.dumps(board, indent=2) + "\n", encoding="utf-8")
+            os.replace(tmp, path)
+        except OSError:
+            if brief is not None:
+                brief.unlink(missing_ok=True)
+            raise
     return board
 
 

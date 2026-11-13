@@ -1,0 +1,17 @@
+{
+  "task": "M04",
+  "gate": "check",
+  "command": "npm run check",
+  "exit_code": 0,
+  "result": "pass",
+  "slot": null,
+  "exclusive": [],
+  "lock_wait_s": 0.0,
+  "lock_warning": null,
+  "started": "2026-11-13T06:10:12+00:00",
+  "finished": "2026-11-13T06:10:14+00:00",
+  "commit": "e8db5d1b8e5ea8f1ba5f611d917eca37e31f7807",
+  "dirty": true,
+  "log": "M04-check-20261113T061012Z.log",
+  "log_sha256": "318266123b2405d03e8f89fbf68ce35e6f32f6cd1dc4a20bdb719efd221e2b07"
+}

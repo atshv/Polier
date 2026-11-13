@@ -2,12 +2,15 @@
 """Add one quick-track task to the board when the request qualifies (ADR-0004).
 
 Usage:
-    python3 tools/quick.py new TITLE --scope PATH [PATH ...] [--gate NAME ...]
+    python3 tools/quick.py new TITLE --scope PATH [PATH ...] --accept "WHEN …, THEN …"
+                           [--accept ...] [--gate NAME ...] [--satisfies D<n> ...]
                            [--role ROLE] [--root DIR] [--json]
 
 Writes a pending task with ``track: quick`` to board.json and its brief to
 tasks/<ID>.md. The task then runs through the ordinary state machine, gates
-and review. The rule lives in core/quick.py.
+and review. The rule lives in core/quick.py. --accept (repeatable) states the
+expected behaviour and is required; --satisfies names definition-of-done items
+of docs/quality.md and is required when no task has touched the files.
 
 Exit codes: 0 created, 1 refused (reasons and the proposal path), 2 usage or
 environment error (not a project, invalid board).
@@ -35,6 +38,8 @@ def _parser() -> argparse.ArgumentParser:
     new.add_argument("title")
     new.add_argument("--scope", nargs="+", action="extend", default=[], metavar="PATH")
     new.add_argument("--gate", nargs="+", action="extend", default=None, metavar="NAME")
+    new.add_argument("--accept", action="append", default=[], metavar="TEXT")
+    new.add_argument("--satisfies", nargs="+", action="extend", default=[], metavar="D")
     new.add_argument("--role")
     new.add_argument("--root")
     new.add_argument("--json", action="store_true")
@@ -52,12 +57,13 @@ def main(argv=None) -> int:
         print("quick.py: no board.json found; pass --root DIR", file=sys.stderr)
         return 2
     try:
-        ok, reasons = quick.qualifies(root, args.scope, args.title)
-        if not ok:
-            _out(args, {"ok": False, "task": None, "reasons": reasons, "next": quick.NEXT},
-                 "refused:\n" + "\n".join(f"- {r}" for r in reasons) + f"\nnext: {quick.NEXT}")
-            return 1
-        made = quick.create(root, args.title, args.scope, args.gate, args.role)
+        made = quick.create(root, args.title, args.scope, args.accept, args.gate,
+                            args.role, args.satisfies)
+    except quick.Refused as exc:
+        reasons = exc.reasons
+        _out(args, {"ok": False, "task": None, "reasons": reasons, "next": quick.NEXT},
+             "refused:\n" + "\n".join(f"- {r}" for r in reasons) + f"\nnext: {quick.NEXT}")
+        return 1
     except PolierError as exc:
         print(f"quick.py: {exc}", file=sys.stderr)
         return 2
