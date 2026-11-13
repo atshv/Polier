@@ -59,7 +59,7 @@
       "satisfies": [
         "D1"
       ],
-      "status": "review",
+      "status": "done",
       "depends_on": [],
       "complexity": 6,
       "stage": 1,
@@ -92,7 +92,11 @@
       "round": 1,
       "evidence": [],
       "scope_write_forbidden": [],
-      "handoff": []
+      "handoff": [
+        "evals/ holds 8 process cases; run them with the flags in docs/gates/node.md (--mocks off, Polier MCP grant, Write Edit, --scaffold).",
+        "Write/Edit attempt graders are with-only: a guard-denied attempt still counts as a call; score outcomes on file contents.",
+        "Pass --output-dir outside the repo: results under evals/ sit inside the plugin's skills path '.'."
+      ]
     },
     {
       "id": "M02",

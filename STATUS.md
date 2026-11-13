@@ -8,6 +8,10 @@ Factory line (✓ closed, bold = current station): idea ✓ · concept ✓ · de
 
 ## Ready now
 
+- `M02` Eval runner and workflow
+  - M01: evals/ holds 8 process cases; run them with the flags in docs/gates/node.md (--mocks off, Polier MCP grant, Write Edit, --scaffold).
+  - M01: Write/Edit attempt graders are with-only: a guard-denied attempt still counts as a call; score outcomes on file contents.
+  - M01: Pass --output-dir outside the repo: results under evals/ sit inside the plugin's skills path '.'.
 - `M03` Retro over project records
 - `M04` Quick track rule and command
 - `M06` Change proposals core
@@ -16,17 +20,17 @@ Factory line (✓ closed, bold = current station): idea ✓ · concept ✓ · de
 
 - Limits: 3 attempts/task, 1 in progress
 - Next wave: `M03` (tasks/M03.md)
-- Running: `M01` attempt 2/3
-- Blocked: M02, M05, M07, M08, M09 (open dependency)
+- Running: none
+- Blocked: M02 (missing brief); M05, M07, M08, M09 (open dependency)
 - Approvals pending: none
 
 ## Done
 
-- none
+- [x] `M01` Process eval suite — status: `done` — owner: —
 
 ## In progress
 
-- [ ] `M01` Process eval suite — status: `review` — owner: —
+- none
 
 ## Blocked / failed
 
