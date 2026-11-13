@@ -1,0 +1,64 @@
+{
+  "task": "M03",
+  "state": "idle",
+  "attempt": 0,
+  "attempts": [],
+  "events": [
+    {
+      "at": "2026-11-13T01:27:14+00:00",
+      "kind": "gate",
+      "data": {
+        "gate": "tests",
+        "result": "pass",
+        "record": "reviews/evidence/M03-tests-20261113T012612Z.json"
+      }
+    },
+    {
+      "at": "2026-11-13T01:27:19+00:00",
+      "kind": "gate",
+      "data": {
+        "gate": "check",
+        "result": "pass",
+        "record": "reviews/evidence/M03-check-20261113T012717Z.json"
+      }
+    },
+    {
+      "at": "2026-11-13T01:27:24+00:00",
+      "kind": "gate",
+      "data": {
+        "gate": "fixtures",
+        "result": "pass",
+        "record": "reviews/evidence/M03-fixtures-20261113T012723Z.json"
+      }
+    },
+    {
+      "at": "2026-11-13T05:56:12+00:00",
+      "kind": "gate",
+      "data": {
+        "gate": "tests",
+        "result": "pass",
+        "record": "reviews/evidence/M03-tests-20261113T055516Z.json"
+      }
+    },
+    {
+      "at": "2026-11-13T05:56:16+00:00",
+      "kind": "gate",
+      "data": {
+        "gate": "check",
+        "result": "pass",
+        "record": "reviews/evidence/M03-check-20261113T055615Z.json"
+      }
+    },
+    {
+      "at": "2026-11-13T05:56:20+00:00",
+      "kind": "gate",
+      "data": {
+        "gate": "fixtures",
+        "result": "pass",
+        "record": "reviews/evidence/M03-fixtures-20261113T055620Z.json"
+      }
+    }
+  ],
+  "usage": {},
+  "updated": "2026-11-13T05:56:20+00:00"
+}

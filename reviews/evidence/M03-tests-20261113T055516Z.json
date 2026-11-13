@@ -1,0 +1,17 @@
+{
+  "task": "M03",
+  "gate": "tests",
+  "command": "npm test",
+  "exit_code": 0,
+  "result": "pass",
+  "slot": null,
+  "exclusive": [],
+  "lock_wait_s": 0.0,
+  "lock_warning": null,
+  "started": "2026-11-13T05:55:16+00:00",
+  "finished": "2026-11-13T05:56:12+00:00",
+  "commit": "50a12c4c842601a75f352d84ff489ac1e7fbe7aa",
+  "dirty": true,
+  "log": "M03-tests-20261113T055516Z.log",
+  "log_sha256": "7483d16758e529c01ec7edf71e719a3bfae2cea8e82ebb25ac7a0bd78591310a"
+}
