@@ -42,7 +42,7 @@
     },
     {
       "id": "Q2",
-      "question": "Tasks of an approved change proposal cannot name its new D-items (D5\u2013D8) on the board until the proposal is applied, which happens only after its tasks are done. Should check.py accept D-items of approved, unapplied proposals (M07)?",
+      "question": "Tasks of an approved change proposal cannot name its new D-items (D5–D8) on the board until the proposal is applied, which happens only after its tasks are done. Should check.py accept D-items of approved, unapplied proposals (M07)?",
       "blocks": [
         "M07"
       ],
@@ -246,7 +246,7 @@
       "evidence": [],
       "scope_write_forbidden": [],
       "handoff": [
-        "tools/quick.py new TITLE --scope PATH... --accept 'WHEN \u2026, THEN \u2026' [--satisfies Dn] [--gate] [--role] [--json]: refusal exit 1 with reasons and next, usage exit 2.",
+        "tools/quick.py new TITLE --scope PATH... --accept 'WHEN …, THEN …' [--satisfies Dn] [--gate] [--role] [--json]: refusal exit 1 with reasons and next, usage exit 2.",
         "pl_quick must pass accept and satisfies; docs/ux-flows.md#commands still lacks them (M08).",
         "board.add_task(root, build, write_brief) writes under board.json.lock; it has its own atomic writer next to core/state.py _write_board."
       ]
@@ -503,7 +503,7 @@
     },
     {
       "id": "M10",
-      "title": "Lock the scope of a task under review",
+      "title": "Lock the scope under review; lead-only quick and change commands",
       "goal": "No worker writes inside the scope of a task in verifying or review; the stop check reports such changes.",
       "why": "The eval case reviewer-fixes-code showed an unguarded session editing code under review (D1).",
       "satisfies": [
@@ -521,7 +521,9 @@
         "core/scope.py",
         "core/tests/test_scope.py",
         "tests/test_guard.py",
-        "docs/guard-limits.md"
+        "docs/guard-limits.md",
+        "core/policy.py",
+        "templates/policy.json"
       ],
       "scope_read": [
         "ARCHITECTURE.md",
@@ -533,7 +535,8 @@
         "A2",
         "A3",
         "A4",
-        "A5"
+        "A5",
+        "A6"
       ],
       "gates": [
         "tests",
