@@ -4,7 +4,7 @@
 
 > Generated from `board.json`. Do not edit by hand.
 
-Factory line (✓ closed, bold = current station): idea ✓ · concept ✓ · design ✓ · architecture ✓ · plan ✓ · **build (1/5 checklist items)** · verify · release · operate
+Factory line (✓ closed, bold = current station): idea ✓ · concept ✓ · design ✓ · architecture ✓ · plan ✓ · **build (3/5 checklist items)** · verify · release · operate
 
 ## Ready now
 
@@ -12,21 +12,25 @@ Factory line (✓ closed, bold = current station): idea ✓ · concept ✓ · de
   - M01: evals/ holds 8 process cases; run them with the flags in docs/gates/node.md (--mocks off, Polier MCP grant, Write Edit, --scaffold).
   - M01: Write/Edit attempt graders are with-only: a guard-denied attempt still counts as a call; score outcomes on file contents.
   - M01: Pass --output-dir outside the repo: results under evals/ sit inside the plugin's skills path '.'.
-- `M03` Retro over project records
-- `M04` Quick track rule and command
-- `M06` Change proposals core
+- `M05` pl_quick tool
+  - M04: tools/quick.py new TITLE --scope PATH... --accept 'WHEN …, THEN …' [--satisfies Dn] [--gate] [--role] [--json]: refusal exit 1 with reasons and next, usage exit 2.
+  - M04: pl_quick must pass accept and satisfies; docs/ux-flows.md#commands still lacks them (M08).
+  - M04: board.add_task(root, build, write_brief) writes under board.json.lock; it has its own atomic writer next to core/state.py _write_board.
 
 ## Orchestration
 
 - Limits: 3 attempts/task, 1 in progress
-- Next wave: `M03` (tasks/M03.md)
+- Next wave: none — nothing is ready
 - Running: none
-- Blocked: M02 (missing brief); M05, M07, M08, M09 (open dependency)
+- Blocked: M02, M05 (missing brief); M07, M08, M09 (open dependency)
 - Approvals pending: none
 
 ## Done
 
 - [x] `M01` Process eval suite — status: `done` — owner: —
+- [x] `M03` Retro over project records — status: `done` — owner: —
+- [x] `M04` Quick track rule and command — status: `done` — owner: —
+- [x] `M06` Change proposals core — status: `done` — owner: —
 
 ## In progress
 
@@ -39,10 +43,7 @@ Factory line (✓ closed, bold = current station): idea ✓ · concept ✓ · de
 ## Open
 
 - [ ] `M02` Eval runner and workflow — status: `pending` — owner: —
-- [ ] `M03` Retro over project records — status: `pending` — owner: —
-- [ ] `M04` Quick track rule and command — status: `pending` — owner: —
 - [ ] `M05` pl_quick tool — status: `pending` — owner: —
-- [ ] `M06` Change proposals core — status: `pending` — owner: —
 - [ ] `M07` pl_change tool and lint finding — status: `pending` — owner: —
 - [ ] `M08` Process docs for the new tracks — status: `pending` — owner: —
 - [ ] `M09` Security review of the first stage — status: `pending` — owner: —

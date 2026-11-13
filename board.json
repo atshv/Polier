@@ -152,7 +152,7 @@
       "satisfies": [
         "D2"
       ],
-      "status": "pending",
+      "status": "done",
       "depends_on": [],
       "complexity": 5,
       "stage": 1,
@@ -186,7 +186,10 @@
       "round": 0,
       "evidence": [],
       "scope_write_forbidden": [],
-      "handoff": []
+      "handoff": [
+        "tools/retro.py FOLDER... [--json|--write PATH|--since]: six error classes from runs/, reviews/, approvals, board and factory; read-only.",
+        "Stop-check reports are not recorded in runs/, so scope pressure comes from open_questions only; stalled approval uses a fixed 7 days."
+      ]
     },
     {
       "id": "M04",
@@ -196,7 +199,7 @@
       "satisfies": [
         "D4"
       ],
-      "status": "pending",
+      "status": "done",
       "depends_on": [],
       "complexity": 5,
       "stage": 1,
@@ -233,7 +236,11 @@
       "round": 0,
       "evidence": [],
       "scope_write_forbidden": [],
-      "handoff": []
+      "handoff": [
+        "tools/quick.py new TITLE --scope PATH... --accept 'WHEN \u2026, THEN \u2026' [--satisfies Dn] [--gate] [--role] [--json]: refusal exit 1 with reasons and next, usage exit 2.",
+        "pl_quick must pass accept and satisfies; docs/ux-flows.md#commands still lacks them (M08).",
+        "board.add_task(root, build, write_brief) writes under board.json.lock; it has its own atomic writer next to core/state.py _write_board."
+      ]
     },
     {
       "id": "M05",
@@ -288,7 +295,7 @@
       "satisfies": [
         "D3"
       ],
-      "status": "pending",
+      "status": "done",
       "depends_on": [],
       "complexity": 6,
       "stage": 1,
@@ -325,7 +332,10 @@
       "round": 0,
       "evidence": [],
       "scope_write_forbidden": [],
-      "handoff": []
+      "handoff": [
+        "tools/change.py new|show|link|apply: deltas per file#heading; apply needs a granted scope_change whose requested note starts with the proposal ID, and every linked task done.",
+        "Headings inside a delta body must be fenced; apply refuses records, plan files, changes/ and protected paths as targets."
+      ]
     },
     {
       "id": "M07",
