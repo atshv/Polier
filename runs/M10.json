@@ -64,8 +64,28 @@
         "result": "pass",
         "record": "reviews/evidence/M10-evals-smoke-20261113T180410Z.json"
       }
+    },
+    {
+      "at": "2026-11-13T18:07:16+00:00",
+      "kind": "state",
+      "data": {
+        "from": "in_progress",
+        "to": "verifying",
+        "actor": "lead",
+        "note": "owner approved lead in chat (no dialog in the app)"
+      }
+    },
+    {
+      "at": "2026-11-13T18:07:16+00:00",
+      "kind": "state",
+      "data": {
+        "from": "verifying",
+        "to": "review",
+        "actor": "lead",
+        "note": "owner approved lead in chat (no dialog in the app)"
+      }
     }
   ],
   "usage": {},
-  "updated": "2026-11-13T18:06:12+00:00"
+  "updated": "2026-11-13T18:07:16+00:00"
 }

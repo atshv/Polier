@@ -31,7 +31,7 @@ Factory line (✓ closed, bold = current station): idea ✓ · concept ✓ · de
 
 ## In progress
 
-- [ ] `M10` Lock the scope under review; lead-only quick and change commands — status: `in_progress` — owner: —
+- [ ] `M10` Lock the scope under review; lead-only quick and change commands — status: `review` — owner: —
 
 ## Blocked / failed
 
