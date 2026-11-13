@@ -1,0 +1,17 @@
+{
+  "task": "M05",
+  "gate": "validate",
+  "command": "claude plugin validate . --strict",
+  "exit_code": 0,
+  "result": "pass",
+  "slot": null,
+  "exclusive": [],
+  "lock_wait_s": 0.0,
+  "lock_warning": null,
+  "started": "2026-11-13T17:53:21+00:00",
+  "finished": "2026-11-13T17:53:22+00:00",
+  "commit": "bea45912e338d6d6bc0b3a4d45330efbff4331b4",
+  "dirty": true,
+  "log": "M05-validate-20261113T175321Z.log",
+  "log_sha256": "26993ea0ca709942d82c2180deb31dd383a281d44b7d5cd084e3743c70514de5"
+}

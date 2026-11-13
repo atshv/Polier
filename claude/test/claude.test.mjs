@@ -18,7 +18,9 @@ const RUNTIME = mkdtempSync(path.join(tmpdir(), 'pl-cc-run-'))
 const TOOL = (name) => `mcp__plugin_polier_polier__${name}`
 
 let seq = 0
-const env = (extra = {}) => ({ ...process.env, POLIER_PYTHON: PY, POLIER_RUNTIME_DIR: RUNTIME, ...extra })
+// The owner's plugin options reach this process as POLIER_* and CLAUDE_PLUGIN_OPTION_*; the tests must not depend on them.
+const CLEAN_ENV = Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^(POLIER_|CLAUDE_PLUGIN_OPTION_)/.test(key)))
+const env = (extra = {}) => ({ ...CLEAN_ENV, POLIER_PYTHON: PY, POLIER_RUNTIME_DIR: RUNTIME, ...extra })
 
 /** A Claude Code stand-in: initialize, list and call tools, answer elicitation with queued answers. */
 async function connect(root, { elicitation = true, answers = [] } = {}) {
@@ -239,4 +241,28 @@ test('the plugin manifest matches the package', () => {
   const matcher = new RegExp(hooks.PreToolUse[0].matcher)
   for (const name of ['Write', 'Edit', 'MultiEdit', 'NotebookEdit', 'Bash', TOOL('pl_gate'), 'mcp__polier__pl_gate']) assert.ok(matcher.test(name), name)
   for (const name of ['Read', 'Grep', 'mcp__other__pl_gate']) assert.equal(matcher.test(name), false, name)
+})
+
+test('pl_quick through the MCP server: refused for a worker, created after lead mode', async () => {
+  const files = { 'factory.json': JSON.stringify({ stations: { build: { status: 'done' } } }), 'docs/quality.md': '- D1 It works.\n' }
+  const root = project([task('M01', 'done')], { files })
+  const args = { title: 'Fix the crash on empty input', scope: ['src/app.py'], accept: ['WHEN the input is empty, THEN the app exits with a message'], satisfies: ['D1'] }
+  const cc = await connect(root, { answers: [{ action: 'accept', content: { decision: 'approve' } }] })
+  try {
+    const refused = await cc.call('pl_quick', args)
+    assert.equal(refused.error, true)
+    assert.match(String(refused.value), /pl_mode lead/)
+    assert.equal(existsSync(path.join(root, 'tasks/M02.md')), false)
+    assert.equal((await cc.call('pl_mode', { role: 'lead', reason: 'quick fix' })).value.ok, true)
+    const created = await cc.call('pl_quick', args)
+    assert.equal(created.value.ok, true, JSON.stringify(created.value))
+    assert.equal(created.value.task, 'M02')
+    assert.ok(created.value.next)
+    const again = await cc.call('pl_quick', { ...args, title: 'Second' })
+    assert.equal(again.error, false)
+    assert.equal(again.value.ok, false)
+    assert.ok(again.value.reasons.length > 0)
+  } finally {
+    await cc.close()
+  }
 })

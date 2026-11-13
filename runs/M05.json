@@ -1,0 +1,128 @@
+{
+  "task": "M05",
+  "state": "done",
+  "attempt": 1,
+  "attempts": [
+    {
+      "n": 1,
+      "started": "2026-11-13T17:49:25+00:00",
+      "ended": "2026-11-13T17:59:24+00:00",
+      "result": "pass",
+      "note": "review round 1 pass, gates green; owner approved lead in chat"
+    }
+  ],
+  "events": [
+    {
+      "at": "2026-11-13T17:49:25+00:00",
+      "kind": "start",
+      "data": {
+        "actor": "lead"
+      }
+    },
+    {
+      "at": "2026-11-13T17:49:25+00:00",
+      "kind": "state",
+      "data": {
+        "from": "pending",
+        "to": "in_progress",
+        "actor": "lead",
+        "note": "owner approved lead in chat (no dialog in the app)"
+      }
+    },
+    {
+      "at": "2026-11-13T17:50:41+00:00",
+      "kind": "gate",
+      "data": {
+        "gate": "tests",
+        "result": "fail",
+        "record": "reviews/evidence/M05-tests-20261113T175029Z.json"
+      }
+    },
+    {
+      "at": "2026-11-13T17:53:16+00:00",
+      "kind": "gate",
+      "data": {
+        "gate": "tests",
+        "result": "pass",
+        "record": "reviews/evidence/M05-tests-20261113T175211Z.json"
+      }
+    },
+    {
+      "at": "2026-11-13T17:53:21+00:00",
+      "kind": "gate",
+      "data": {
+        "gate": "check",
+        "result": "pass",
+        "record": "reviews/evidence/M05-check-20261113T175320Z.json"
+      }
+    },
+    {
+      "at": "2026-11-13T17:53:22+00:00",
+      "kind": "gate",
+      "data": {
+        "gate": "validate",
+        "result": "pass",
+        "record": "reviews/evidence/M05-validate-20261113T175321Z.json"
+      }
+    },
+    {
+      "at": "2026-11-13T17:56:10+00:00",
+      "kind": "gate",
+      "data": {
+        "gate": "tests",
+        "result": "pass",
+        "record": "reviews/evidence/M05-tests-20261113T175505Z.json"
+      }
+    },
+    {
+      "at": "2026-11-13T17:56:16+00:00",
+      "kind": "gate",
+      "data": {
+        "gate": "check",
+        "result": "pass",
+        "record": "reviews/evidence/M05-check-20261113T175614Z.json"
+      }
+    },
+    {
+      "at": "2026-11-13T17:56:16+00:00",
+      "kind": "gate",
+      "data": {
+        "gate": "validate",
+        "result": "pass",
+        "record": "reviews/evidence/M05-validate-20261113T175616Z.json"
+      }
+    },
+    {
+      "at": "2026-11-13T17:56:52+00:00",
+      "kind": "state",
+      "data": {
+        "from": "in_progress",
+        "to": "verifying",
+        "actor": "lead",
+        "note": "owner approved lead in chat (no dialog in the app)"
+      }
+    },
+    {
+      "at": "2026-11-13T17:56:52+00:00",
+      "kind": "state",
+      "data": {
+        "from": "verifying",
+        "to": "review",
+        "actor": "lead",
+        "note": "owner approved lead in chat (no dialog in the app)"
+      }
+    },
+    {
+      "at": "2026-11-13T17:59:24+00:00",
+      "kind": "state",
+      "data": {
+        "from": "review",
+        "to": "done",
+        "actor": "lead",
+        "note": "review round 1 pass, gates green; owner approved lead in chat"
+      }
+    }
+  ],
+  "usage": {},
+  "updated": "2026-11-13T17:59:24+00:00"
+}

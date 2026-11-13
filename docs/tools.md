@@ -81,6 +81,20 @@ Read the execution state of the board or of one task, or (lead session) move a t
 | `handoff` | list of string |  | With status done: 1–3 lines the dependent tasks need (what exists now, where, how to use it). |
 | `project` | string |  | Project folder. Default: the session directory or the nearest parent with board.json or factory.json. |
 
+## `pl_quick`
+
+Quick track (lead session): add one small change after the build station as a pending task with its brief, through tools/quick.py new. A request that does not qualify comes back as ok: false with the reasons and the path to propose it instead; nothing is written then. After a created task the lead sets it in_progress with pl_state.
+
+| Parameter | Type | Required | Meaning |
+| --- | --- | --- | --- |
+| `title` | string | yes | What the change does, one line. |
+| `scope` | list of string |  | Existing files the change may touch. |
+| `accept` | list of string | yes | Expected behaviour, each line "WHEN <situation>, THEN <behaviour>". At least one. |
+| `satisfies` | list of string |  | Definition-of-done items of docs/quality.md, e.g. D1; needed when no task has touched the files. |
+| `gates` | list of string |  | Gate names; default: the gates of the task that last touched the files, else tests. |
+| `role` | string |  | Specialist role; default: the role of the task that last touched the files. |
+| `project` | string |  | Project folder. Default: the session directory or the nearest parent with board.json or factory.json. |
+
 ## `pl_factory`
 
 The factory line (factory.json). init shows the owner the planned line (platforms, traits, items per station) in an approval prompt and writes it only on yes. Read: status, next (open items of the current station with the evidence they need). Write (lead, or any session while no task runs): done (with evidence paths, optionally #heading), na or defer (with a reason), reopen, link (board tasks that deliver an item). advance asks the owner and closes the current station. Every write returns what is left and the next step; docs/factory.md is regenerated.
