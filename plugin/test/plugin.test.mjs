@@ -176,7 +176,7 @@ test('registers the tools, the live context and the skill with the real services
   await ctx.plugin(plugin)
   await new Promise((r) => setTimeout(r, 100))
   const names = ctx.get('tools').schemas().map((s) => s.name)
-  for (const n of ['pl_preflight', 'pl_status', 'pl_gate', 'pl_scope_check', 'pl_review', 'pl_check', 'pl_next', 'pl_state', 'pl_factory', 'pl_mode', 'pl_role', 'pl_task', 'pl_approval']) {
+  for (const n of ['pl_preflight', 'pl_status', 'pl_gate', 'pl_scope_check', 'pl_review', 'pl_check', 'pl_next', 'pl_state', 'pl_quick', 'pl_factory', 'pl_mode', 'pl_role', 'pl_task', 'pl_approval']) {
     assert.ok(names.includes(n), n)
   }
   const skills = await ctx.get('skills').list({})
@@ -577,4 +577,45 @@ test('pl_task gives a builder the task role and leaves a reviewer a reviewer', a
   assert.equal(review.value.claimed, false)
   const code = await call(tools, reviewer, 'write', { file_path: 'src/app.py', content: 'x = 9\n' })
   assert.match(code.text, /reviewer session writes only under reviews/)
+})
+
+const closedLine = { 'factory.json': JSON.stringify({ stations: { build: { status: 'done' } } }), 'docs/quality.md': '- D1 It works.\n' }
+const quickArgs = { title: 'Fix the crash on empty input', scope: ['src/app.py'], accept: ['WHEN the input is empty, THEN the app exits with a message'], satisfies: ['D1'] }
+
+test('pl_quick: a lead creates the quick task, a refusal is a result, a bad request is a tool error', async () => {
+  const root = project([task('M01', 'done')], { files: closedLine })
+  const { tools } = await boot({}, { approval: approvals('allowed-once') })
+  const lead = agent(root)
+  await mode(tools, lead, 'lead')
+  const created = await call(tools, lead, 'pl_quick', quickArgs)
+  assert.equal(created.error, false, created.text)
+  assert.equal(created.value.ok, true)
+  assert.equal(created.value.task, 'M02')
+  assert.ok(created.value.next)
+  const board = JSON.parse(readFileSync(path.join(root, 'board.json'), 'utf8'))
+  assert.equal(board.tasks.find((t) => t.id === 'M02').track, 'quick')
+  assert.ok(existsSync(path.join(root, 'tasks/M02.md')))
+
+  const refused = await call(tools, lead, 'pl_quick', { ...quickArgs, title: 'Another one' })
+  assert.equal(refused.error, false)
+  assert.equal(refused.value.ok, false)
+  assert.match(refused.value.reasons.join(' '), /M02/)
+  assert.ok(refused.value.next)
+
+  const none = await call(tools, lead, 'pl_quick', { ...quickArgs, accept: [] })
+  assert.equal(none.error, true)
+  assert.match(none.text, /WHEN/)
+  const asString = await call(tools, lead, 'pl_quick', { ...quickArgs, scope: 'src/app.py', title: 'Third' })
+  assert.equal(asString.value.ok, false)
+})
+
+test('pl_quick: a worker is refused with the way to lead mode and nothing is written', async () => {
+  const root = project([task('M01', 'done')], { files: closedLine })
+  const before = readFileSync(path.join(root, 'board.json'), 'utf8')
+  const { tools } = await boot({}, { approval: approvals() })
+  const refused = await call(tools, agent(root), 'pl_quick', quickArgs)
+  assert.equal(refused.error, true)
+  assert.match(refused.text, /pl_mode lead/)
+  assert.equal(readFileSync(path.join(root, 'board.json'), 'utf8'), before)
+  assert.equal(existsSync(path.join(root, 'tasks/M02.md')), false)
 })

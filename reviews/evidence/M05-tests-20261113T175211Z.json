@@ -1,0 +1,17 @@
+{
+  "task": "M05",
+  "gate": "tests",
+  "command": "env -u POLIER_ENFORCE -u CLAUDE_PLUGIN_OPTION_ENFORCE npm test",
+  "exit_code": 0,
+  "result": "pass",
+  "slot": null,
+  "exclusive": [],
+  "lock_wait_s": 0.0,
+  "lock_warning": null,
+  "started": "2026-11-13T17:52:11+00:00",
+  "finished": "2026-11-13T17:53:16+00:00",
+  "commit": "bea45912e338d6d6bc0b3a4d45330efbff4331b4",
+  "dirty": true,
+  "log": "M05-tests-20261113T175211Z.log",
+  "log_sha256": "2faf1bef5be0e70fde805b2708adf9607bcce7da642f939e7f2b5363cecb91c5"
+}

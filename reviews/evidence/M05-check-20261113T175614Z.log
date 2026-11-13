@@ -1,0 +1,8 @@
+$ npm run check
+[exit 0]
+
+
+> dsh-polier@0.4.7 check
+> python3 scripts/check.py
+
+OK: generated pages current, no dead code found, modules parse

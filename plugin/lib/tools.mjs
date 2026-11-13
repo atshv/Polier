@@ -590,5 +590,42 @@ export function tools(ctx, config) {
     },
   })
 
-  return [preflight, status, gate, scope, review, check, next, state, factory, mode, roleTool, bind, approval]
+  const quick = jsonTool({
+    name: 'pl_quick',
+    description: 'Quick track (lead session): add one small change after the build station as a pending task with its brief, through tools/quick.py new. A request that does not qualify comes back as ok: false with the reasons and the path to propose it instead; nothing is written then. After a created task the lead sets it in_progress with pl_state.',
+    parameters: {
+      type: 'object',
+      properties: {
+        title: { type: 'string', description: 'What the change does, one line.' },
+        scope: { type: 'array', items: { type: 'string' }, description: 'Existing files the change may touch.' },
+        accept: { type: 'array', items: { type: 'string' }, description: 'Expected behaviour, each line "WHEN <situation>, THEN <behaviour>". At least one.' },
+        satisfies: { type: 'array', items: { type: 'string' }, description: 'Definition-of-done items of docs/quality.md, e.g. D1; needed when no task has touched the files.' },
+        gates: { type: 'array', items: { type: 'string' }, description: 'Gate names; default: the gates of the task that last touched the files, else tests.' },
+        role: { type: 'string', description: 'Specialist role; default: the role of the task that last touched the files.' },
+        project: PROJECT,
+      },
+      required: ['title', 'accept'],
+    },
+    async execute(args, exec) {
+      const { root } = needBoard(ctx, exec.agent, args.project)
+      if (stateOf(exec.agent).role !== 'lead') {
+        throw new Error('Polier: only a lead session creates a quick task (it writes board.json). Switch with pl_mode lead (the owner approves it), then call pl_quick again.')
+      }
+      const title = typeof args.title === 'string' ? args.title.trim() : ''
+      if (!title) throw new Error('pl_quick needs a title')
+      const list = (value) => (Array.isArray(value) ? value : typeof value === 'string' ? [value] : [])
+        .filter((item) => typeof item === 'string' && item.trim()).map((item) => item.trim())
+      const argv = py(config, 'quick.py', 'new', title, '--root', root, '--json')
+      const flags = [['--scope', args.scope], ['--accept', args.accept], ['--gate', args.gates], ['--satisfies', args.satisfies]]
+      for (const [flag, value] of flags) for (const item of list(value)) argv.push(flag, item)
+      if (typeof args.role === 'string' && args.role.trim()) argv.push('--role', args.role.trim())
+      const result = await run(ctx, exec.agent, argv, { cwd: root, timeoutMs: 60_000, signal: exec.signal })
+      const value = result.code === 0 || result.code === 1 ? lastJson(result.stdout) : undefined
+      if (!value) throw new Error(`pl_quick failed (exit ${result.code}): ${(result.stderr || result.stdout).trim().slice(-1000) || 'no output'}`)
+      if (result.code === 0) await render(ctx, config, exec.agent, root, exec.signal)
+      return value
+    },
+  })
+
+  return [preflight, status, gate, scope, review, check, next, state, quick, factory, mode, roleTool, bind, approval]
 }
