@@ -30,7 +30,7 @@ Factory line (✓ closed, bold = current station): idea ✓ · concept ✓ · de
 
 ## In progress
 
-- [ ] `M05` pl_quick tool — status: `in_progress` — owner: —
+- [ ] `M05` pl_quick tool — status: `review` — owner: —
 
 ## Blocked / failed
 

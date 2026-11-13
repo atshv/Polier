@@ -259,7 +259,7 @@
       "satisfies": [
         "D4"
       ],
-      "status": "in_progress",
+      "status": "review",
       "depends_on": [
         "M04"
       ],
