@@ -2,6 +2,7 @@
 
 Polier's guard keeps honest agents on track; it is not a sandbox. These are the known gaps.
 
+- **A task under review is locked only for file-tool writes.** While a task is `verifying` or `review`, a worker that is not bound to it cannot write inside its `scope_write` (a lead, a reviewer under `reviews/` and `off` are unchanged); a write through Bash reaches only the stop check, which lists the file under `locked` with the task's ID. A task's `scope_write` is read from the board, so a change to the board by shell lifts the lock.
 - **Approvals are cooperative evidence, not authentication.** `reviews/approvals/AP-NNN.json` has no signature and no identity check. Whoever can write the file can forge a granted record, and a shell write is outside the guard. Commit the approval and review it like code.
 - **Run records can be forged.** `runs/<ID>.json` is a text file that a hand edit or a shell write can change as easily as the tools; `tools/audit.py` compares it with the board and the evidence folder, not with what happened. A `done` task whose run record was edited is only visible as a contradiction.
 - **Command matching is static.** The policy's denied and lead-only patterns are matched against shell segments after quotes, heredocs, assignments and wrappers are stripped, so `git push` is caught. A command assembled by a variable, `eval`, an interpreter or a script file is not.

@@ -7,6 +7,9 @@ Two entry points with deliberately different rules, kept as they shipped:
   tasks a path must fit one of them.
 - check_stop() looks at every changed file of one task after the fact.
   scope_write_forbidden wins over everything, board files pass with allow_board.
+
+Both also lock the scope of a task in verifying or review against workers that
+are not bound to it (locked_by).
 """
 from __future__ import annotations
 
@@ -32,6 +35,8 @@ RECORDS = ("board.json", "STATUS.md", "STATUS.html", "factory.json", "docs/facto
            "runs", "reviews/approvals")
 # The only folder a reviewer session writes to.
 REVIEWS = "reviews"
+# A task in one of these states is under review: its scope is frozen for workers.
+LOCKED_STATUSES = ("verifying", "review")
 # Approval records are the approver's: a reviewer writes review material, never
 # the approval ledger (tools/approve.py owns it).
 APPROVALS = "reviews/approvals"
@@ -47,6 +52,19 @@ class Decision(NamedTuple):
 def _strings(task: dict, key: str) -> List[str]:
     value = task.get(key)
     return [p for p in value if isinstance(p, str)] if isinstance(value, list) else []
+
+
+def locked_by(rel: str, board, own: Iterable[str] = ()) -> List[Tuple[str, str]]:
+    """(task id, status) of every task under review whose `scope_write` holds `rel`.
+
+    Tasks in `own` (the session's bound tasks) are not counted. Evidence paths are never locked.
+    """
+    if not isinstance(board, dict) or any(inside(rel, a) for a in ALWAYS_ALLOWED):
+        return []
+    own = set(own)
+    return [(t.get("id"), t.get("status")) for t in tasks_of(board)
+            if t.get("status") in LOCKED_STATUSES and t.get("id") not in own
+            and any(inside(rel, e) for e in _strings(t, "scope_write"))]
 
 
 def worktree_mode(board) -> str:
@@ -118,7 +136,8 @@ def check_write(path: str, tasks: Union[dict, Iterable[dict], None], role: str =
     """Guard decision for writing `path`.
 
     `tasks` is the task (or list of tasks) bound to the session; empty means no
-    task is running and a worker may write anything. With `root`, `path` may be
+    task is running and a worker may write anything except the scope of a task
+    in `verifying` or `review`. With `root`, `path` may be
     absolute or relative to `cwd` (default: `root`); without it, `path` must
     already be relative to the project root. With `board` and `root` the
     worktree rule is enforced as well.
@@ -133,7 +152,16 @@ def check_write(path: str, tasks: Union[dict, Iterable[dict], None], role: str =
                 return Decision(False, "approvals", "is the approval ledger", rel)
             return Decision(True, path=rel)
         return Decision(False, "reviewer", "is outside reviews/", rel)
-    if role != "worker" or not tasks:
+    if role != "worker":
+        return Decision(True, path=rel)
+    if board is None and root is not None:
+        board = load_board(root, strict=False)
+    locked = locked_by(rel, board, [t.get("id") for t in tasks])
+    if locked:
+        held = ", ".join(f"{i} (status {st})" for i, st in locked)
+        return Decision(False, "locked", f"is in the write scope of {held}, which is under review "
+                        "and locked for workers; the session's task", rel)
+    if not tasks:
         return Decision(True, path=rel)
     return decide(rel, tasks, board=board, root=root, cwd=cwd)
 
@@ -302,17 +330,29 @@ def check_stop(changed: List[str], task: dict, allow_board: bool = False, root=N
             records.append(path)
             continue
         mine.append(path)
-    found = violations(mine, task, allow_board)
+    locked: List[dict] = []
+    board = load_board(root, strict=False) if root is not None else None
+    for path in mine:
+        for tid, status in locked_by(path, board, [task.get("id")]):
+            locked.append({"path": path, "task": tid, "status": status})
+    locked_paths = {item["path"] for item in locked}
+    found = violations([p for p in mine if p not in locked_paths], task, allow_board)
     foreign = _foreign_changes(found, task, root)
     if foreign:
         foreign_paths = {item["path"] for item in foreign}
         found = [(path, reason) for path, reason in found if path not in foreign_paths]
+    held: dict = {}
+    for item in locked:
+        held.setdefault(item["path"], []).append(f"{item['task']} ({item['status']})")
+    found = [(p, f"locked: in the scope of {', '.join(ids)}, which is under review")
+             for p, ids in held.items()] + found
     return {
         "task": task.get("id"),
         "ok": not found,
         "changed": list(changed),
         "violations": [{"path": p, "reason": r} for p, r in found],
         "foreign": foreign,
+        "locked": locked,
         "records": records,
         "baseline": unchanged,
         "scope_write": task.get("scope_write", []),

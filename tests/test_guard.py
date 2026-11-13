@@ -54,6 +54,22 @@ class Writes(unittest.TestCase):
         self.assertIsNone(decide(request(self.root, role="lead", path="package.json"))["deny"])
 
 
+class LockedScope(unittest.TestCase):
+    def setUp(self):
+        self.root = make_project([task("M01", status="review", scope_write=["src/app.py"]),
+                                  task("M02", scope_write=["docs/"])])
+        self.addCleanup(shutil.rmtree, self.root, ignore_errors=True)
+
+    def test_unbound_worker_is_refused_and_told_the_task(self):
+        deny = decide(request(self.root, tasks=[], path="src/app.py"))["deny"]
+        self.assertIn("M01 (status review)", deny)
+        self.assertIsNone(decide(request(self.root, tasks=[], path="README.md"))["deny"])
+
+    def test_lead_and_reviewer_are_unchanged(self):
+        self.assertIsNone(decide(request(self.root, role="lead", tasks=[], path="src/app.py"))["deny"])
+        self.assertIsNone(decide(request(self.root, role="reviewer", tasks=[], path="reviews/M01.md"))["deny"])
+
+
 class Commands(unittest.TestCase):
     def setUp(self):
         self.root = make_project([task("M01")])
@@ -68,6 +84,11 @@ class Commands(unittest.TestCase):
         self.assertIn("only the lead may run", worker)
         self.assertIsNone(decide(request(self.root, role="lead",
                                          command="python3 tools/state.py set M01 done"))["deny"])
+
+    def test_quick_and_change_are_lead_only(self):
+        for command in ("python3 tools/quick.py new x", "python3 tools/change.py apply C1"):
+            self.assertIn("only the lead may run", decide(request(self.root, command=command))["deny"])
+            self.assertIsNone(decide(request(self.root, role="lead", command=command))["deny"])
 
     def test_kills_are_flagged_not_denied(self):
         answer = decide(request(self.root, command="lsof -ti:3000 | xargs kill"))

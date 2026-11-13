@@ -28,8 +28,44 @@
         "actor": "lead",
         "note": "owner approved lead in chat (no dialog in the app)"
       }
+    },
+    {
+      "at": "2026-11-13T18:03:57+00:00",
+      "kind": "gate",
+      "data": {
+        "gate": "tests",
+        "result": "pass",
+        "record": "reviews/evidence/M10-tests-20261113T180248Z.json"
+      }
+    },
+    {
+      "at": "2026-11-13T18:04:03+00:00",
+      "kind": "gate",
+      "data": {
+        "gate": "check",
+        "result": "pass",
+        "record": "reviews/evidence/M10-check-20261113T180401Z.json"
+      }
+    },
+    {
+      "at": "2026-11-13T18:04:03+00:00",
+      "kind": "gate",
+      "data": {
+        "gate": "fixtures",
+        "result": "pass",
+        "record": "reviews/evidence/M10-fixtures-20261113T180403Z.json"
+      }
+    },
+    {
+      "at": "2026-11-13T18:06:12+00:00",
+      "kind": "gate",
+      "data": {
+        "gate": "evals-smoke",
+        "result": "pass",
+        "record": "reviews/evidence/M10-evals-smoke-20261113T180410Z.json"
+      }
     }
   ],
   "usage": {},
-  "updated": "2026-11-13T18:00:54+00:00"
+  "updated": "2026-11-13T18:06:12+00:00"
 }

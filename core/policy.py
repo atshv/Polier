@@ -67,7 +67,8 @@ DEFAULTS: Dict[str, object] = {
                  "docker push*", "gh release*", "kubectl apply*", "kubectl delete*",
                  "terraform apply*", "rm -rf /*"],
         "lead_only": ["*tools/state.py set*", "*tools/approve.py grant*",
-                      "*tools/approve.py deny*", "*tools/worktree.py finish*"],
+                      "*tools/approve.py deny*", "*tools/worktree.py finish*",
+                      "*tools/quick.py new*", "*tools/change.py apply*"],
         "warn": ["*kill*", "*pkill*", "killall*"],
     },
     "checks": {
