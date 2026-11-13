@@ -259,7 +259,7 @@
       "satisfies": [
         "D4"
       ],
-      "status": "review",
+      "status": "done",
       "depends_on": [
         "M04"
       ],
@@ -294,7 +294,10 @@
       "round": 0,
       "evidence": [],
       "scope_write_forbidden": [],
-      "handoff": []
+      "handoff": [
+        "pl_quick(title, scope[], accept[], satisfies?, gates?, role?) forwards to tools/quick.py new; lead only; a refusal returns ok false with reasons and next.",
+        "Claude Code tests build their env without POLIER_* and CLAUDE_PLUGIN_OPTION_* (CLEAN_ENV); keep it that way for new tests."
+      ]
     },
     {
       "id": "M06",

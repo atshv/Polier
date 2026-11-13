@@ -12,13 +12,16 @@ Factory line (✓ closed, bold = current station): idea ✓ · concept ✓ · de
   - M01: evals/ holds 8 process cases; run them with the flags in docs/gates/node.md (--mocks off, Polier MCP grant, Write Edit, --scaffold).
   - M01: Write/Edit attempt graders are with-only: a guard-denied attempt still counts as a call; score outcomes on file contents.
   - M01: Pass --output-dir outside the repo: results under evals/ sit inside the plugin's skills path '.'.
+- `M10` Lock the scope of a task under review
+  - M05: pl_quick(title, scope[], accept[], satisfies?, gates?, role?) forwards to tools/quick.py new; lead only; a refusal returns ok false with reasons and next.
+  - M05: Claude Code tests build their env without POLIER_* and CLAUDE_PLUGIN_OPTION_* (CLEAN_ENV); keep it that way for new tests.
 
 ## Orchestration
 
 - Limits: 3 attempts/task, 1 in progress
-- Next wave: none — nothing is ready
-- Running: `M05` attempt 1/3
-- Blocked: M02 (missing brief); M07, M08, M09, M10, M11 (open dependency)
+- Next wave: `M10` (tasks/M10.md)
+- Running: none
+- Blocked: M02 (missing brief); M07, M08, M09, M11 (open dependency)
 - Approvals pending: none
 
 ## Done
@@ -26,11 +29,12 @@ Factory line (✓ closed, bold = current station): idea ✓ · concept ✓ · de
 - [x] `M01` Process eval suite — status: `done` — owner: —
 - [x] `M03` Retro over project records — status: `done` — owner: —
 - [x] `M04` Quick track rule and command — status: `done` — owner: —
+- [x] `M05` pl_quick tool — status: `done` — owner: —
 - [x] `M06` Change proposals core — status: `done` — owner: —
 
 ## In progress
 
-- [ ] `M05` pl_quick tool — status: `review` — owner: —
+- none
 
 ## Blocked / failed
 
