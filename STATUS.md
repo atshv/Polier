@@ -12,15 +12,12 @@ Factory line (✓ closed, bold = current station): idea ✓ · concept ✓ · de
   - M01: evals/ holds 8 process cases; run them with the flags in docs/gates/node.md (--mocks off, Polier MCP grant, Write Edit, --scaffold).
   - M01: Write/Edit attempt graders are with-only: a guard-denied attempt still counts as a call; score outcomes on file contents.
   - M01: Pass --output-dir outside the repo: results under evals/ sit inside the plugin's skills path '.'.
-- `M10` Lock the scope under review; lead-only quick and change commands
-  - M05: pl_quick(title, scope[], accept[], satisfies?, gates?, role?) forwards to tools/quick.py new; lead only; a refusal returns ok false with reasons and next.
-  - M05: Claude Code tests build their env without POLIER_* and CLAUDE_PLUGIN_OPTION_* (CLEAN_ENV); keep it that way for new tests.
 
 ## Orchestration
 
 - Limits: 3 attempts/task, 1 in progress
-- Next wave: `M10` (tasks/M10.md)
-- Running: none
+- Next wave: none — nothing is ready
+- Running: `M10` attempt 1/3
 - Blocked: M02 (missing brief); M07, M08, M09, M11 (open dependency)
 - Approvals pending: none
 
@@ -34,7 +31,7 @@ Factory line (✓ closed, bold = current station): idea ✓ · concept ✓ · de
 
 ## In progress
 
-- none
+- [ ] `M10` Lock the scope under review; lead-only quick and change commands — status: `in_progress` — owner: —
 
 ## Blocked / failed
 
@@ -46,7 +43,6 @@ Factory line (✓ closed, bold = current station): idea ✓ · concept ✓ · de
 - [ ] `M07` pl_change tool and lint finding — status: `pending` — owner: —
 - [ ] `M08` Process docs for the new tracks — status: `pending` — owner: —
 - [ ] `M09` Security review of the first stage — status: `pending` — owner: —
-- [ ] `M10` Lock the scope under review; lead-only quick and change commands — status: `pending` — owner: —
 - [ ] `M11` Owner decisions when no dialog appears — status: `pending` — owner: —
 
 ## Decisions

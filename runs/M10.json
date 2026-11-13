@@ -1,0 +1,35 @@
+{
+  "task": "M10",
+  "state": "running",
+  "attempt": 1,
+  "attempts": [
+    {
+      "n": 1,
+      "started": "2026-11-13T18:00:54+00:00",
+      "ended": null,
+      "result": null,
+      "note": null
+    }
+  ],
+  "events": [
+    {
+      "at": "2026-11-13T18:00:54+00:00",
+      "kind": "start",
+      "data": {
+        "actor": "lead"
+      }
+    },
+    {
+      "at": "2026-11-13T18:00:54+00:00",
+      "kind": "state",
+      "data": {
+        "from": "pending",
+        "to": "in_progress",
+        "actor": "lead",
+        "note": "owner approved lead in chat (no dialog in the app)"
+      }
+    }
+  ],
+  "usage": {},
+  "updated": "2026-11-13T18:00:54+00:00"
+}
