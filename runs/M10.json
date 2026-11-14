@@ -1,6 +1,6 @@
 {
   "task": "M10",
-  "state": "running",
+  "state": "done",
   "attempt": 3,
   "attempts": [
     {
@@ -20,9 +20,9 @@
     {
       "n": 3,
       "started": "2026-11-14T05:41:03+00:00",
-      "ended": null,
-      "result": null,
-      "note": null
+      "ended": "2026-11-14T05:49:02+00:00",
+      "result": "pass",
+      "note": "Review round 3 pass, gates green."
     }
   ],
   "events": [
@@ -280,8 +280,18 @@
         "to": "review",
         "actor": "lead"
       }
+    },
+    {
+      "at": "2026-11-14T05:49:02+00:00",
+      "kind": "state",
+      "data": {
+        "from": "review",
+        "to": "done",
+        "actor": "lead",
+        "note": "Review round 3 pass, gates green."
+      }
     }
   ],
   "usage": {},
-  "updated": "2026-11-14T05:45:38+00:00"
+  "updated": "2026-11-14T05:49:02+00:00"
 }

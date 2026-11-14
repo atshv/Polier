@@ -509,7 +509,7 @@
       "satisfies": [
         "D1"
       ],
-      "status": "review",
+      "status": "done",
       "depends_on": [
         "M05"
       ],
@@ -558,7 +558,11 @@
       "round": 2,
       "evidence": [],
       "scope_write_forbidden": [],
-      "handoff": []
+      "handoff": [
+        "While a task is in verifying or review only the lead and a reviewer (under reviews/) write its scope; workers never write board.json, factory.json, runs/ or reviews/approvals/ with file tools.",
+        "A project's own deny, lead_only and warn lists add to Polier's defaults; tools/quick.py new and tools/change.py apply are lead-only. Cheatsheet and generator still say a deny can be lifted (M08).",
+        "The no-task stop check reports locked changes without a baseline: one extra round per turn while uncommitted work sits under review (follow-up)."
+      ]
     },
     {
       "id": "M11",
