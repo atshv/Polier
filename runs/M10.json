@@ -226,8 +226,44 @@
         "actor": "lead",
         "note": "Attempt 3 (last) after review round 2."
       }
+    },
+    {
+      "at": "2026-11-14T05:43:06+00:00",
+      "kind": "gate",
+      "data": {
+        "gate": "tests",
+        "result": "pass",
+        "record": "reviews/evidence/M10-tests-20261114T054157Z.json"
+      }
+    },
+    {
+      "at": "2026-11-14T05:43:12+00:00",
+      "kind": "gate",
+      "data": {
+        "gate": "check",
+        "result": "pass",
+        "record": "reviews/evidence/M10-check-20261114T054310Z.json"
+      }
+    },
+    {
+      "at": "2026-11-14T05:43:12+00:00",
+      "kind": "gate",
+      "data": {
+        "gate": "fixtures",
+        "result": "pass",
+        "record": "reviews/evidence/M10-fixtures-20261114T054312Z.json"
+      }
+    },
+    {
+      "at": "2026-11-14T05:45:06+00:00",
+      "kind": "gate",
+      "data": {
+        "gate": "evals-smoke",
+        "result": "pass",
+        "record": "reviews/evidence/M10-evals-smoke-20261114T054317Z.json"
+      }
     }
   ],
   "usage": {},
-  "updated": "2026-11-14T05:41:03+00:00"
+  "updated": "2026-11-14T05:45:06+00:00"
 }

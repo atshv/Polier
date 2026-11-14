@@ -111,9 +111,9 @@ async function lockedReminder(ctx, config, agent, info) {
   const answer = await ask(ctx, config, agent, info, { stop: true })
   if (answer.error || answer.locked.length === 0) return undefined
   return [
-    'Polier: the working tree has changes inside the scope of a task under review.',
+    'Polier: the working tree has changes inside the scope of a task under review (a report, not an order).',
     ...answer.locked.slice(0, 20).map((item) => `- ${item.path}: locked by ${item.task} (status ${item.status})`),
-    'Undo these changes (git checkout for files you edited), or keep them and report each one under open_questions. Then finish.',
+    'If you changed them, revert your own changes; if you did not, leave them and finish.',
   ].join('\n')
 }
 

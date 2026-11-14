@@ -69,12 +69,12 @@ class LockedScope(unittest.TestCase):
         self.assertTrue(self.write("README.md").ok)
         self.assertTrue(self.write("reviews/evidence/a.log").ok)
 
-    def test_a_bound_worker_is_locked_out_of_another_task_only(self):
+    def test_a_bound_worker_is_locked_out_of_any_task_under_review(self):
         t2 = task("M02", scope_write=["tests/", "src/"])
         self.assertEqual(self.write("src/app.py", [t2]).code, "locked")
         self.assertTrue(self.write("tests/x.py", [t2]).ok)
         own = task("M01", "review", scope_write=["src/", "docs/a.md"])
-        self.assertTrue(self.write("src/app.py", [own]).ok)
+        self.assertEqual(self.write("src/app.py", [own]).code, "locked")  # no exemption for the bound builder
 
     def test_other_statuses_do_not_lock(self):
         for status in ("rework", "in_progress", "done", "pending"):

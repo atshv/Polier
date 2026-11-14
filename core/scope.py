@@ -161,7 +161,9 @@ def check_write(path: str, tasks: Union[dict, Iterable[dict], None], role: str =
         board = load_board(root, strict=False)
     if any(inside(rel, r) for r in RECORD_WRITES):
         return Decision(False, "lead-owned", "is lead-owned (a Polier record the tools write)", rel)
-    locked = locked_by(rel, board, [t.get("id") for t in tasks])
+    # A task under review gives no exemption to the worker bound to it: only the lead and a
+    # reviewer (under reviews/) write while it is reviewed.
+    locked = locked_by(rel, board)
     if locked:
         held = ", ".join(f"{i} (status {st})" for i, st in locked)
         return Decision(False, "locked", f"is in the write scope of {held}, which is locked while it is under review", rel)

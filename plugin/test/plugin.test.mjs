@@ -642,5 +642,22 @@ test('a task under review is locked: file-tool writes, records, binding and the 
   writeFileSync(path.join(root, 'src', 'app.py'), 'x = 2\n')
   await plugin.onTurnStopping(ctx, config, { agent: free, turn: 1 })
   assert.equal(free.steered.length, 1)
-  assert.match(free.steered[0].content[0].text, /src\/app\.py: locked by M01 \(status review\)/)
+  const text = free.steered[0].content[0].text
+  assert.match(text, /src\/app\.py: locked by M01 \(status review\)/)
+  assert.match(text, /if you changed them, revert your own changes; if you did not, leave them and finish/i)
+  assert.doesNotMatch(text, /checkout|undo/i, 'a report, never an order to discard work the session may not have made')
+})
+
+test('the mode-switch detour does not bind a task under review', async () => {
+  const root = project([task('M01', 'review', { scope_write: ['src/'] })])
+  const { tools } = await boot({ python: PY }, { approval: approvals('allowed-once') })
+  const a = agent(root)
+  assert.equal((await call(tools, a, 'pl_task', { task: 'M01' })).value.ok, false)
+  assert.equal((await mode(tools, a, 'reviewer')).value.ok, true)
+  assert.equal((await call(tools, a, 'pl_task', { task: 'M01' })).value.bound, 'M01')
+  assert.equal((await mode(tools, a, 'worker')).value.ok, true)
+  const write = await call(tools, a, 'write', { file_path: 'src/app.py', content: 'x = 9\n' })
+  assert.equal(write.error, true)
+  assert.match(write.text, /M01 \(status review\)/)
+  assert.equal(readFileSync(path.join(root, 'src', 'app.py'), 'utf8'), 'x = 1\n')
 })

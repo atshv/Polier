@@ -538,7 +538,7 @@ export function tools(ctx, config) {
       }
       if (entry.status === 'verifying' || entry.status === 'review') {
         return { ok: false, bound: state.pinned ?? null,
-          error: `cannot bind ${id}: it is ${entry.status}, so its scope is locked for workers. A reviewer binds it with pl_role reviewer; the lead reopens it with rework.` }
+          error: `cannot bind ${id}: it is ${entry.status}, so its scope is locked for workers while it is under review. Only the lead reopens it (rework).` }
       }
       const held = state.claims.includes(id)
       const taken = await takeClaim(ctx, config, exec.agent, root, id)
