@@ -1,11 +1,18 @@
 {
   "task": "M10",
   "state": "running",
-  "attempt": 1,
+  "attempt": 2,
   "attempts": [
     {
       "n": 1,
       "started": "2026-11-13T18:00:54+00:00",
+      "ended": "2026-11-14T05:29:25+00:00",
+      "result": "fail",
+      "note": "Review round 1: close the two lock bypasses (board.json write, pl_task binding), stop check for unbound workers, lead_only extends the defaults, denial wording. Scope widened by approval AP-004."
+    },
+    {
+      "n": 2,
+      "started": "2026-11-14T05:30:11+00:00",
       "ended": null,
       "result": null,
       "note": null
@@ -84,8 +91,55 @@
         "actor": "lead",
         "note": "owner approved lead in chat (no dialog in the app)"
       }
+    },
+    {
+      "at": "2026-11-14T05:28:56+00:00",
+      "kind": "approval",
+      "data": {
+        "id": "AP-003",
+        "action": "scope_change",
+        "status": "denied",
+        "by": "owner"
+      }
+    },
+    {
+      "at": "2026-11-14T05:29:15+00:00",
+      "kind": "approval",
+      "data": {
+        "id": "AP-004",
+        "action": "scope_change",
+        "status": "granted",
+        "by": "owner"
+      }
+    },
+    {
+      "at": "2026-11-14T05:29:25+00:00",
+      "kind": "state",
+      "data": {
+        "from": "review",
+        "to": "rework",
+        "actor": "lead",
+        "note": "Review round 1: close the two lock bypasses (board.json write, pl_task binding), stop check for unbound workers, lead_only extends the defaults, denial wording. Scope widened by approval AP-004."
+      }
+    },
+    {
+      "at": "2026-11-14T05:30:11+00:00",
+      "kind": "start",
+      "data": {
+        "actor": "lead"
+      }
+    },
+    {
+      "at": "2026-11-14T05:30:11+00:00",
+      "kind": "state",
+      "data": {
+        "from": "rework",
+        "to": "in_progress",
+        "actor": "lead",
+        "note": "Attempt 2 after review round 1, scope widened by AP-004."
+      }
     }
   ],
   "usage": {},
-  "updated": "2026-11-13T18:07:16+00:00"
+  "updated": "2026-11-14T05:30:11+00:00"
 }

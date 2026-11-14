@@ -509,7 +509,7 @@
       "satisfies": [
         "D1"
       ],
-      "status": "review",
+      "status": "in_progress",
       "depends_on": [
         "M05"
       ],
@@ -523,7 +523,12 @@
         "tests/test_guard.py",
         "docs/guard-limits.md",
         "core/policy.py",
-        "templates/policy.json"
+        "templates/policy.json",
+        "core/guard.py",
+        "plugin/lib/guard.mjs",
+        "plugin/lib/tools.mjs",
+        "plugin/test/plugin.test.mjs",
+        "core/tests/test_policy.py"
       ],
       "scope_read": [
         "ARCHITECTURE.md",
@@ -536,7 +541,10 @@
         "A3",
         "A4",
         "A5",
-        "A6"
+        "A6",
+        "A7",
+        "A8",
+        "A9"
       ],
       "gates": [
         "tests",
@@ -547,7 +555,7 @@
       "owner": null,
       "branch": "task/M10",
       "worktree": null,
-      "round": 0,
+      "round": 1,
       "evidence": [],
       "scope_write_forbidden": [],
       "handoff": []

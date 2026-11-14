@@ -17,7 +17,7 @@ Factory line (✓ closed, bold = current station): idea ✓ · concept ✓ · de
 
 - Limits: 3 attempts/task, 1 in progress
 - Next wave: none — nothing is ready
-- Running: `M10` attempt 1/3
+- Running: `M10` attempt 2/3
 - Blocked: M02 (missing brief); M07, M08, M09, M11 (open dependency)
 - Approvals pending: none
 
@@ -31,7 +31,7 @@ Factory line (✓ closed, bold = current station): idea ✓ · concept ✓ · de
 
 ## In progress
 
-- [ ] `M10` Lock the scope under review; lead-only quick and change commands — status: `review` — owner: —
+- [ ] `M10` Lock the scope under review; lead-only quick and change commands — status: `in_progress` — owner: —
 
 ## Blocked / failed
 
