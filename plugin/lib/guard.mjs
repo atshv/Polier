@@ -51,7 +51,7 @@ async function ask(ctx, config, agent, info, fields) {
     const result = await run(ctx, agent, argv, { cwd: info.root, timeoutMs: 20_000, preferShell: false })
     const answer = JSON.parse(result.stdout.trim().split('\n').pop() || '{}')
     if (result.code !== 0 || answer.error) return { error: answer.error || (result.stderr || `exit ${result.code}`).trim() }
-    return { deny: answer.deny || undefined, kills: answer.kills === true }
+    return { deny: answer.deny || undefined, kills: answer.kills === true, locked: Array.isArray(answer.locked) ? answer.locked : [] }
   } catch (error) {
     return { error: String(error?.message ?? error) }
   }
@@ -106,13 +106,25 @@ export async function scopeCheck(ctx, config, agent, info, taskId, signal) {
   }
 }
 
+/** The stop check of a worker with no task: changes inside the scope of a task under review. */
+async function lockedReminder(ctx, config, agent, info) {
+  const answer = await ask(ctx, config, agent, info, { stop: true })
+  if (answer.error || answer.locked.length === 0) return undefined
+  return [
+    'Polier: the working tree has changes inside the scope of a task under review (a report, not an order).',
+    ...answer.locked.slice(0, 20).map((item) => `- ${item.path}: locked by ${item.task} (status ${item.status})`),
+    'If you changed them, revert your own changes; if you did not, leave them and finish.',
+  ].join('\n')
+}
+
 /**
  * The stop check for one worker session: the reminder to send when the working
  * tree has changes outside the scope of its single task, or undefined.
  */
 export async function stopReminder(ctx, config, agent, signal) {
   const info = context(ctx, agent)
-  if (!info || info.state.role !== 'worker' || info.tasks.length !== 1) return undefined
+  if (!info || info.state.role !== 'worker' || info.tasks.length > 1) return undefined
+  if (info.tasks.length === 0) return lockedReminder(ctx, config, agent, info)
   const task = info.tasks[0]
   let result
   try {

@@ -1,0 +1,17 @@
+{
+  "task": "M10",
+  "gate": "check",
+  "command": "npm run check",
+  "exit_code": 0,
+  "result": "pass",
+  "slot": null,
+  "exclusive": [],
+  "lock_wait_s": 0.0,
+  "lock_warning": null,
+  "started": "2026-11-14T05:43:10+00:00",
+  "finished": "2026-11-14T05:43:12+00:00",
+  "commit": "cae14f49706f01f800cb039ca252ce4b7d6a393a",
+  "dirty": true,
+  "log": "M10-check-20261114T054310Z.log",
+  "log_sha256": "318266123b2405d03e8f89fbf68ce35e6f32f6cd1dc4a20bdb719efd221e2b07"
+}

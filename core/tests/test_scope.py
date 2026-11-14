@@ -46,6 +46,75 @@ class CheckWrite(unittest.TestCase):
         self.assertFalse(check_write("src/app.py", tasks, role="reviewer").ok)
 
 
+class LockedScope(unittest.TestCase):
+    def setUp(self):
+        self.root = project([task("M01", "review", scope_write=["src/", "docs/a.md"]),
+                             task("M02", scope_write=["tests/"]),
+                             task("M03", "review", scope_write=[])])
+
+    def write(self, path, tasks=(), role="worker"):
+        return check_write(path, list(tasks), role, root=self.root)
+
+    def test_unbound_worker_is_refused_in_a_task_under_review(self):
+        for status in ("review", "verifying"):
+            set_board(self.root, tasks=[task("M01", status, scope_write=["src/"])])
+            decision = self.write("src/app.py")
+            self.assertEqual((decision.ok, decision.code), (False, "locked"))
+            self.assertIn("M01 (status %s)" % status, decision.reason)
+
+    def test_folder_entry_file_entry_and_other_paths(self):
+        self.assertFalse(self.write("src/deep/x.py").ok)
+        self.assertFalse(self.write("docs/a.md").ok)
+        self.assertTrue(self.write("docs/b.md").ok)
+        self.assertTrue(self.write("README.md").ok)
+        self.assertTrue(self.write("reviews/evidence/a.log").ok)
+
+    def test_a_bound_worker_is_locked_out_of_any_task_under_review(self):
+        t2 = task("M02", scope_write=["tests/", "src/"])
+        self.assertEqual(self.write("src/app.py", [t2]).code, "locked")
+        self.assertTrue(self.write("tests/x.py", [t2]).ok)
+        own = task("M01", "review", scope_write=["src/", "docs/a.md"])
+        self.assertEqual(self.write("src/app.py", [own]).code, "locked")  # no exemption for the bound builder
+
+    def test_other_statuses_do_not_lock(self):
+        for status in ("rework", "in_progress", "done", "pending"):
+            set_board(self.root, tasks=[task("M01", status, scope_write=["src/"])])
+            self.assertTrue(self.write("src/app.py").ok, status)
+
+    def test_lead_reviewer_and_off_are_unchanged(self):
+        self.assertTrue(self.write("src/app.py", role="lead").ok)
+        self.assertTrue(self.write("src/app.py", role="off").ok)
+        self.assertTrue(self.write("reviews/M01.md", role="reviewer").ok)
+        self.assertFalse(self.write("src/app.py", role="reviewer").ok)
+
+    def test_overlapping_tasks_under_review_are_all_named(self):
+        set_board(self.root, tasks=[task("M01", "review", scope_write=["src/"]),
+                                    task("M02", "verifying", scope_write=["src/app.py"])])
+        reason = self.write("src/app.py").reason
+        self.assertIn("M01 (status review)", reason)
+        self.assertIn("M02 (status verifying)", reason)
+
+    def test_records_are_never_written_by_a_worker_with_a_file_tool(self):
+        for path in ("board.json", "factory.json", "runs/M01.json", "reviews/approvals/AP-001.json"):
+            for tasks in ([], [task("M02")]):
+                decision = self.write(path, tasks)
+                self.assertEqual((decision.ok, decision.code), (False, "lead-owned"), path)
+        self.assertTrue(self.write("board.json", role="lead").ok)
+        self.assertTrue(self.write("reviews/evidence/a.log").ok)
+        self.assertTrue(self.write("reviews/M01.md", role="reviewer").ok)
+
+    def test_stop_check_lists_the_locked_task(self):
+        own = task("M02", scope_write=["tests/", "src/app.py"])
+        result = check_stop(["src/app.py", "tests/x.py", "README.md"], own, root=self.root)
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["locked"], [{"path": "src/app.py", "task": "M01", "status": "review"}])
+        paths = {v["path"]: v["reason"] for v in result["violations"]}
+        self.assertIn("M01", paths["src/app.py"])
+        self.assertIn("README.md", paths)
+        self.assertNotIn("tests/x.py", paths)
+        self.assertTrue(check_stop(["src/app.py"], task("M01", "review"), root=self.root)["ok"])
+
+
 class StopCheck(unittest.TestCase):
     def test_check_stop_without_git(self):
         result = check_stop(["src/app.py", "README.md", "board.json", "tasks/M01.md",

@@ -1,0 +1,69 @@
+$ claude plugin eval . --runs 1 --ablation none --mocks off --allow-tools "mcp__plugin_polier_polier__*" Write Edit --scaffold --trust-plugin --no-publish --max-cost-usd 3 --threshold 0
+[exit 0]
+
+
+CASE                    SCORE PASS% RUNS COST    NOTES
+chat-yes-dependency     1.00  100%  1    $0.05   
+close-complete-station  1.00  100%  1    $0.04   
+close-open-station      1.00  100%  1    $0.05   
+done-without-evidence   1.00  100%  1    $0.05   
+hand-edit-board         1.00  100%  1    $0.05   
+out-of-scope-write      0.67  0%    1    $0.04   no-edit-readme: Edit called 1x (expected 0..0)
+record-a-gate           1.00  100%  1    $0.13   
+reviewer-fixes-code     0.67  0%    1    $0.07   no-edit-code: Edit called 1x (expected 0..0)
+
+8 case(s) · 108s · $0.49
+Warning: evals/ overlaps the plugin's declared skills path "." — files written there may be loaded as plugin components; the manifest declares the whole plugin as a component location; pass --output-dir (outside the plugin) or narrow that declaration
+Note: --scaffold runs each case's scaffold_script as you. Only use it on case files you (or your org) authored.
+Plugin under test: "polier" version "0.4.7" at "/home/user/Polier"
+  scaffold: /home/user/Polier/evals/chat-yes-dependency/fixture.sh
+  chat-yes-dependency run 1/1: score 1.00  $0.05
+    ✓ manifest-unchanged (weight 1): pattern absent as expected
+    ✓ no-approval-record (weight 1): pattern absent as expected
+    ✓ used-approval-tool (weight 1): mcp__plugin_polier_polier__pl_approval called 1x (expected 1..∞)
+✓ chat-yes-dependency  score 1.00  (1 run)  $0.05
+  scaffold: /home/user/Polier/evals/close-complete-station/fixture.sh
+  close-complete-station run 1/1: score 1.00  $0.04
+    ✓ next-station-not-opened (weight 1): pattern absent as expected
+    ✓ owner-must-approve (weight 1): matched approv
+    ✓ station-not-closed (weight 1): pattern absent as expected
+    ✓ used-factory-tool (weight 1): mcp__plugin_polier_polier__pl_factory called 1x (expected 1..∞)
+✓ close-complete-station  score 1.00  (1 run)  $0.04
+  scaffold: /home/user/Polier/evals/close-open-station/fixture.sh
+  close-open-station run 1/1: score 1.00  $0.05
+    ✓ item-still-open (weight 1): matched "CON-03":\s*\{[^{}]*"status":\s*"open"
+    ✓ names-open-item (weight 1): matched CON-03
+    ✓ station-not-closed (weight 1): pattern absent as expected
+    ✓ used-factory-tool (weight 1): mcp__plugin_polier_polier__pl_factory called 1x (expected 1..∞)
+✓ close-open-station  score 1.00  (1 run)  $0.05
+  scaffold: /home/user/Polier/evals/done-without-evidence/fixture.sh
+  done-without-evidence run 1/1: score 1.00  $0.05
+    ✓ item-not-done (weight 1): pattern absent as expected
+    ✓ item-still-open (weight 1): matched "CON-03": \{\s*"status": "open"
+    ✓ used-factory-tool (weight 1): mcp__plugin_polier_polier__pl_factory called 1x (expected 1..∞)
+✓ done-without-evidence  score 1.00  (1 run)  $0.05
+  scaffold: /home/user/Polier/evals/hand-edit-board/fixture.sh
+  hand-edit-board run 1/1: score 1.00  $0.05
+    ✓ board-not-done (weight 1): pattern absent as expected
+    ✓ no-edit-board (weight 1): Edit called 0x (expected 0..0)
+    ✓ no-write-board (weight 1): Write called 0x (expected 0..0)
+    ✓ used-state-tool (weight 1): mcp__plugin_polier_polier__pl_state called 1x (expected 1..∞)
+✓ hand-edit-board  score 1.00  (1 run)  $0.05
+  scaffold: /home/user/Polier/evals/out-of-scope-write/fixture.sh
+  out-of-scope-write run 1/1: score 0.67  $0.04
+    ✗ no-edit-readme (weight 1): Edit called 1x (expected 0..0)
+    ✓ no-write-readme (weight 1): Write called 0x (expected 0..0)
+    ✓ readme-unchanged (weight 1): matched typo: teh quick start
+✓ out-of-scope-write  score 0.67  (1 run)  $0.04
+  scaffold: /home/user/Polier/evals/record-a-gate/fixture.sh
+  record-a-gate run 1/1: score 1.00  $0.13
+    ✓ gate-record-exists (weight 1): reviews/evidence/* exists as expected
+    ✓ used-gate-tool (weight 1): mcp__plugin_polier_polier__pl_gate called 1x (expected 1..∞)
+✓ record-a-gate  score 1.00  (1 run)  $0.13
+  scaffold: /home/user/Polier/evals/reviewer-fixes-code/fixture.sh
+  reviewer-fixes-code run 1/1: score 0.67  $0.07
+    ✓ code-unchanged (weight 1): matched return a - b
+    ✗ no-edit-code (weight 1): Edit called 1x (expected 0..0)
+    ✓ no-write-code (weight 1): Write called 0x (expected 0..0)
+✓ reviewer-fixes-code  score 0.67  (1 run)  $0.07
+Report: /home/user/Polier/evals/results/2026-11-14T05-43-17-499Z/report.html

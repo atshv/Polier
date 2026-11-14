@@ -619,3 +619,45 @@ test('pl_quick: a worker is refused with the way to lead mode and nothing is wri
   assert.equal(readFileSync(path.join(root, 'board.json'), 'utf8'), before)
   assert.equal(existsSync(path.join(root, 'tasks/M02.md')), false)
 })
+
+test('a task under review is locked: file-tool writes, records, binding and the stop check', async () => {
+  const root = project([task('M01', 'review', { scope_write: ['src/'] }), task('M02', 'pending', { scope_write: ['docs/'] })])
+  const { ctx, tools } = await boot({ python: PY })
+  const config = plugin.resolveConfig({ python: PY })
+  const a = agent(root)
+  const locked = await call(tools, a, 'write', { file_path: 'src/app.py', content: 'x = 9\n' })
+  assert.equal(locked.error, true)
+  assert.match(locked.text, /M01 \(status review\)/)
+  assert.equal(readFileSync(path.join(root, 'src', 'app.py'), 'utf8'), 'x = 1\n')
+  for (const file of ['board.json', 'factory.json', 'runs/M01.json', 'reviews/approvals/AP-001.json']) {
+    assert.equal((await call(tools, a, 'write', { file_path: file, content: '{}' })).error, true, file)
+  }
+  const bind = await call(tools, a, 'pl_task', { task: 'M01' })
+  assert.equal(bind.value.ok, false)
+  assert.match(bind.value.error, /review/)
+
+  // no task bound, a shell change in the locked scope: the stop check reports it
+  const free = agent(root)
+  await call(tools, free, 'pl_task', {})
+  writeFileSync(path.join(root, 'src', 'app.py'), 'x = 2\n')
+  await plugin.onTurnStopping(ctx, config, { agent: free, turn: 1 })
+  assert.equal(free.steered.length, 1)
+  const text = free.steered[0].content[0].text
+  assert.match(text, /src\/app\.py: locked by M01 \(status review\)/)
+  assert.match(text, /if you changed them, revert your own changes; if you did not, leave them and finish/i)
+  assert.doesNotMatch(text, /checkout|undo/i, 'a report, never an order to discard work the session may not have made')
+})
+
+test('the mode-switch detour does not bind a task under review', async () => {
+  const root = project([task('M01', 'review', { scope_write: ['src/'] })])
+  const { tools } = await boot({ python: PY }, { approval: approvals('allowed-once') })
+  const a = agent(root)
+  assert.equal((await call(tools, a, 'pl_task', { task: 'M01' })).value.ok, false)
+  assert.equal((await mode(tools, a, 'reviewer')).value.ok, true)
+  assert.equal((await call(tools, a, 'pl_task', { task: 'M01' })).value.bound, 'M01')
+  assert.equal((await mode(tools, a, 'worker')).value.ok, true)
+  const write = await call(tools, a, 'write', { file_path: 'src/app.py', content: 'x = 9\n' })
+  assert.equal(write.error, true)
+  assert.match(write.text, /M01 \(status review\)/)
+  assert.equal(readFileSync(path.join(root, 'src', 'app.py'), 'utf8'), 'x = 1\n')
+})

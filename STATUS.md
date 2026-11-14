@@ -12,16 +12,17 @@ Factory line (✓ closed, bold = current station): idea ✓ · concept ✓ · de
   - M01: evals/ holds 8 process cases; run them with the flags in docs/gates/node.md (--mocks off, Polier MCP grant, Write Edit, --scaffold).
   - M01: Write/Edit attempt graders are with-only: a guard-denied attempt still counts as a call; score outcomes on file contents.
   - M01: Pass --output-dir outside the repo: results under evals/ sit inside the plugin's skills path '.'.
-- `M10` Lock the scope under review; lead-only quick and change commands
-  - M05: pl_quick(title, scope[], accept[], satisfies?, gates?, role?) forwards to tools/quick.py new; lead only; a refusal returns ok false with reasons and next.
-  - M05: Claude Code tests build their env without POLIER_* and CLAUDE_PLUGIN_OPTION_* (CLEAN_ENV); keep it that way for new tests.
+- `M11` Owner decisions when no dialog appears
+  - M10: While a task is in verifying or review only the lead and a reviewer (under reviews/) write its scope; workers never write board.json, factory.json, runs/ or reviews/approvals/ with file tools.
+  - M10: A project's own deny, lead_only and warn lists add to Polier's defaults; tools/quick.py new and tools/change.py apply are lead-only. Cheatsheet and generator still say a deny can be lifted (M08).
+  - M10: The no-task stop check reports locked changes without a baseline: one extra round per turn while uncommitted work sits under review (follow-up).
 
 ## Orchestration
 
 - Limits: 3 attempts/task, 1 in progress
-- Next wave: `M10` (tasks/M10.md)
+- Next wave: `M11` (tasks/M11.md)
 - Running: none
-- Blocked: M02 (missing brief); M07, M08, M09, M11 (open dependency)
+- Blocked: M02 (missing brief); M07, M08, M09 (open dependency)
 - Approvals pending: none
 
 ## Done
@@ -31,6 +32,7 @@ Factory line (✓ closed, bold = current station): idea ✓ · concept ✓ · de
 - [x] `M04` Quick track rule and command — status: `done` — owner: —
 - [x] `M05` pl_quick tool — status: `done` — owner: —
 - [x] `M06` Change proposals core — status: `done` — owner: —
+- [x] `M10` Lock the scope under review; lead-only quick and change commands — status: `done` — owner: —
 
 ## In progress
 
@@ -46,7 +48,6 @@ Factory line (✓ closed, bold = current station): idea ✓ · concept ✓ · de
 - [ ] `M07` pl_change tool and lint finding — status: `pending` — owner: —
 - [ ] `M08` Process docs for the new tracks — status: `pending` — owner: —
 - [ ] `M09` Security review of the first stage — status: `pending` — owner: —
-- [ ] `M10` Lock the scope under review; lead-only quick and change commands — status: `pending` — owner: —
 - [ ] `M11` Owner decisions when no dialog appears — status: `pending` — owner: —
 
 ## Decisions

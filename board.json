@@ -42,7 +42,7 @@
     },
     {
       "id": "Q2",
-      "question": "Tasks of an approved change proposal cannot name its new D-items (D5–D8) on the board until the proposal is applied, which happens only after its tasks are done. Should check.py accept D-items of approved, unapplied proposals (M07)?",
+      "question": "Tasks of an approved change proposal cannot name its new D-items (D5\u2013D8) on the board until the proposal is applied, which happens only after its tasks are done. Should check.py accept D-items of approved, unapplied proposals (M07)?",
       "blocks": [
         "M07"
       ],
@@ -246,7 +246,7 @@
       "evidence": [],
       "scope_write_forbidden": [],
       "handoff": [
-        "tools/quick.py new TITLE --scope PATH... --accept 'WHEN …, THEN …' [--satisfies Dn] [--gate] [--role] [--json]: refusal exit 1 with reasons and next, usage exit 2.",
+        "tools/quick.py new TITLE --scope PATH... --accept 'WHEN \u2026, THEN \u2026' [--satisfies Dn] [--gate] [--role] [--json]: refusal exit 1 with reasons and next, usage exit 2.",
         "pl_quick must pass accept and satisfies; docs/ux-flows.md#commands still lacks them (M08).",
         "board.add_task(root, build, write_brief) writes under board.json.lock; it has its own atomic writer next to core/state.py _write_board."
       ]
@@ -509,7 +509,7 @@
       "satisfies": [
         "D1"
       ],
-      "status": "pending",
+      "status": "done",
       "depends_on": [
         "M05"
       ],
@@ -523,7 +523,12 @@
         "tests/test_guard.py",
         "docs/guard-limits.md",
         "core/policy.py",
-        "templates/policy.json"
+        "templates/policy.json",
+        "core/guard.py",
+        "plugin/lib/guard.mjs",
+        "plugin/lib/tools.mjs",
+        "plugin/test/plugin.test.mjs",
+        "core/tests/test_policy.py"
       ],
       "scope_read": [
         "ARCHITECTURE.md",
@@ -536,7 +541,10 @@
         "A3",
         "A4",
         "A5",
-        "A6"
+        "A6",
+        "A7",
+        "A8",
+        "A9"
       ],
       "gates": [
         "tests",
@@ -547,10 +555,14 @@
       "owner": null,
       "branch": "task/M10",
       "worktree": null,
-      "round": 0,
+      "round": 2,
       "evidence": [],
       "scope_write_forbidden": [],
-      "handoff": []
+      "handoff": [
+        "While a task is in verifying or review only the lead and a reviewer (under reviews/) write its scope; workers never write board.json, factory.json, runs/ or reviews/approvals/ with file tools.",
+        "A project's own deny, lead_only and warn lists add to Polier's defaults; tools/quick.py new and tools/change.py apply are lead-only. Cheatsheet and generator still say a deny can be lifted (M08).",
+        "The no-task stop check reports locked changes without a baseline: one extra round per turn while uncommitted work sits under review (follow-up)."
+      ]
     },
     {
       "id": "M11",

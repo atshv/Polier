@@ -1,0 +1,11 @@
+{
+  "id": "AP-004",
+  "action": "scope_change",
+  "task": "M10",
+  "status": "granted",
+  "requested_by": "lead",
+  "requested_at": "2026-11-14T05:29:10+00:00",
+  "approved_by": "owner",
+  "approved_at": "2026-11-14T05:29:15+00:00",
+  "note": "Asked again on the owner's request after AP-003 was denied. M10 rework after review round 1: widen the scope by core/guard.py, plugin/lib/guard.mjs, plugin/lib/tools.mjs, plugin/test/plugin.test.mjs, core/tests/test_policy.py and add A7\u2013A9: workers never write board.json, factory.json, runs/ or reviews/approvals/ with file tools; pl_task refuses to bind a worker to a task in verifying or review; the stop check also reports locked changes of a worker with no task; a project's own lead_only/deny/warn lists add to Polier's defaults; one clear denial sentence for a locked path. To approve, choose \"approve\" in the Decision field, then Submit. | answered in the Claude Code approval prompt"
+}

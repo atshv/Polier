@@ -1,0 +1,17 @@
+{
+  "task": "M10",
+  "gate": "tests",
+  "command": "npm test",
+  "exit_code": 0,
+  "result": "pass",
+  "slot": null,
+  "exclusive": [],
+  "lock_wait_s": 0.0,
+  "lock_warning": null,
+  "started": "2026-11-14T05:41:57+00:00",
+  "finished": "2026-11-14T05:43:06+00:00",
+  "commit": "cae14f49706f01f800cb039ca252ce4b7d6a393a",
+  "dirty": true,
+  "log": "M10-tests-20261114T054157Z.log",
+  "log_sha256": "02522b0c4826d1863e4423026a8f6c7fe32932d25a95286214c53a1984ca8e2e"
+}

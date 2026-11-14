@@ -536,6 +536,10 @@ export function tools(ctx, config) {
         return { ok: true, bound: id, claimed: false, role: null,
           next: `Review ${id}: read tasks/${id}.md, the diff and the gate records in reviews/evidence/, then write reviews/${id}.md.` }
       }
+      if (entry.status === 'verifying' || entry.status === 'review') {
+        return { ok: false, bound: state.pinned ?? null,
+          error: `cannot bind ${id}: it is ${entry.status}, so its scope is locked for workers while it is under review. Only the lead reopens it (rework).` }
+      }
       const held = state.claims.includes(id)
       const taken = await takeClaim(ctx, config, exec.agent, root, id)
       if (!taken.ok && taken.code !== 2) return { ok: false, bound: state.pinned ?? null, error: `cannot claim ${id}: ${taken.message}` }
