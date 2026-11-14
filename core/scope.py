@@ -33,6 +33,9 @@ BOARD_FILES = ("board.json", "STATUS.md", "tasks", "runs")
 # never count against a worker: the lead's tools change them while a task runs.
 RECORDS = ("board.json", "STATUS.md", "STATUS.html", "factory.json", "docs/factory.md",
            "runs", "reviews/approvals")
+# Records only the Polier tools write: a worker never writes them with a file tool,
+# bound to a task or not (a worker with no task may otherwise write anything).
+RECORD_WRITES = ("board.json", "factory.json", "runs", "reviews/approvals")
 # The only folder a reviewer session writes to.
 REVIEWS = "reviews"
 # A task in one of these states is under review: its scope is frozen for workers.
@@ -156,11 +159,12 @@ def check_write(path: str, tasks: Union[dict, Iterable[dict], None], role: str =
         return Decision(True, path=rel)
     if board is None and root is not None:
         board = load_board(root, strict=False)
+    if any(inside(rel, r) for r in RECORD_WRITES):
+        return Decision(False, "lead-owned", "is lead-owned (a Polier record the tools write)", rel)
     locked = locked_by(rel, board, [t.get("id") for t in tasks])
     if locked:
         held = ", ".join(f"{i} (status {st})" for i, st in locked)
-        return Decision(False, "locked", f"is in the write scope of {held}, which is under review "
-                        "and locked for workers; the session's task", rel)
+        return Decision(False, "locked", f"is in the write scope of {held}, which is locked while it is under review", rel)
     if not tasks:
         return Decision(True, path=rel)
     return decide(rel, tasks, board=board, root=root, cwd=cwd)

@@ -410,8 +410,13 @@ def manifest_match(policy, rel) -> Optional[str]:
 # ---------------------------------------------------------------------------
 
 def _read_rule(policy, rule: str) -> List[str]:
-    raw = _raw_section(policy, "commands").get(rule, DEFAULTS["commands"][rule])
-    return [item for item in raw if _is_text(item)] if isinstance(raw, list) else []
+    """Polier's default patterns of `rule` plus the project's own, which add and never replace."""
+    own = _raw_section(policy, "commands").get(rule)
+    out = list(DEFAULTS["commands"][rule])
+    for item in own if isinstance(own, list) else []:
+        if _is_text(item) and item not in out:
+            out.append(item)
+    return out
 
 
 def _denial_reason(rule: str, pattern: str, segment: str, role: str) -> str:

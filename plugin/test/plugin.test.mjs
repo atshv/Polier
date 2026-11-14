@@ -619,3 +619,28 @@ test('pl_quick: a worker is refused with the way to lead mode and nothing is wri
   assert.equal(readFileSync(path.join(root, 'board.json'), 'utf8'), before)
   assert.equal(existsSync(path.join(root, 'tasks/M02.md')), false)
 })
+
+test('a task under review is locked: file-tool writes, records, binding and the stop check', async () => {
+  const root = project([task('M01', 'review', { scope_write: ['src/'] }), task('M02', 'pending', { scope_write: ['docs/'] })])
+  const { ctx, tools } = await boot({ python: PY })
+  const config = plugin.resolveConfig({ python: PY })
+  const a = agent(root)
+  const locked = await call(tools, a, 'write', { file_path: 'src/app.py', content: 'x = 9\n' })
+  assert.equal(locked.error, true)
+  assert.match(locked.text, /M01 \(status review\)/)
+  assert.equal(readFileSync(path.join(root, 'src', 'app.py'), 'utf8'), 'x = 1\n')
+  for (const file of ['board.json', 'factory.json', 'runs/M01.json', 'reviews/approvals/AP-001.json']) {
+    assert.equal((await call(tools, a, 'write', { file_path: file, content: '{}' })).error, true, file)
+  }
+  const bind = await call(tools, a, 'pl_task', { task: 'M01' })
+  assert.equal(bind.value.ok, false)
+  assert.match(bind.value.error, /review/)
+
+  // no task bound, a shell change in the locked scope: the stop check reports it
+  const free = agent(root)
+  await call(tools, free, 'pl_task', {})
+  writeFileSync(path.join(root, 'src', 'app.py'), 'x = 2\n')
+  await plugin.onTurnStopping(ctx, config, { agent: free, turn: 1 })
+  assert.equal(free.steered.length, 1)
+  assert.match(free.steered[0].content[0].text, /src\/app\.py: locked by M01 \(status review\)/)
+})

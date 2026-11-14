@@ -65,6 +65,27 @@ class LockedScope(unittest.TestCase):
         self.assertIn("M01 (status review)", deny)
         self.assertIsNone(decide(request(self.root, tasks=[], path="README.md"))["deny"])
 
+    def test_the_denial_is_one_sentence_naming_task_and_status(self):
+        deny = decide(request(self.root, tasks=[], path="src/app.py"))["deny"]
+        self.assertIn("is in the write scope of M01 (status review), which is locked while it is under review", deny)
+        self.assertNotIn(" of .", deny)
+        self.assertNotIn("Allowed: nothing", deny)
+
+    def test_records_are_refused_without_a_task_too(self):
+        for path in ("board.json", "factory.json", "runs/M01.json", "reviews/approvals/AP-001.json"):
+            deny = decide(request(self.root, tasks=[], path=path))["deny"]
+            self.assertIn("lead-owned", deny, path)
+            self.assertNotIn(" of .", deny)
+        self.assertIsNone(decide(request(self.root, role="lead", tasks=[], path="board.json"))["deny"])
+
+    def test_stop_request_lists_changes_in_a_locked_scope(self):
+        self.assertEqual(decide(request(self.root, tasks=[], stop=True))["locked"], [])
+        (self.root / "src" / "app.py").write_text("x = 2\n", encoding="utf-8")
+        (self.root / "README.md").write_text("changed\n", encoding="utf-8")
+        locked = decide(request(self.root, tasks=[], stop=True))["locked"]
+        self.assertEqual(locked, [{"path": "src/app.py", "task": "M01", "status": "review"}])
+        self.assertEqual(decide(request(self.root, tasks=["M01"], stop=True))["locked"], [])
+
     def test_lead_and_reviewer_are_unchanged(self):
         self.assertIsNone(decide(request(self.root, role="lead", tasks=[], path="src/app.py"))["deny"])
         self.assertIsNone(decide(request(self.root, role="reviewer", tasks=[], path="reviews/M01.md"))["deny"])
@@ -89,6 +110,15 @@ class Commands(unittest.TestCase):
         for command in ("python3 tools/quick.py new x", "python3 tools/change.py apply C1"):
             self.assertIn("only the lead may run", decide(request(self.root, command=command))["deny"])
             self.assertIsNone(decide(request(self.root, role="lead", command=command))["deny"])
+
+    def test_a_project_list_adds_to_the_defaults(self):
+        policy = json.loads(POLICY.read_text(encoding="utf-8"))
+        policy["commands"] = {"lead_only": ["*make release*"], "deny": ["*rm -rf build*"]}
+        (self.root / "policy.json").write_text(json.dumps(policy), encoding="utf-8")
+        for command in ("python3 tools/quick.py new x", "make release", "python3 tools/state.py set M01 done"):
+            self.assertIn("only the lead may run", decide(request(self.root, command=command))["deny"], command)
+        self.assertIn("blocked for every role", decide(request(self.root, command="git push"))["deny"])
+        self.assertIn("blocked for every role", decide(request(self.root, command="rm -rf build"))["deny"])
 
     def test_kills_are_flagged_not_denied(self):
         answer = decide(request(self.root, command="lsof -ti:3000 | xargs kill"))

@@ -201,6 +201,14 @@ class Commands(unittest.TestCase):
             DEFAULT_POLICY, "python3 tools/state.py set M01 in_progress", "off"))
         self.assertIsNone(policy.command_denial(DEFAULT_POLICY, "", "worker"))
 
+    def test_project_lists_add_to_the_defaults(self):
+        own = {"version": 1, "commands": {"lead_only": ["*make release*"], "warn": ["*reboot*"], "deny": []}}
+        self.assertEqual(policy.command_denial(own, "make release", "worker")["rule"], "lead_only")
+        self.assertEqual(policy.command_denial(own, "python3 tools/quick.py new x", "worker")["rule"], "lead_only")
+        self.assertEqual(policy.command_denial(own, "python3 tools/change.py apply C1", "worker")["rule"], "lead_only")
+        self.assertEqual(policy.command_denial(own, "git push", "lead")["rule"], "deny")
+        self.assertEqual(policy._read_rule(own, "warn"), ["*kill*", "*pkill*", "killall*", "*reboot*"])
+
     def test_text_in_quotes_and_heredocs_is_data(self):
         payloads = (
             'echo "git push origin main"',

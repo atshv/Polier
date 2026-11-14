@@ -14,8 +14,9 @@ from typing import List, Optional, Tuple
 
 from . import approvals, policy as pol
 from .board import load_board, tasks_of
+from .errors import PolierError
 from .paths import inside, relative, resolve
-from .scope import check_write
+from .scope import changed_files, check_write, locked_by
 from .shell import process_kills
 
 EVIDENCE = "reviews/evidence"
@@ -98,6 +99,14 @@ def write_denial(root, cwd, role: str, task_ids: List[str], path: str,
         return (f"Polier: write to {shown} blocked, {verdict.reason} ({ids}). Do the work in the "
                 "task's worktree, not in the main checkout. If the change is needed elsewhere, "
                 "stop and report it under open_questions.")
+    if verdict.code == "locked":
+        return (f"Polier: write to {shown} blocked, the path {verdict.reason}. Report the problem "
+                "under open_questions instead; only the lead reopens the task (rework). "
+                "Do not try another way to write it.")
+    if not tasks:
+        return (f"Polier: write to {shown} blocked, the path {verdict.reason}. "
+                "Do not try another way to write it. If the change is needed, stop and report it "
+                "under open_questions.")
     allowed: List[str] = []
     for task in tasks:
         for entry in task.get("scope_write") or []:
@@ -128,8 +137,26 @@ def command_denial(root, role: str, task_ids: List[str], command: str) -> Option
             "change instead of running it; the lead runs it (pl_mode lead, approved by the owner).")
 
 
+def locked_changes(root, task_ids: List[str]) -> List[dict]:
+    """Changed files inside the scope of a task under review, other than the session's own tasks."""
+    board = load_board(root, strict=False) or {}
+    try:
+        changed = changed_files(root)
+    except PolierError:
+        return []
+    out: List[dict] = []
+    for path in changed:
+        for tid, status in locked_by(path, board, task_ids):
+            out.append({"path": path, "task": tid, "status": status})
+    return out
+
+
 def decide(request: dict) -> dict:
-    """One guard answer: ``{"deny": reason or None, "kills": bool}``."""
+    """One guard answer: ``{"deny": reason or None, "kills": bool}``.
+
+    A request with ``stop`` set (and no path or command) is the stop check of a session with no
+    task: the answer lists the changed files in a locked scope under ``locked``.
+    """
     root = request.get("root")
     if not root:
         return {"deny": None, "kills": False}
@@ -139,6 +166,8 @@ def decide(request: dict) -> dict:
         reason = write_denial(root, request.get("cwd"), role, ids, request["path"],
                               request.get("specialist"))
         return {"deny": reason, "kills": False}
+    if request.get("stop"):
+        return {"deny": None, "kills": False, "locked": locked_changes(root, ids)}
     command = request.get("command") or ""
     return {"deny": command_denial(root, role, ids, command),
             "kills": bool(command and process_kills(command))}

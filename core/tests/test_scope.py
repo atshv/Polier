@@ -94,6 +94,15 @@ class LockedScope(unittest.TestCase):
         self.assertIn("M01 (status review)", reason)
         self.assertIn("M02 (status verifying)", reason)
 
+    def test_records_are_never_written_by_a_worker_with_a_file_tool(self):
+        for path in ("board.json", "factory.json", "runs/M01.json", "reviews/approvals/AP-001.json"):
+            for tasks in ([], [task("M02")]):
+                decision = self.write(path, tasks)
+                self.assertEqual((decision.ok, decision.code), (False, "lead-owned"), path)
+        self.assertTrue(self.write("board.json", role="lead").ok)
+        self.assertTrue(self.write("reviews/evidence/a.log").ok)
+        self.assertTrue(self.write("reviews/M01.md", role="reviewer").ok)
+
     def test_stop_check_lists_the_locked_task(self):
         own = task("M02", scope_write=["tests/", "src/app.py"])
         result = check_stop(["src/app.py", "tests/x.py", "README.md"], own, root=self.root)
