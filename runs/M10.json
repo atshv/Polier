@@ -262,8 +262,26 @@
         "result": "pass",
         "record": "reviews/evidence/M10-evals-smoke-20261114T054317Z.json"
       }
+    },
+    {
+      "at": "2026-11-14T05:45:38+00:00",
+      "kind": "state",
+      "data": {
+        "from": "in_progress",
+        "to": "verifying",
+        "actor": "lead"
+      }
+    },
+    {
+      "at": "2026-11-14T05:45:38+00:00",
+      "kind": "state",
+      "data": {
+        "from": "verifying",
+        "to": "review",
+        "actor": "lead"
+      }
     }
   ],
   "usage": {},
-  "updated": "2026-11-14T05:45:06+00:00"
+  "updated": "2026-11-14T05:45:38+00:00"
 }
