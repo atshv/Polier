@@ -509,7 +509,7 @@
       "satisfies": [
         "D1"
       ],
-      "status": "in_progress",
+      "status": "review",
       "depends_on": [
         "M05"
       ],
