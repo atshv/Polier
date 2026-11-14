@@ -69,8 +69,9 @@ Outputs: `docs/concept.md`, `docs/quality.md (D1..Dn)`
 | CON-06 | should | **Running costs** — Hosting, services, store fees and API usage per month at the expected scale. | all | `docs/concept.md#costs` |
 | CON-07 | must | **Data inventory** — Which data, its source, owner, retention period and how it is deleted. | database, personal_data | `docs/concept.md#data` |
 | CON-08 | must | **Legal frame** — Applicable law (Swiss revFADP; GDPR with EU users), terms of the APIs used, licences. | personal_data, payments, eu_users | `docs/concept.md#legal` |
-| CON-09 | must | **Monetisation** — Free, one-off, subscription or in-app purchase; platform fees (stores take 15–30 %). | payments | `docs/concept.md#monetisation` |
+| CON-09 | must | **Monetisation** — Free, one-off, subscription or in-app purchase; platform fees (stores take 15–30 %, lower rates for small developers) [VERIFY: current Apple and Google commission rates and any regional alternative terms]. | payments | `docs/concept.md#monetisation` |
 | CON-10 | should | **Top risks** — The three biggest risks and how the plan reduces each. | all | `docs/concept.md#risks` |
+| CON-11 | must | **Accessibility law** — Whether the European Accessibility Act applies (consumer e-commerce, banking, e-books, transport and telecom services; applies since 28 Jun 2025; micro-enterprises exempt for services) and the conformance target, normally EN 301 549 / WCAG 2.1 AA [VERIFY: scope for this product and the national law of the target markets]. | eu_users | `docs/concept.md#legal` |
 
 ## Design — designer
 
@@ -87,7 +88,7 @@ Outputs: `docs/ux-flows.md`, `docs/design-rules.md`
 | DES-05 | must | **Design system** — Colours, type scale, spacing, radii, icons and components as named tokens with values. | ui | `docs/design-rules.md` |
 | DES-06 | must | **Screen states** — Empty, loading, error, offline, success and disabled for every screen. | ui | `docs/design-rules.md#states` |
 | DES-07 | should | **Light and dark mode** — Both colour schemes defined as tokens. | ui | `docs/design-rules.md#light-and-dark` |
-| DES-08 | must | **Accessibility** — Contrast ≥ 4.5:1, scalable text, screen-reader labels, focus order, touch targets ≥ 44 pt. | ui | `docs/design-rules.md#accessibility` |
+| DES-08 | must | **Accessibility** — Contrast ≥ 4.5:1, scalable text, screen-reader labels, focus order, touch targets ≥ 44 pt on iOS, ≥ 48 dp on Android and ≥ 24×24 CSS px on the web (WCAG 2.2 AA). | ui | `docs/design-rules.md#accessibility` |
 | DES-09 | should | **Onboarding** — First-run flow and every permission prompt with its reason text. | ui | `docs/ux-flows.md#onboarding` |
 | DES-10 | should | **Brand assets** — Logo, app icon in all required sizes, launch/splash screen, favicon. | ui | `docs/design-rules.md#brand` |
 | DES-11 | should | **Copy and tone** — UI texts, error messages and the tone of voice; which languages. | ui | `docs/design-rules.md#copy` |
@@ -171,11 +172,11 @@ Outputs: `src/ or packages/`, `runs/`, `reviews/`
 | BLD-25 | should | **Data export** — Users can download their data in a common format. | personal_data | `task` |
 | BLD-30 | must | **Sign up, log in, log out** — Account creation, session handling and logout on every device. | accounts | `task` |
 | BLD-31 | must | **Password reset** — Reset or magic link with expiring single-use tokens. | accounts | `task` |
-| BLD-32 | should | **Social login** — Sign in with Apple / Google; an iOS app with other social logins must offer Sign in with Apple or an equivalent [VERIFY: current App Review guideline 4.8]. | accounts | `task` |
+| BLD-32 | should | **Social login** — Sign in with Apple / Google. An iOS app that uses a third-party login for the primary account must also offer an equivalent login that collects only name and email, lets the user hide the email and does not track for advertising without consent; Sign in with Apple qualifies. Exceptions: own account system only, enterprise/education accounts, e-ID, clients of one third-party service (App Review Guideline 4.8, checked 2026-11-14). | accounts | `task` |
 | BLD-33 | should | **Two-factor authentication** — TOTP or passkeys, recovery codes. | accounts | `task` |
 | BLD-34 | must | **Roles and permissions** — Every access checked on the server, never only in the client. | accounts | `task` |
 | BLD-35 | should | **Profile** — Users edit their profile and settings. | accounts | `task` |
-| BLD-36 | must | **Account deletion** — Users delete their account and data from inside the product (store requirement for apps). | accounts | `task` |
+| BLD-36 | must | **Account deletion** — Users delete their account and data from inside the product. iOS: deletion in the app (App Review Guideline 5.1.1(v)); Google Play: an in-app path and a web link to request deletion without reinstalling, entered in the data safety form (Play account deletion policy, checked 2026-11-14). | accounts | `task` |
 | BLD-40 | must | **Encrypted transport** — HTTPS/TLS for every connection; HSTS on the web. | backend, deploys | `task` |
 | BLD-41 | must | **Password storage** — Passwords hashed with Argon2id or bcrypt, or delegated to the identity provider. | accounts | `task` |
 | BLD-42 | must | **Secrets handling** — Secrets only from the environment or a secret manager; secret files in policy protected paths. | all | `task` |
@@ -188,13 +189,14 @@ Outputs: `src/ or packages/`, `runs/`, `reviews/`
 | BLD-53 | must | **AI calls** — Through the server, with per-user limits, timeouts and a fallback. | ai | `task` |
 | BLD-54 | must | **Analytics events** — A named event list, privacy-friendly tool, consent where required. | analytics | `task` |
 | BLD-55 | must | **Maps and location** — Location only with permission and a reason text; coarse when fine is not needed. | location | `task` |
+| BLD-56 | should | **AI transparency** — Users see when they talk to an AI or receive AI-generated content, and generated media is marked as such [VERIFY: EU AI Act Art. 50 obligations and dates when EU users are served]. | ai | `task` |
 | BLD-60 | must | **SEO** — Titles, meta descriptions, sitemap, robots.txt, Open Graph, structured data. | web, public | `task` |
 | BLD-61 | must | **Web performance** — Optimised images and fonts, Core Web Vitals budget in the gates. | web | `task` |
 | BLD-62 | should | **Progressive web app** — Manifest and service worker for install and offline. | web | `task` |
 | BLD-63 | must | **Consent banner** — Cookie/tracking consent before any non-essential tracking. | web, analytics | `task` |
 | BLD-64 | must | **iOS permissions** — Usage-description strings in Info.plist for camera, photos, location, contacts, microphone. | ios | `task` |
-| BLD-65 | must | **iOS privacy manifest** — PrivacyInfo.xcprivacy with tracking domains and required-reason APIs, also for SDKs. | ios | `task` |
-| BLD-66 | must | **Android permissions and target SDK** — Runtime permissions; targetSdk meets Google Play's current requirement [VERIFY: current Play target API level]. | android | `task` |
+| BLD-65 | must | **iOS privacy manifest** — PrivacyInfo.xcprivacy with tracking domains and required-reason APIs, also for SDKs [VERIFY: Apple's current required-reason API list and list of SDKs that need a manifest and signature]. | ios | `task` |
+| BLD-66 | must | **Android permissions and target SDK** — Runtime permissions; targetSdk meets Google Play's current requirement: new apps and updates target Android 16 (API 36) since 31 Aug 2026, extension possible to 1 Nov 2026; the level rises every year (Play target API level policy, checked 2026-11-14). | android | `task` |
 | BLD-67 | should | **Android platform polish** — Adaptive icon, edge-to-edge layout, predictive back gesture. | android | `task` |
 | BLD-68 | must | **Desktop auto-update** — Signed update feed and in-app updater. | desktop | `task` |
 | BLD-69 | must | **Desktop packages** — Installer or package per OS (MSI/MSIX, DMG/pkg, AppImage/deb/rpm). | desktop | `task` |
@@ -239,7 +241,7 @@ Outputs: `docs/releasing.md`, `docs/environments.md`, `docs/store/<platform>.md`
 | REL-04 | must | **Domain and TLS** — Domain, DNS records and an auto-renewing certificate. | web, service | `docs/environments.md` |
 | REL-05 | must | **Environments live** — Variables set per environment, smoke check passing (tools/smoke.py). | deploys | `docs/environments.md` |
 | REL-06 | must | **Privacy policy** — Per Swiss revFADP (and GDPR with EU users), linked in the product and the store listing. | personal_data | `docs/legal.md` |
-| REL-07 | must | **Imprint** — Name, address and contact of the operator on the website. | web | `docs/legal.md` |
+| REL-07 | must | **Imprint** — Name, address and contact of the operator on the website [VERIFY: imprint duty for the operator's country and the audience, e.g. Swiss UWG Art. 3 para. 1 lit. s for e-commerce, German DDG § 5]. | web | `docs/legal.md` |
 | REL-08 | should | **Terms of service** — Terms of use; refunds and cancellation when money is taken. | accounts, payments | `docs/legal.md` |
 | REL-09 | must | **Open-source licences** — Licences of all dependencies listed and compatible; notices shipped where required. | all | `docs/legal.md` |
 | REL-10 | should | **Processor agreements** — Data processing agreements with hosting, email, analytics and AI providers. | personal_data | `docs/legal.md` |
@@ -250,21 +252,24 @@ Outputs: `docs/releasing.md`, `docs/environments.md`, `docs/store/<platform>.md`
 | REL-WEB-02 | should | **Search registration** — Sitemap submitted to search consoles. | web, public | `docs/releasing.md` |
 | REL-IOS-01 | must | **Apple Developer Program** — Membership active (yearly fee) for the publishing account. | ios | `docs/store/ios.md` |
 | REL-IOS-02 | must | **iOS signing** — Bundle ID, certificates and provisioning profiles (automatic signing, Xcode Cloud or fastlane match). | ios | `docs/store/ios.md` |
-| REL-IOS-03 | must | **App Store listing** — Name, subtitle, description, keywords, category, age rating, support URL and privacy policy URL (required for every app). | ios | `docs/store/ios.md` |
+| REL-IOS-03 | must | **App Store listing** — Name, subtitle, description, keywords, category, age rating, support URL and privacy policy URL; every app links its privacy policy in App Store Connect and inside the app (App Review Guideline 5.1.1(i), checked 2026-11-14). | ios | `docs/store/ios.md` |
 | REL-IOS-04 | must | **App Store screenshots** — Screenshots for the required device sizes; optional preview video. | ios | `docs/store/ios.md` |
 | REL-IOS-05 | must | **App privacy details** — The App Store privacy label matches the privacy manifest and the real data flows. | ios | `docs/store/ios.md` |
 | REL-IOS-06 | must | **TestFlight** — The release build tested through TestFlight. | ios | `docs/store/ios.md` |
 | REL-IOS-07 | must | **App Review** — Review notes, demo account and a check against the App Review Guidelines. | ios | `docs/store/ios.md` |
 | REL-IOS-08 | must | **In-app purchases** — Products and subscriptions configured in App Store Connect with StoreKit. | ios, payments | `docs/store/ios.md` |
 | REL-IOS-09 | must | **Export compliance** — Encryption questions answered (ITSAppUsesNonExemptEncryption). | ios | `docs/store/ios.md` |
+| REL-IOS-10 | must | **EU trader status** — Trader or non-trader status declared in App Store Connect, required for every account even without EU distribution; a trader's address, phone and email appear on the EU product page; apps without it are removed from the EU store since 17 Feb 2025 (EU Digital Services Act; Apple developer news, checked 2026-11-14). | ios | `docs/store/ios.md` |
+| REL-IOS-11 | must | **Required SDK** — The release build uses the Xcode and iOS SDK version App Store Connect currently requires for uploads [VERIFY: current minimum Xcode/SDK requirement]. | ios | `docs/store/ios.md` |
 | REL-AND-01 | must | **Google Play Console** — Developer account with completed identity verification. | android | `docs/store/android.md` |
 | REL-AND-02 | must | **Android signing** — Application ID, upload key in a safe place, Play App Signing enabled. | android | `docs/store/android.md` |
 | REL-AND-03 | must | **Play Store listing** — Title, short and full description, icon, feature graphic, screenshots, category, contact, privacy policy URL. | android | `docs/store/android.md` |
 | REL-AND-04 | must | **Data safety form** — Play data safety section matches the real data flows. | android | `docs/store/android.md` |
 | REL-AND-05 | must | **Content rating** — Rating questionnaire and target audience completed. | android | `docs/store/android.md` |
-| REL-AND-06 | must | **Closed test** — Closed testing before production; new personal accounts need a minimum number of testers and days [VERIFY: current Play requirement]. | android | `docs/store/android.md` |
+| REL-AND-06 | must | **Closed test** — Closed testing before production; personal accounts created after 13 Nov 2023 need at least 12 testers opted in for 14 consecutive days before they can apply for production access (Play Console Help, checked 2026-11-14). | android | `docs/store/android.md` |
 | REL-AND-07 | must | **Play Billing products** — In-app products and subscriptions configured in the Play Console. | android, payments | `docs/store/android.md` |
-| REL-AND-08 | must | **Release bundle** — Signed AAB from CI with the required target API level. | android | `docs/store/android.md` |
+| REL-AND-08 | must | **Release bundle** — Signed AAB from CI with the target API level from BLD-66. | android | `docs/store/android.md` |
+| REL-AND-09 | must | **EU trader status** — Trader status and contact details declared in the Play Console for the EU Digital Services Act [VERIFY: current Play Console DSA requirement and deadline]. | android | `docs/store/android.md` |
 | REL-DSK-01 | must | **Desktop code signing** — Windows Authenticode and macOS Developer ID certificates. | desktop | `docs/store/desktop.md` |
 | REL-DSK-02 | must | **macOS notarisation** — Every macOS build notarised and stapled. | desktop | `docs/store/desktop.md` |
 | REL-DSK-03 | must | **Distribution channel** — Website download, Mac App Store, Microsoft Store, winget or Homebrew. | desktop | `docs/store/desktop.md` |
@@ -292,4 +297,4 @@ Outputs: `docs/runbook.md`
 | OPS-11 | should | **Cost alerts** — Budget alerts for hosting and paid APIs. | deploys, ai | `docs/runbook.md` |
 | OPS-12 | should | **Incident plan** — Who does what when production is down; status communication. | deploys | `docs/runbook.md` |
 | OPS-13 | must | **Store upkeep** — Yearly OS/SDK updates and store policy changes tracked. | ios, android | `docs/runbook.md` |
-| OPS-14 | must | **Data requests** — Access and deletion requests answered within the legal deadline. | personal_data | `docs/runbook.md` |
+| OPS-14 | must | **Data requests** — Access and deletion requests answered within the legal deadline [VERIFY: revFADP 30 days (DSV Art. 18), GDPR one month extendable (Art. 12(3))]. | personal_data | `docs/runbook.md` |
