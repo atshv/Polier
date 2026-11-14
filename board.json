@@ -509,7 +509,7 @@
       "satisfies": [
         "D1"
       ],
-      "status": "review",
+      "status": "in_progress",
       "depends_on": [
         "M05"
       ],
@@ -555,7 +555,7 @@
       "owner": null,
       "branch": "task/M10",
       "worktree": null,
-      "round": 1,
+      "round": 2,
       "evidence": [],
       "scope_write_forbidden": [],
       "handoff": []

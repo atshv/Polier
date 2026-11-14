@@ -1,7 +1,7 @@
 {
   "task": "M10",
   "state": "running",
-  "attempt": 2,
+  "attempt": 3,
   "attempts": [
     {
       "n": 1,
@@ -13,6 +13,13 @@
     {
       "n": 2,
       "started": "2026-11-14T05:30:11+00:00",
+      "ended": "2026-11-14T05:41:03+00:00",
+      "result": "fail",
+      "note": "Review round 2: close the mode-switch detour (no own-task exemption for a task under review) and make the unbound stop check a report, not an undo order."
+    },
+    {
+      "n": 3,
+      "started": "2026-11-14T05:41:03+00:00",
       "ended": null,
       "result": null,
       "note": null
@@ -192,8 +199,35 @@
         "to": "review",
         "actor": "lead"
       }
+    },
+    {
+      "at": "2026-11-14T05:41:03+00:00",
+      "kind": "state",
+      "data": {
+        "from": "review",
+        "to": "rework",
+        "actor": "lead",
+        "note": "Review round 2: close the mode-switch detour (no own-task exemption for a task under review) and make the unbound stop check a report, not an undo order."
+      }
+    },
+    {
+      "at": "2026-11-14T05:41:03+00:00",
+      "kind": "start",
+      "data": {
+        "actor": "lead"
+      }
+    },
+    {
+      "at": "2026-11-14T05:41:03+00:00",
+      "kind": "state",
+      "data": {
+        "from": "rework",
+        "to": "in_progress",
+        "actor": "lead",
+        "note": "Attempt 3 (last) after review round 2."
+      }
     }
   ],
   "usage": {},
-  "updated": "2026-11-14T05:37:02+00:00"
+  "updated": "2026-11-14T05:41:03+00:00"
 }
